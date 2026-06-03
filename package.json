@@ -1,0 +1,29 @@
+{
+  "name": "centroidium",
+  "version": "1.0.0",
+  "private": true,
+  "description": "The high-performance core rendering engine for the CodingDatafy platform.",
+  "author": "CodingDatafy Team",
+  "license": "MIT",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "next": "16.2.9",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "gray-matter": "4.0.3",
+    "remark": "15.0.1",
+    "remark-html": "16.0.1",
+    "@vercel/analytics": "latest"
+  },
+  "devDependencies": {
+    "@types/node": "24.17.0",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "typescript": "6.0.3"
+  }
+}
