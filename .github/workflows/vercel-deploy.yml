@@ -1,0 +1,71 @@
+# @project CodingDatafy
+# @license MIT
+# @copyright 2026 CodingDatafy Organization
+# @author CodingDatafy Team
+
+name: Deploy Content Update to Vercel
+
+on:
+  repository_dispatch:
+    types: [content_updated]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      # Step 1: Checkout the Engine source code
+      - name: Checkout Engine Code
+        uses: actions/checkout@v4
+
+      # Step 2: Dynamically fetch the content from the 'content' repository using GitHub API/Actions
+      - name: Fetch Website Content
+        uses: actions/checkout@v4
+        with:
+          repository: 'CodingDatafy/content'
+          path: 'content-temp' # Temporary folder to hold the fetched repo
+          token: ${{ secrets.CENTROIDIUM_PAT }} # Uses PAT to access private/public content repo
+          ref: ${{ github.event.client_payload.branch }} # Syncs with the same branch (main/develop)
+
+      # Step 3: Move the 'data' folder to the required location inside the engine
+      - name: Inject Content into Engine
+        run: |
+          mkdir -p src/data
+          cp -r content-temp/data/* src/data/
+          rm -rf content-temp
+
+      # Step 4: Setup Node.js environment
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # Step 5: Install Vercel CLI
+      - name: Install Vercel CLI
+        run: npm install -g vercel
+
+      # Step 6: Pull Vercel Environment (Dynamically switch production/preview)
+      - name: Pull Vercel Environment Information
+        run: |
+          if [ "${{ github.event.client_payload.branch }}" = "main" ]; then
+            vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+          else
+            vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
+          fi
+
+      # Step 7: Build Project Artifacts
+      - name: Build Project Artifacts
+        run: |
+          if [ "${{ github.event.client_payload.branch }}" = "main" ]; then
+            vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+          else
+            vercel build --token=${{ secrets.VERCEL_TOKEN }}
+          fi
+
+      # Step 8: Deploy Artifacts to Vercel
+      - name: Deploy Artifacts to Vercel
+        run: |
+          if [ "${{ github.event.client_payload.branch }}" = "main" ]; then
+            vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+          else
+            vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }}
+          fi
