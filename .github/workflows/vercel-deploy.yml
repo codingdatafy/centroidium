@@ -17,11 +17,10 @@ jobs:
       # ==========================================
       # Step 1: Environment Initialization
       # ==========================================
-      # Using checkout to pull the repository code
+      # Updated to the official full-length commit SHA compliant with Node 24 execution environment
       - name: Checkout Engine Repository
-        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
-      # We skip setup-node entirely
       - name: Verify Environment Node Version
         run: |
           node -v
@@ -33,8 +32,9 @@ jobs:
       # ==========================================
       # Step 2: Content Injection (Root Layer)
       # ==========================================
+      # Updated to the official full-length commit SHA compliant with Node 24 execution environment
       - name: Clone Content Repository
-        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: 'CodingDatafy/content'
           path: 'content-temp'
