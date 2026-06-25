@@ -1,11 +1,6 @@
 {
   "cleanUrls": true,
   "github": {
-    "silent": true,
-    "autoJobCancel": true
-  },
-  "git": {
-    "deploymentEnabled": false,
-    "ignoreChanges": ["**/*"]
+    "silent": true
   }
 }
