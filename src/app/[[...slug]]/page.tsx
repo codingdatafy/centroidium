@@ -7,7 +7,6 @@
 
 import { getPageData, getAllPostSlugs } from "@/lib/markdown";
 import { notFound } from "next/navigation";
-import { connection } from "next/server";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -99,9 +98,7 @@ export default async function Page({ params }: PageProps) {
     );
   }
 
-  // 1. ENSURE RUNTIME IS DYNAMIC ACCORDING TO NEXT.JS 16 STANDARDS FOR REAL ROUTES
-  await connection();
-
+  // Fetch the markdown data statically during compile time
   const data = await getPageData(slug);
 
   if (!data) notFound();
