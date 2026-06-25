@@ -9,7 +9,6 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import AnalyticsWrapper from "./AnalyticsWrapper"; 
-import "@/public/styles/centroidium.css";
 
 /**
  * CONSOLIDATED SITE METADATA
@@ -55,6 +54,10 @@ export default function RootLayout({ children }: RootLayoutProps) {
 
   return (
     <html lang="en" data-scroll-behavior="smooth">
+      <head>
+        {/* LINKING CORE STYLESHEET VIA ABSOLUTE PUBLIC STATIC ROUTE */}
+        <link rel="stylesheet" href="/styles/centroidium.css" />
+      </head>
       <body>
         {/* INJECTING STRUCTURED DATA FOR SEARCH ENGINES */}
         <script

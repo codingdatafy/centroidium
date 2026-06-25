@@ -11,7 +11,7 @@ const nextConfig: NextConfig = {
   // 1. CORE PERFORMANCE & NEXT.JS 16 CACHE COMPONENTS
   reactStrictMode: true,
   poweredByHeader: false,
-  reactCompiler: true,
+  reactCompiler: false,
   cacheComponents: true,
 
   // 2. CLOUDFLARE INTEGRATION SECURITY
