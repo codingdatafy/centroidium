@@ -30,17 +30,20 @@ jobs:
           token: ${{ secrets.CENTROIDIUM_PAT }}
           ref: ${{ github.event.client_payload.branch || github.ref_name }}
 
-      # Step 3: Move the 'data' folder from content root into engine src/data
+      # Step 3: Move the 'data' folder from content root into engine root directory
       - name: Inject Content into Engine
         run: |
-          mkdir -p src/data
+          # Create data directory in the engine root folder
+          mkdir -p data
           if [ -d "content-temp/data" ]; then
-            cp -r content-temp/data/* src/data/
-            echo "Data synchronized into src/data successfully."
-            ls -la src/data
+            # Copy all files from content data folder to engine root data folder
+            cp -r content-temp/data/* data/
+            echo "Data synchronized into engine root /data successfully."
+            ls -la data
           else
             echo "Error: content-temp/data directory does not exist!" && exit 1
           fi
+          # Remove temporary content folder
           rm -rf content-temp
 
       # Step 4: Setup Node.js environment
