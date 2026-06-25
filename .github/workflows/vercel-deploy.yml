@@ -26,11 +26,11 @@ jobs:
           token: ${{ secrets.CENTROIDIUM_PAT }} # Uses PAT to access private/public content repo
           ref: ${{ github.event.client_payload.branch }} # Syncs with the same branch (main/develop)
 
-      # Step 3: Move the 'data' folder to the required location inside the engine
+      # Step 3: Move the 'data' folder to the required location inside the engine (Root Location fixed)
       - name: Inject Content into Engine
         run: |
-          mkdir -p src/data
-          cp -r content-temp/data/* src/data/
+          mkdir -p data
+          cp -r content-temp/data/* data/
           rm -rf content-temp
 
       # Step 4: Setup Node.js environment
@@ -51,6 +51,9 @@ jobs:
           else
             vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
           fi
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
       # Step 7: Build Project Artifacts
       - name: Build Project Artifacts
@@ -60,6 +63,9 @@ jobs:
           else
             vercel build --token=${{ secrets.VERCEL_TOKEN }}
           fi
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
       # Step 8: Deploy Artifacts to Vercel
       - name: Deploy Artifacts to Vercel
@@ -69,3 +75,6 @@ jobs:
           else
             vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }}
           fi
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
