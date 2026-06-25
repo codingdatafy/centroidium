@@ -8,6 +8,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
+import { Suspense } from "react"; // Added Suspense for Next.js 16 dynamic rendering safety
 import AnalyticsWrapper from "./AnalyticsWrapper"; 
 
 /**
@@ -86,9 +87,11 @@ export default function RootLayout({ children }: RootLayoutProps) {
             </nav>
           </header>
 
-          {/* MAIN CONTENT AREA */}
+          {/* MAIN CONTENT AREA WRAPPED IN SUSPENSE TO PREVENT UNCACHED DATA ERRORS */}
           <div id="content">
-            {children}
+            <Suspense fallback={<div>Loading workspace...</div>}>
+              {children}
+            </Suspense>
           </div>
 
           {/* APPLICATION FOOTER */}

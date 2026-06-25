@@ -81,15 +81,26 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
  * MAIN PAGE RENDERER
  */
 export default async function Page({ params }: PageProps) {
-  // 1. ENSURE RUNTIME IS DYNAMIC ACCORDING TO NEXT.JS 16 STANDARDS
-  await connection();
-
   const { slug } = await params;
 
-  // Immediately handle the fallback route to bypass empty content builds
+  // Handle fallback route synchronously and statically to prevent uncached data suspension errors
   if (slug && slug[0] === "_fallback") {
-    notFound();
+    return (
+      <main id="main">
+        <article id="article">
+          <header id="article-header">
+            <h1 id="article-title">Initialization Workspace</h1>
+          </header>
+          <section>
+            <p>CodingDatafy engine is initializing. Content workspace will populate dynamically.</p>
+          </section>
+        </article>
+      </main>
+    );
   }
+
+  // 1. ENSURE RUNTIME IS DYNAMIC ACCORDING TO NEXT.JS 16 STANDARDS FOR REAL ROUTES
+  await connection();
 
   const data = await getPageData(slug);
 
