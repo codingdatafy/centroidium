@@ -1,9 +1,7 @@
-/**
- * @project CodingDatafy
- * @license MIT
- * @copyright 2026 CodingDatafy Organization
- * @author CodingDatafy Team
- */
+# @project CodingDatafy
+# @license MIT
+# @copyright 2026 CodingDatafy Organization
+# @author CodingDatafy Team
 
 name: Deploy Content Update to Vercel
 
