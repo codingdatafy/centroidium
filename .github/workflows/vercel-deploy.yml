@@ -30,11 +30,11 @@ jobs:
           token: ${{ secrets.CENTROIDIUM_PAT }}
           ref: ${{ github.event.client_payload.branch || github.ref_name }}
 
-      # Step 3: Move the 'data' folder to the required location inside the engine (Root Location fixed)
+      # Step 3: Move the 'data' folder from content root into engine src/data
       - name: Inject Content into Engine
         run: |
-          mkdir -p data
-          cp -r content-temp/data/* data/
+          mkdir -p src/data
+          cp -r content-temp/data/* src/data/
           rm -rf content-temp
 
       # Step 4: Setup Node.js environment
