@@ -12,7 +12,7 @@ import { remark } from 'remark';
 import html from 'remark-html';
 import { cache } from 'react';
 
-const DATA_DIRECTORY = path.join(process.cwd(), 'src', 'data');
+const DATA_DIRECTORY = path.join(process.cwd(), 'data');
 
 const GITHUB_OWNER = 'CodingDatafy';
 const GITHUB_REPO = 'content';
