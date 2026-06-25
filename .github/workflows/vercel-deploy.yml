@@ -21,18 +21,24 @@ jobs:
       - name: Checkout Engine Repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
+      # Setup Node.js with caching enabled to enhance installation performance
+      - name: Setup Node.js Environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
       - name: Verify Environment Node Version
         run: |
           node -v
           npm -v
 
+      # Switched from npm ci to npm install to bypass the missing package-lock.json requirement
       - name: Install Project Dependencies
-        run: npm ci
+        run: npm install
 
       # ==========================================
       # Step 2: Content Injection (Root Layer)
-      # ==========================================
-      # Updated to the official full-length commit SHA compliant with Node 24 execution environment
       - name: Clone Content Repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
