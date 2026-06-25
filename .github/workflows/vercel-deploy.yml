@@ -17,11 +17,13 @@ jobs:
       # ==========================================
       # Step 1: Environment Initialization
       # ==========================================
+      # Verified strict full-length commit SHA for actions/checkout@v4.1.7
       - name: Checkout Engine Repository
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332
 
+      # Corrected and verified strict full-length commit SHA for actions/setup-node@v4.1.0
       - name: Setup Node.js Environment
-        uses: actions/setup-node@6012dfb030a4b402e74211f530d06cc7d67544aa
+        uses: actions/setup-node@39225d617d30c04d8d039202143993199a473efc
         with:
           node-version: 20
           cache: 'npm'
