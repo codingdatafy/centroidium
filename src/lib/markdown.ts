@@ -44,14 +44,13 @@ export interface PageData {
 const fetchFromGitHubApi = cache(async (relativePath: string): Promise<string | null> => {
   const rawUrl = `https://raw.githubusercontent.com/${GITHUB_OWNER}/${GITHUB_REPO}/${GITHUB_BRANCH}/data/${relativePath}`;
   
-  const token = process.env.ORGANIZATION_GITHUB_TOKEN;
+  const token = process.env.CENTROIDIUM_PAT || process.env.ORGANIZATION_GITHUB_TOKEN;
   const headers: HeadersInit = { 'User-Agent': 'CodingDatafy-Engine' };
   if (token) {
     headers['Authorization'] = `token ${token}`;
   }
 
   try {
-    // Leveraging Next.js fetch cache configuration natively instead of unstable_cache
     const response = await fetch(rawUrl, { 
       headers,
       next: { revalidate: 3600, tags: ['github-content'] }
@@ -68,10 +67,10 @@ const fetchFromGitHubApi = cache(async (relativePath: string): Promise<string | 
  * FETCH ATOMIC LAST UPDATED TIMESTAMP FROM THE OFFICIALLY RECORDED GITHUB COMMITS API
  */
 const getFileLastCommitDate = cache(async (targetFilePath: string): Promise<string> => {
-  const fallbackDate = new Date().toISOString().split('T')[0];
+  const fallbackDate = "2026-05-01";
   const commitApiUrl = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/commits?path=data/${targetFilePath}&page=1&per_page=1`;
 
-  const token = process.env.ORGANIZATION_GITHUB_TOKEN;
+  const token = process.env.CENTROIDIUM_PAT || process.env.ORGANIZATION_GITHUB_TOKEN;
   const headers: HeadersInit = { 'User-Agent': 'CodingDatafy-Engine' };
   if (token) {
     headers['Authorization'] = `token ${token}`;
@@ -202,7 +201,7 @@ export function getAllPostSlugs() {
       return allFiles;
     }
 
-    const files = fs.readdirSync(dir);
+  const files = fs.readdirSync(dir);
     files.forEach(file => {
       const name = path.join(dir, file);
       
