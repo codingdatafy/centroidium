@@ -72,9 +72,9 @@ jobs:
         run: |
           CURRENT_BRANCH="${{ github.event.client_payload.branch || github.ref_name }}"
           if [ "$CURRENT_BRANCH" = "main" ]; then
-            vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+            vercel build --prod --force --token=${{ secrets.VERCEL_TOKEN }}
           else
-            vercel build --token=${{ secrets.VERCEL_TOKEN }}
+            vercel build --force --token=${{ secrets.VERCEL_TOKEN }}
           fi
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
