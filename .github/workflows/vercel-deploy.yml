@@ -21,9 +21,9 @@ jobs:
       - name: Checkout Engine Repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
-      # Setup Node.js with official full-length commit SHA for strict organization security policies
+      # Setup Node.js with verified full-length commit SHA for v4.2.0 to satisfy strict security policies
       - name: Setup Node.js Environment
-        uses: actions/setup-node@39228d374d90b11ef058343fc350311a45ab7784
+        uses: actions/setup-node@1d51557799056024458d4ae28c423529049467a4
         with:
           node-version: '22'
           cache: 'npm'
