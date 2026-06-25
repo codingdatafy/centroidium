@@ -33,6 +33,7 @@ jobs:
           node -v
           npm -v
 
+      # Switched from npm ci to npm install to bypass the missing package-lock.json requirement
       - name: Install Project Dependencies
         run: npm install
 
