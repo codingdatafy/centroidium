@@ -1,3 +1,10 @@
+/**
+ * @project CodingDatafy
+ * @license MIT
+ * @copyright 2026 CodingDatafy Organization
+ * @author CodingDatafy Team
+ */
+
 name: Deploy Content Update to Vercel
 
 on:
@@ -12,23 +19,27 @@ jobs:
       # ==========================================
       # Step 1: Environment Initialization
       # ==========================================
+      # Pinning actions/checkout to the strict full-length commit SHA of v4.1.7
       - name: Checkout Engine Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332
 
+      # Pinning actions/setup-node to the strict full-length commit SHA of v4.0.3
       - name: Setup Node.js Environment
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@6012dfb030a4b402e74211f530d06cc7d67544aa
         with:
           node-version: 20
           cache: 'npm'
 
+       bondage: Install Project Dependencies
       - name: Install Project Dependencies
         run: npm ci
 
       # ==========================================
       # Step 2: Content Injection (Root Layer)
       # ==========================================
+      # Pinning actions/checkout to the strict full-length commit SHA of v4.1.7
       - name: Clone Content Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332
         with:
           repository: 'CodingDatafy/content'
           path: 'content-temp'
