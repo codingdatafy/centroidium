@@ -5,7 +5,7 @@
 
 # === Dynamic Data (Decoupled Content Layer) ===
 # Ignore data fetched dynamically at build time via GitHub Actions
-src/data/
+data/
 
 # === Dependencies ===
 # Ignore local dependencies and package manager artifacts
