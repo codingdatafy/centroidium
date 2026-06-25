@@ -34,7 +34,13 @@ jobs:
       - name: Inject Content into Engine
         run: |
           mkdir -p src/data
-          cp -r content-temp/data/* src/data/
+          if [ -d "content-temp/data" ]; then
+            cp -r content-temp/data/* src/data/
+            echo "Data synchronized into src/data successfully."
+            ls -la src/data
+          else
+            echo "Error: content-temp/data directory does not exist!" && exit 1
+          fi
           rm -rf content-temp
 
       # Step 4: Setup Node.js environment
