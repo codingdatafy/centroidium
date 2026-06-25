@@ -22,7 +22,13 @@ interface PageProps {
  * STATIC PATH GENERATION
  */
 export async function generateStaticParams() {
+  // Fetch paths from the markdown content library
   const paths = getAllPostSlugs();
+  
+  if (!paths || paths.length === 0) {
+    return [{ slug: ["_fallback"] }];
+  }
+
   return paths;
 }
 
@@ -31,6 +37,12 @@ export async function generateStaticParams() {
  */
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
+  
+  // Return early if it is the fallback verification route
+  if (slug && slug[0] === "_fallback") {
+    return { title: "CodingDatafy" };
+  }
+
   const data = await getPageData(slug);
   
   if (!data) return {};
@@ -73,6 +85,12 @@ export default async function Page({ params }: PageProps) {
   await connection();
 
   const { slug } = await params;
+
+  // Immediately handle the fallback route to bypass empty content builds
+  if (slug && slug[0] === "_fallback") {
+    notFound();
+  }
+
   const data = await getPageData(slug);
 
   if (!data) notFound();
