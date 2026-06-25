@@ -1,94 +1,72 @@
-# @project CodingDatafy
-# @license MIT
-# @copyright 2026 CodingDatafy Organization
-# @author CodingDatafy Team
-
 name: Deploy Content Update to Vercel
 
 on:
   repository_dispatch:
     types: [content_updated]
-  push:
-    branches:
-      - main
-      - develop
+  workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      # Step 1: Checkout the Engine source code
-      - name: Checkout Engine Code
+      # ==========================================
+      # Step 1: Environment Initialization
+      # ==========================================
+      - name: Checkout Engine Repository
         uses: actions/checkout@v4
 
-      # Step 2: Dynamically fetch the content from the 'content' repository using GitHub API/Actions
-      - name: Fetch Website Content
+      - name: Setup Node.js Environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Project Dependencies
+        run: npm ci
+
+      # ==========================================
+      # Step 2: Content Injection (Root Layer)
+      # ==========================================
+      - name: Clone Content Repository
         uses: actions/checkout@v4
         with:
           repository: 'CodingDatafy/content'
           path: 'content-temp'
-          token: ${{ secrets.CENTROIDIUM_PAT }}
-          ref: ${{ github.event.client_payload.branch || github.ref_name }}
+          token: ${{ secrets.ORGANIZATION_GITHUB_TOKEN }}
 
-      # Step 3: Move the 'data' folder from content root into engine root data directory
-      - name: Inject Content into Engine
+      - name: Inject Content into Engine Root
         run: |
           rm -rf data
           mkdir -p data
           if [ -d "content-temp/data" ]; then
             cp -r content-temp/data/* data/
-            echo "Data synchronized into root data folder successfully."
+            echo "Data workspace successfully injected into root."
             ls -la data
           else
-            echo "Error: content-temp/data directory does not exist!" && exit 1
+            echo "Critical Error: Content workspace missing!" && exit 1
           fi
           rm -rf content-temp
-          
-      # Step 4: Setup Node.js environment
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
 
-      # Step 5: Install Vercel CLI
-      - name: Install Vercel CLI
-        run: npm install -g vercel
+      # ==========================================
+      # Step 3: Vercel Compilation & Production Deployment
+      # ==========================================
+      - name: Install Vercel CLI Globally
+        run: npm install -g vercel@latest
 
-      # Step 6: Pull Vercel Environment (Dynamically switch production/preview)
-      - name: Pull Vercel Environment Information
-        run: |
-          CURRENT_BRANCH="${{ github.event.client_payload.branch || github.ref_name }}"
-          if [ "$CURRENT_BRANCH" = "main" ]; then
-            vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
-          else
-            vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
-          fi
+      - name: Pull Vercel Environment Management
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
-      # Step 7: Build Project Artifacts
-      - name: Build Project Artifacts
-        run: |
-          CURRENT_BRANCH="${{ github.event.client_payload.branch || github.ref_name }}"
-          if [ "$CURRENT_BRANCH" = "main" ]; then
-            vercel build --prod --force --token=${{ secrets.VERCEL_TOKEN }}
-          else
-            vercel build --force --token=${{ secrets.VERCEL_TOKEN }}
-          fi
+      - name: Build Local Project Artifacts (Prebuilt Mode)
+        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
-      # Step 8: Deploy Artifacts to Vercel
-      - name: Deploy Artifacts to Vercel
-        run: |
-          CURRENT_BRANCH="${{ github.event.client_payload.branch || github.ref_name }}"
-          if [ "$CURRENT_BRANCH" = "main" ]; then
-            vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
-          else
-            vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }}
-          fi
+      - name: Deploy Prebuilt Artifacts to Vercel Production
+        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
