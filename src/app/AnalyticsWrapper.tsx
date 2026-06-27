@@ -41,14 +41,25 @@ export default function AnalyticsWrapper() {
 
         // 2. Advanced Bot, Web-Crawler & AI Opt-out Regex Verification
         const ua = navigator.userAgent.toLowerCase();
-        const isBot = /bot|googlebot|crawler|spider|robot|crawling|lighthouse|chrome-lighthouse|google-inspectiontool|ahrefsbot|semrushbot|gptbot|chatgpt|claudebot|coherebot|headlesschrome|python|node-fetch|axios/i.test(ua);
+        const isBotAgent = /bot|googlebot|crawler|spider|robot|crawling|lighthouse|chrome-lighthouse|google-inspectiontool|ahrefsbot|semrushbot|gptbot|chatgpt|claudebot|coherebot|headlesschrome|python|node-fetch|axios/i.test(ua);
         
-        // 3. Admin LocalStorage Privacy Verification
+        // 3. Client-Side Automation & Stealth Browser Fingerprinting Detection
+        // Detects standard automation flags
+        const isWebDriver = navigator.webdriver === true;
+        
+        // Detects missing browser components common in headless environment spoofing
+        const hasNoPlugins = navigator.plugins && navigator.plugins.length === 0;
+        const hasNoLanguages = !navigator.languages || navigator.languages.length === 0;
+        
+        // Evaluates if the client environment matches automated browser behavior
+        const isAutomatedBot = isWebDriver || (hasNoPlugins && hasNoLanguages);
+
+        // 4. Admin LocalStorage Privacy Verification
         const isExplicitlyDisabled = localStorage.getItem('va-disable') === 'true';
 
-        // 4. Boundary Logic Execution: Drop traffic event execution if anomalies are caught
-        if (!isOfficialDomain || isBot || isExplicitlyDisabled) {
-          console.log(`CodingDatafy Analytics: Event dropped (Domain Match: ${isOfficialDomain}, Bot: ${isBot}, Admin Block: ${isExplicitlyDisabled})`);
+        // 5. Boundary Logic Execution: Drop traffic event execution if anomalies are caught
+        if (!isOfficialDomain || isBotAgent || isAutomatedBot || isExplicitlyDisabled) {
+          console.log(`CodingDatafy Analytics: Event dropped (Domain Match: ${isOfficialDomain}, BotAgent: ${isBotAgent}, AutomatedBot: ${isAutomatedBot}, Admin Block: ${isExplicitlyDisabled})`);
           return null; 
         }
 
