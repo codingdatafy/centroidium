@@ -103,7 +103,8 @@ export default async function Page({ params }: PageProps) {
 
   if (!data) notFound();
 
-  const relativePath = `/${slug?.join('/') || ''}`;
+  // Define absolute URL instead of relative path to counter content scraping attempts
+  const absoluteUrl = `https://www.codingdatafy.com/${slug?.join('/') || ''}`;
 
   return (
     <>
@@ -131,23 +132,19 @@ export default async function Page({ params }: PageProps) {
             />
 
             <footer id="article-footer">
-              <hr />
-              <div>
-                {data.meta.lastUpdated && (
-                  <p>
-                    <time dateTime={data.meta.lastUpdated}>
-                      Last Updated: {data.meta.lastUpdated}
-                    </time>
-                  </p>
-                )}
-
+              {data.meta.lastUpdated && (
                 <p>
-                  <small>
-                    Published by <strong>CodingDatafy™ Organization</strong>. 
-                    Explore <Link href={relativePath}>CodingDatafy Documentation</Link>.
-                  </small>
+                  <time dateTime={data.meta.lastUpdated}>
+                    Last Updated: {data.meta.lastUpdated}
+                  </time>
                 </p>
-              </div>
+              )}
+              <p>
+                <small>
+                  Published by <strong>CodingDatafy™ Organization</strong>. 
+                  Explore <Link href={absoluteUrl}>CodingDatafy Documentation</Link>.
+                </small>
+              </p>
             </footer>
           </article>
         </div>
