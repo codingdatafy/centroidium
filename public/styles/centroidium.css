@@ -569,6 +569,20 @@ table.sortable th.sort-desc::after {
 	border: solid 1px rgb(0 0 0);
 	text-align: center;
 }
+#article-footer {
+	margin: 0 0 0.1em 0;
+	padding: 0.1em;
+	background: rgb(0 255 0 / 0.2);
+	border: solid 1px rgb(0 0 0);
+	text-align: center;
+}
+#article-footer p:last-child {
+	position: absolute;
+    left: -9999px;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+}
 /* --------------------------- Footer ---------------------------------- */
 #footer {
 	margin: 1px;
