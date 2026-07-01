@@ -1,0 +1,15 @@
+# CodingDatafy
+
+> Master coding with CodingDatafy expert-led documentation. On a mission to build the world's largest reference and knowledge base for coding languages.
+
+## Core Reference Pages
+- [Homepage](https://www.codingdatafy.com/) - CodingDatafy main entrance.
+- [Programming Languages Directory](https://www.codingdatafy.com/languages) - Our core coding documentation.
+- [FAQ](https://www.codingdatafy.com/faq) - Frequently Asked Questions.
+- [About Us](https://www.codingdatafy.com/about) - About CodingDatafy Organization.
+- [Contribute Guide](https://www.codingdatafy.com/contribute) - How to contribute to our open-source repositories.
+
+## Legal & Contact
+- [Contact Us](https://www.codingdatafy.com/contact) - Get in touch with our team.
+- [Terms of Use](https://www.codingdatafy.com/terms-of-use) - Terms and conditions.
+- [Privacy Policy](https://www.codingdatafy.com/privacy-policy) - Privacy policy and data handling.
