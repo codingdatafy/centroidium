@@ -116,7 +116,7 @@ export default function RootLayout({ children }: RootLayoutProps) {
                 </a>
               </li>
             </ul>
-            <p>
+            <p id="copyright">
               <small>Copyright © 2026 <strong>CodingDatafy™</strong> Organization | Content licensed under <strong>CC BY-SA 4.0</strong></small>
             </p>
           </footer>
