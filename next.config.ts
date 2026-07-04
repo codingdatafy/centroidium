@@ -70,6 +70,17 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+
+  // 7. INTERNAL REWRITES FOR COMPATIBILITY & PRIVACY BYPASS
+  async rewrites() {
+    return [
+      {
+        // Route proxy to mask Vercel Web Analytics tracking calls from ad-blockers
+        source: '/_vercel/insights/:path*',
+        destination: 'https://vitals.vercel-analytics.com/:path*',
+      },
+    ];
+  },
 };
 
 export default nextConfig;
