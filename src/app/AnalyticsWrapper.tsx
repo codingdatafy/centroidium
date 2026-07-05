@@ -31,6 +31,9 @@ export default function AnalyticsWrapper() {
 
   return (
     <Analytics 
+      // Link analytics component to our secure config proxy routes
+      endpoint="/va/events"
+      scriptSrc="/va/lib.js"
       beforeSend={(event) => {
         // Safe context checking for window availability under hybrid environments
         if (typeof window === 'undefined') return null;
