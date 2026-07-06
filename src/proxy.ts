@@ -14,11 +14,12 @@ export function proxy(request: NextRequest) {
   const url = new URL(request.url);
   const pathname = url.pathname;
 
-  // 1. SKIP STATIC ASSETS AND CORE FRAMEWORK ROUTES FOR EFFICIENCY
+  // 1. SKIP STATIC ASSETS, TRACKING PROXIES AND CORE FRAMEWORK ROUTES FOR EFFICIENCY
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/_vercel') ||
     pathname.startsWith('/api') ||
+    pathname.startsWith('/va') ||
     pathname.includes('.')
   ) {
     return NextResponse.next();
@@ -42,7 +43,6 @@ export function proxy(request: NextRequest) {
     requestHeaders.set('x-forwarded-for', cfIp);
   }
 
-  // Pass modified headers cleanly down the routing chain
   const response = NextResponse.next({
     request: {
       headers: requestHeaders,
