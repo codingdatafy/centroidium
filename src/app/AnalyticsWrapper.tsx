@@ -34,7 +34,7 @@ export default function AnalyticsWrapper() {
 
   return (
     <Analytics 
-      // Link analytics component to our secure config proxy routes
+      // Link analytics component to Vercel secure dynamic config proxy routes
       endpoint="/va/events"
       scriptSrc="/va/lib.js"
       beforeSend={((event) => {

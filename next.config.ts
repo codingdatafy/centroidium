@@ -79,8 +79,8 @@ const nextConfig: NextConfig = {
         destination: 'https://va.vercel-scripts.com/v1/script.js',
       },
       {
-        source: '/va/events',
-        destination: 'https://_vercel/insights/event',
+        source: '/va/events/:path*',
+        destination: '/_vercel/insights/:path*',
       },
     ];
   },
