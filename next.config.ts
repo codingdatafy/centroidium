@@ -76,15 +76,11 @@ const nextConfig: NextConfig = {
     return [
       {
         source: '/va/lib.js',
-        destination: 'https://va.vercel-scripts.com/v1/script.debug.js',
+        destination: 'https://va.vercel-scripts.com/v1/script.js',
       },
       {
         source: '/va/events',
-        destination: 'https://vitals.vercel-analytics.com/v1/vitals',
-      },
-      {
-        source: '/_vercel/insights/:path*',
-        destination: 'https://vitals.vercel-analytics.com/:path*',
+        destination: 'https://_vercel/insights/event',
       },
     ];
   },
