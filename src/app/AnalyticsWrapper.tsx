@@ -8,7 +8,7 @@
 'use client';
 
 import { useEffect, useState } from "react";
-import { Analytics } from '@vercel/analytics/react';
+import { Analytics, type AnalyticsProps } from '@vercel/analytics/react';
 
 export default function AnalyticsWrapper() {
   const [mounted, setMounted] = useState(false);
@@ -29,12 +29,15 @@ export default function AnalyticsWrapper() {
 
   if (!mounted) return null;
 
+  // Safe parameters extraction for TypeScript typing in beforeSend
+  type BeforeSendType = NonNullable<AnalyticsProps['beforeSend']>;
+
   return (
     <Analytics 
       // Link analytics component to our secure config proxy routes
       endpoint="/va/events"
       scriptSrc="/va/lib.js"
-      beforeSend={(event) => {
+      beforeSend={((event) => {
         // Safe context checking for window availability under hybrid environments
         if (typeof window === 'undefined') return null;
 
@@ -57,8 +60,8 @@ export default function AnalyticsWrapper() {
         // Evaluates if the client environment matches automated browser behavior
         const isAutomatedBot = isWebDriver || (hasNoPlugins && hasNoLanguages);
 
-        // 4. Admin LocalStorage Privacy Verification
-        const isExplicitlyDisabled = localStorage.getItem('va-disable') === 'true';
+        // 4. Admin LocalStorage Privacy Verification (Safely wrapped inside window check)
+        const isExplicitlyDisabled = typeof window !== 'undefined' && localStorage.getItem('va-disable') === 'true';
 
         // 5. Boundary Logic Execution: Drop traffic event execution if anomalies are caught
         if (!isOfficialDomain || isBotAgent || isAutomatedBot || isExplicitlyDisabled) {
@@ -67,7 +70,7 @@ export default function AnalyticsWrapper() {
         }
 
         return event;
-      }}
+      }) as BeforeSendType}
     />
   );
 }

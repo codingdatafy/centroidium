@@ -75,7 +75,14 @@ const nextConfig: NextConfig = {
   async rewrites() {
     return [
       {
-        // Route proxy to mask Vercel Web Analytics tracking calls from ad-blockers
+        source: '/va/lib.js',
+        destination: 'https://va.vercel-scripts.com/v1/script.debug.js',
+      },
+      {
+        source: '/va/events',
+        destination: 'https://vitals.vercel-analytics.com/v1/vitals',
+      },
+      {
         source: '/_vercel/insights/:path*',
         destination: 'https://vitals.vercel-analytics.com/:path*',
       },
