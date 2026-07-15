@@ -71,18 +71,20 @@ const nextConfig: NextConfig = {
     ];
   },
 
-  // 7. INTERNAL REWRITES FOR COMPATIBILITY & PRIVACY BYPASS
+  // 7. PROXY REWRITES FOR ANALYTICS SHIELDING
   async rewrites() {
-    return [
-      {
-        source: '/va/lib.js',
-        destination: 'https://va.vercel-scripts.com/v1/script.js',
-      },
-      {
-        source: '/va/events/:path*',
-        destination: '/_vercel/insights/:path*',
-      },
-    ];
+    return {
+      beforeFiles: [
+        {
+          source: '/va/lib.js',
+          destination: 'https://va.vercel-scripts.com/v1/script.js',
+        },
+        {
+          source: '/va/:path*',
+          destination: 'https://va.vercel-scripts.com/v1/:path*',
+        },
+      ],
+    };
   },
 };
 
