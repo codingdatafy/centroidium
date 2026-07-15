@@ -37,7 +37,7 @@ export default function AnalyticsWrapper() {
       // Force production mode since we are strictly running on main branch
       mode="production"
       // Link analytics component to Vercel secure dynamic config proxy routes
-      endpoint="/va/events"
+      endpoint="/va"
       scriptSrc="/va/lib.js"
       beforeSend={((event) => {
         // Safe context checking for window availability under hybrid environments

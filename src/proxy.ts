@@ -14,33 +14,21 @@ export function proxy(request: NextRequest) {
   const url = new URL(request.url);
   const pathname = url.pathname;
 
-  // 1. ALLOW VERCEL ANALYTICS AND VA PATHS TO PASS DIRECTLY TO NEXT.JS ROUTING WITHOUT INTERACTION
-  if (
-    pathname.startsWith('/va/') || 
-    pathname.startsWith('/_vercel/')
-  ) {
-    return NextResponse.next();
+  // 1. DIRECTORY & CONTENT PRIVACY SHIELD
+  const isAnalyticsRoute = pathname.startsWith('/va/') || pathname.startsWith('/_vercel/');
+  const isStaticOrApi = pathname.startsWith('/_next') || pathname.startsWith('/api') || pathname.includes('.');
+
+  if (!isAnalyticsRoute && !isStaticOrApi) {
+    if (
+      pathname.endsWith('.md') || 
+      pathname.startsWith('/data/') || 
+      pathname.includes('/_sidebar')
+    ) {
+      return new NextResponse(null, { status: 404 });
+    }
   }
 
-  // 2. SKIP STATIC ASSETS, GENERAL API AND CORE FRAMEWORK ROUTES FOR EFFICIENCY
-  if (
-    pathname.startsWith('/_next') ||
-    pathname.startsWith('/api') ||
-    pathname.includes('.')
-  ) {
-    return NextResponse.next();
-  }
-
-  // 3. DIRECTORY & CONTENT PRIVACY SHIELD
-  if (
-    pathname.endsWith('.md') || 
-    pathname.startsWith('/data/') || 
-    pathname.includes('/_sidebar')
-  ) {
-    return new NextResponse(null, { status: 404 });
-  }
-
-  // 4. CLOUDFLARE VISITOR IP SYNCHRONIZATION
+  // 2. CLOUDFLARE VISITOR IP SYNCHRONIZATION
   const requestHeaders = new Headers(request.headers);
   const cfIp = request.headers.get('cf-connecting-ip');
   
@@ -55,7 +43,7 @@ export function proxy(request: NextRequest) {
     },
   });
 
-  // 5. GLOBAL SECURITY & SEO HEADERS
+  // 3. GLOBAL SECURITY & SEO HEADERS
   response.headers.set('X-Content-Type-Options', 'nosniff');
   response.headers.set('X-Robots-Tag', 'index, follow');
   response.headers.set('X-DNS-Prefetch-Control', 'on');
