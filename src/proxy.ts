@@ -14,18 +14,24 @@ export function proxy(request: NextRequest) {
   const url = new URL(request.url);
   const pathname = url.pathname;
 
-  // 1. SKIP STATIC ASSETS, TRACKING PROXIES AND CORE FRAMEWORK ROUTES FOR EFFICIENCY
+  // 1. ALLOW VERCEL ANALYTICS AND VA PATHS TO PASS DIRECTLY TO NEXT.JS ROUTING WITHOUT INTERACTION
+  if (
+    pathname.startsWith('/va/') || 
+    pathname.startsWith('/_vercel/')
+  ) {
+    return NextResponse.next();
+  }
+
+  // 2. SKIP STATIC ASSETS, GENERAL API AND CORE FRAMEWORK ROUTES FOR EFFICIENCY
   if (
     pathname.startsWith('/_next') ||
-    pathname.startsWith('/_vercel') ||
     pathname.startsWith('/api') ||
-    pathname.startsWith('/va') ||
     pathname.includes('.')
   ) {
     return NextResponse.next();
   }
 
-  // 2. DIRECTORY & CONTENT PRIVACY SHIELD
+  // 3. DIRECTORY & CONTENT PRIVACY SHIELD
   if (
     pathname.endsWith('.md') || 
     pathname.startsWith('/data/') || 
@@ -34,7 +40,7 @@ export function proxy(request: NextRequest) {
     return new NextResponse(null, { status: 404 });
   }
 
-  // 3. CLOUDFLARE VISITOR IP SYNCHRONIZATION
+  // 4. CLOUDFLARE VISITOR IP SYNCHRONIZATION
   const requestHeaders = new Headers(request.headers);
   const cfIp = request.headers.get('cf-connecting-ip');
   
@@ -49,7 +55,7 @@ export function proxy(request: NextRequest) {
     },
   });
 
-  // 4. GLOBAL SECURITY & SEO HEADERS
+  // 5. GLOBAL SECURITY & SEO HEADERS
   response.headers.set('X-Content-Type-Options', 'nosniff');
   response.headers.set('X-Robots-Tag', 'index, follow');
   response.headers.set('X-DNS-Prefetch-Control', 'on');
