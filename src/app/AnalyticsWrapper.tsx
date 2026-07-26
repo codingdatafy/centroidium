@@ -51,15 +51,16 @@ export default function AnalyticsWrapper() {
         const ua = navigator.userAgent.toLowerCase();
         const isBotAgent = /bot|googlebot|crawler|spider|robot|crawling|lighthouse|chrome-lighthouse|google-inspectiontool|ahrefsbot|semrushbot|gptbot|chatgpt|claudebot|coherebot|headlesschrome|python|node-fetch|axios/i.test(ua);
         
-        // 3. Client-Side Automation & Stealth Browser Fingerprinting Detection
+        // 3. Robust Client-Side Automation & Stealth Browser Detection
         const isWebDriver = navigator.webdriver === true;
         
-        // Detects missing browser components common in headless environment spoofing
-        const hasNoPlugins = navigator.plugins && navigator.plugins.length === 0;
+        // Headless detection: Checking missing screen properties or phantom features
+        const isPhantom = 'callPhantom' in window || '_phantom' in window;
+        const isHeadlessWindow = 'Buffer' in window || 'emit' in window;
         const hasNoLanguages = !navigator.languages || navigator.languages.length === 0;
         
-        // Evaluates if the client environment matches automated browser behavior
-        const isAutomatedBot = isWebDriver || (hasNoPlugins && hasNoLanguages);
+        // Evaluates if client environment exhibits automated stealth behaviors
+        const isAutomatedBot = isWebDriver || isPhantom || isHeadlessWindow || hasNoLanguages;
 
         // 4. Admin LocalStorage Privacy Verification
         const isExplicitlyDisabled = typeof window !== 'undefined' && localStorage.getItem('va-disable') === 'true';
