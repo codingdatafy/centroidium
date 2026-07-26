@@ -6,7 +6,7 @@
 # =================================================================
 
 # -----------------------------------------------------------------
-# GROUP 1: BLOCKED AI TRAINING CRAWLERS (Strictly Disallowed)
+# GROUP 1: BLOCKED AI TRAINING CRAWLERS & SPIDERS
 # -----------------------------------------------------------------
 # OpenAI: Blocks ChatGPT model training
 User-agent: GPTBot
@@ -76,7 +76,51 @@ Disallow: /
 
 
 # -----------------------------------------------------------------
-# GROUP 2: ALLOWED BOT PARTNERS (Search & Real-time Indexing Only)
+# GROUP 2: BLOCKED SEO & COMPETITOR INTELLIGENCE BOTS
+# -----------------------------------------------------------------
+# Ahrefs
+User-agent: AhrefsBot
+Disallow: /
+
+User-agent: AhrefsSiteAudit
+Disallow: /
+
+# Semrush
+User-agent: SemrushBot
+Disallow: /
+
+User-agent: SemrushBot-SA
+Disallow: /
+
+# Moz
+User-agent: DotBot
+Disallow: /
+
+User-agent: rogerbot
+Disallow: /
+
+# Majestic & Data Providers
+User-agent: MJ12bot
+Disallow: /
+
+User-agent: DataForSeoBot
+Disallow: /
+
+User-agent: SerpstatBot
+Disallow: /
+
+User-agent: SpyFu
+Disallow: /
+
+User-agent: BLEXBot
+Disallow: /
+
+User-agent: MegaIndex.ru
+Disallow: /
+
+
+# -----------------------------------------------------------------
+# GROUP 3: ALLOWED BOT PARTNERS (Search & Real-time Indexing Only)
 # -----------------------------------------------------------------
 # OpenAI: Allows real-time search in ChatGPT (ChatGPT-User / Search)
 User-agent: OAI-SearchBot
@@ -139,7 +183,7 @@ Allow: /
 
 
 # -----------------------------------------------------------------
-# GROUP 3: GLOBAL RULES & SITEMAP
+# GROUP 4: GLOBAL RULES & SITEMAP
 # -----------------------------------------------------------------
 User-agent: *
 Allow: /
