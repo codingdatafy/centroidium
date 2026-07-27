@@ -423,6 +423,12 @@ canvas {
 #content {
 	display: flex;
     flex-flow: row wrap;
+	min-height: 80vh;
+	contain-intrinsic-size: 1000px;
+}
+#content > div {
+  padding: 2rem;
+  min-height: 400px;
 }
 /* --------------------------- Sidebar --------------------------------- */
 #sidebar {
@@ -623,6 +629,8 @@ table.sortable th.sort-desc::after {
 #social-networks li a {
 }
 #social-networks li a img {
+	aspect-ratio: 1 / 1;
+	display: inline-block;
 }
 #copyright {
 	padding-top: 1em;

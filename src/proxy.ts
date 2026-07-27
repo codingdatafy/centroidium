@@ -20,7 +20,18 @@ export function proxy(request: NextRequest) {
   
   if (isAnalyticsRoute) {
     const isKnownBot = /bot|googlebot|crawler|spider|robot|crawling|lighthouse|chrome-lighthouse|google-inspectiontool|ahrefsbot|semrushbot|gptbot|chatgpt|claudebot|coherebot|headlesschrome|python|node-fetch|axios/i.test(userAgent);
+    
     if (isKnownBot) {
+      if (pathname === '/va/lib.js') {
+        return new NextResponse('/* Analytics disabled for automated environments */', {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/javascript; charset=utf-8',
+            'Cache-Control': 'public, max-age=86400, immutable',
+          },
+        });
+      }
+
       return new NextResponse(null, { status: 204 });
     }
   }
