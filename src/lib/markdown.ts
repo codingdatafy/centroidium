@@ -44,10 +44,13 @@ export interface PageData {
 const fetchFromGitHubApi = cache(async (relativePath: string): Promise<string | null> => {
   const rawUrl = `https://raw.githubusercontent.com/${GITHUB_OWNER}/${GITHUB_REPO}/${GITHUB_BRANCH}/data/${relativePath}`;
   
-  const token = process.env.CENTROIDIUM_PAT || process.env.ORGANIZATION_GITHUB_TOKEN;
+  const token = process.env.ORGANIZATION_GITHUB_TOKEN || process.env.CENTROIDIUM_PAT;
   const headers: HeadersInit = { 'User-Agent': 'CodingDatafy-Engine' };
+  
   if (token) {
-    headers['Authorization'] = `token ${token}`;
+    headers['Authorization'] = token.startsWith('github_pat_') || token.startsWith('ghp_') 
+      ? `Bearer ${token}` 
+      : `token ${token}`;
   }
 
   try {
@@ -68,12 +71,25 @@ const fetchFromGitHubApi = cache(async (relativePath: string): Promise<string | 
  */
 const getFileLastCommitDate = cache(async (targetFilePath: string): Promise<string> => {
   const fallbackDate = "2026-05-01";
+
+  if (!targetFilePath) {
+    return fallbackDate;
+  }
+
   const commitApiUrl = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/commits?path=data/${targetFilePath}&page=1&per_page=1`;
 
-  const token = process.env.CENTROIDIUM_PAT || process.env.ORGANIZATION_GITHUB_TOKEN;
-  const headers: HeadersInit = { 'User-Agent': 'CodingDatafy-Engine' };
+  const token = process.env.ORGANIZATION_GITHUB_TOKEN || process.env.CENTROIDIUM_PAT;
+  const headers: HeadersInit = { 
+    'User-Agent': 'CodingDatafy-Engine',
+    'Accept': 'application/vnd.github.v3+json'
+  };
+
   if (token) {
-    headers['Authorization'] = `token ${token}`;
+    headers['Authorization'] = token.startsWith('github_pat_') || token.startsWith('ghp_') 
+      ? `Bearer ${token}` 
+      : `token ${token}`;
+  } else {
+    console.warn(`[CodingDatafy Engine]: ORGANIZATION_GITHUB_TOKEN is missing in environment variables.`);
   }
 
   try {
@@ -84,10 +100,13 @@ const getFileLastCommitDate = cache(async (targetFilePath: string): Promise<stri
 
     if (response.ok) {
       const commits = await response.json();
-      if (commits && commits.length > 0) {
+      if (Array.isArray(commits) && commits.length > 0 && commits[0]?.commit?.committer?.date) {
         return commits[0].commit.committer.date.split('T')[0];
       }
+    } else {
+      console.warn(`[GitHub Commits API Warning]: Status ${response.status} (${response.statusText}) for path data/${targetFilePath}`);
     }
+
     return fallbackDate;
   } catch (error) {
     console.error(`[GitHub Commits API Error]: Failed to fetch history for ${targetFilePath}`, error);
@@ -201,7 +220,7 @@ export function getAllPostSlugs() {
       return allFiles;
     }
 
-  const files = fs.readdirSync(dir);
+    const files = fs.readdirSync(dir);
     files.forEach(file => {
       const name = path.join(dir, file);
       
