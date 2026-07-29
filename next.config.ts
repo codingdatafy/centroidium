@@ -20,7 +20,7 @@ const nextConfig: NextConfig = {
   // 3. TURBOPACK CONFIGURATION
   turbopack: {
     resolveAlias: {
-      fs: { browser: './empty.ts' }
+      fs: { browser: './empty.ts' },
     },
   },
 
@@ -71,10 +71,21 @@ const nextConfig: NextConfig = {
     ];
   },
 
-  // 7. PROXY REWRITES FOR ANALYTICS SHIELDING
+  // 7. PROXY REWRITES FOR ANALYTICS SHIELDING & 404 ROUTE PROTECTION
   async rewrites() {
     return {
       beforeFiles: [
+        // A. BLOCK ESCAPED DOLLAR SIGN PATHS (FORCE 404 STATUS)
+        {
+          source: '/\\$',
+          destination: '/404',
+        },
+        {
+          source: '/:path*\\$:extra*',
+          destination: '/404',
+        },
+
+        // B. PROXY FOR VERCEL ANALYTICS SHIELDING
         {
           source: '/va/lib.js',
           destination: 'https://va.vercel-scripts.com/v1/script.js',
