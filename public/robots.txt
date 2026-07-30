@@ -186,6 +186,8 @@ Allow: /
 # GROUP 4: GLOBAL RULES & SITEMAP
 # -----------------------------------------------------------------
 User-agent: *
+Disallow: /*$
+Disallow: /*%24
 Allow: /
 
 Sitemap: https://www.codingdatafy.com/sitemap.xml
