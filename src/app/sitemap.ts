@@ -7,21 +7,18 @@
 
 import type { MetadataRoute } from 'next';
 import { getAllPostSlugs } from "@/lib/markdown";
-import { connection } from "next/server";
 
 const BASE_URL = 'https://www.codingdatafy.com';
 
+// Freeze the timestamp at application build time
+const BUILD_DATE = new Date();
+
 /**
- * GENERATE STATIC & DYNAMIC SITEMAP ENTRIES
+ * GENERATE STATIC SITEMAP ENTRIES AT BUILD TIME
  */
-export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  // 1. ENSURE DYNAMIC EXECUTION RUNTIME FOR REPOSITORY UPDATES
-  await connection();
-
-  // 2. Fetch all structural paths generated from the compiled content repository
+export default function sitemap(): MetadataRoute.Sitemap {
+  // 1. Fetch all structural paths generated from the compiled content repository
   const allSlugs = getAllPostSlugs();
-
-  const currentDate = new Date();
 
   const sitemapEntries = allSlugs.map((pathEntry) => {
     // Extract the flat slug array mapped directly from the updated markdown compiler logic
@@ -31,7 +28,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const urlPath = slugArray.join('/');
     const fullUrlPath = urlPath === '' ? '' : `/${urlPath}`;
     
-    // 3. ADAPTIVE SEO PRIORITY LOGIC
+    // 2. ADAPTIVE SEO PRIORITY LOGIC
     let priority = 0.7;
     
     if (fullUrlPath === '') {
@@ -45,7 +42,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
     return {
       url: `${BASE_URL}${fullUrlPath}`,
-      lastModified: currentDate,
+      lastModified: BUILD_DATE,
       changeFrequency: 'weekly' as const,
       priority: priority,
     };
