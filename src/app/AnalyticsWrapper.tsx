@@ -10,15 +10,13 @@
 import { useEffect, useState } from "react";
 import { Analytics, type AnalyticsProps } from '@vercel/analytics/react';
 
-const THIRTY_MINUTES_IN_MS = 30 * 60 * 1000;
-
 export default function AnalyticsWrapper() {
   const [mounted, setMounted] = useState<boolean>(false);
 
   useEffect(() => {
     setMounted(true);
     
-    // 1. Secret Admin Access Trigger Context
+    // Secret Admin Access Trigger Context
     if (typeof window !== 'undefined') {
       const queryParams = new URLSearchParams(window.location.search);
       if (queryParams.get('admin') === 'true') {
@@ -61,31 +59,13 @@ export default function AnalyticsWrapper() {
         // 4. Admin Privacy Verification
         const isExplicitlyDisabled = localStorage.getItem('va-disable') === 'true';
 
-        // -------------------------------------------------------------
-        // 5. 30-MINUTE DUPLICATE PAGEVIEW RATE LIMITER (localStorage)
-        // -------------------------------------------------------------
-        const pathname = window.location.pathname;
-        const storageKey = `va_last_pv_${pathname}`;
-        
-        const lastViewedTime = localStorage.getItem(storageKey);
-        const currentTime = Date.now();
-
-        let isWithin30Minutes = false;
-        if (lastViewedTime) {
-          const parsedTime = parseInt(lastViewedTime, 10);
-          if (!isNaN(parsedTime) && currentTime - parsedTime < THIRTY_MINUTES_IN_MS) {
-            isWithin30Minutes = true;
-          }
-        }
-
-        if (!isOfficialDomain || isBotAgent || isAutomatedBot || isExplicitlyDisabled || isWithin30Minutes) {
+        // Filter out non-official domains, bots, automated scripts, or admin sessions
+        if (!isOfficialDomain || isBotAgent || isAutomatedBot || isExplicitlyDisabled) {
           if (process.env.NODE_ENV === 'development') {
-            console.log(`CodingDatafy Analytics: Pageview Dropped (Within 30m: ${isWithin30Minutes}, Domain: ${isOfficialDomain}, Bot: ${isBotAgent || isAutomatedBot})`);
+            console.log(`CodingDatafy Analytics: Pageview Dropped (Domain: ${isOfficialDomain}, Bot: ${isBotAgent || isAutomatedBot}, Admin Disabled: ${isExplicitlyDisabled})`);
           }
           return null;
         }
-
-        localStorage.setItem(storageKey, currentTime.toString());
 
         return event;
       }) as BeforeSendType}
