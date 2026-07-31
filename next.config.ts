@@ -75,13 +75,13 @@ const nextConfig: NextConfig = {
   async rewrites() {
     return {
       beforeFiles: [
-        // A. BLOCK ESCAPED DOLLAR SIGN PATHS (FORCE 404 STATUS)
+        // A. BLOCK ESCAPED DOLLAR SIGN PATHS
         {
           source: '/\\$',
           destination: '/404',
         },
         {
-          source: '/:path*\\$:extra*',
+          source: '/:path*(.*\\$.*)',
           destination: '/404',
         },
 
