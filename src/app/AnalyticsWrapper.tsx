@@ -13,19 +13,21 @@ import { Analytics, type AnalyticsProps } from '@vercel/analytics/react';
 const THIRTY_MINUTES_IN_MS = 30 * 60 * 1000;
 
 export default function AnalyticsWrapper() {
-  const [mounted, setMounted] = useState(false);
+  const [mounted, setMounted] = useState<boolean>(false);
 
   useEffect(() => {
     setMounted(true);
     
     // 1. Secret Admin Access Trigger Context
-    const queryParams = new URLSearchParams(window.location.search);
-    if (queryParams.get('admin') === 'true') {
-      localStorage.setItem('va-disable', 'true');
-      console.log('CodingDatafy: Admin mode activated. Tracking disabled.');
-      const newUrl = window.location.pathname;
-      window.history.replaceState({}, '', newUrl); 
-      alert('Success: Tracking is now disabled for this browser.');
+    if (typeof window !== 'undefined') {
+      const queryParams = new URLSearchParams(window.location.search);
+      if (queryParams.get('admin') === 'true') {
+        localStorage.setItem('va-disable', 'true');
+        console.log('CodingDatafy: Admin mode activated. Tracking disabled.');
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, '', newUrl); 
+        alert('Success: Tracking is now disabled for this browser.');
+      }
     }
   }, []);
 
@@ -60,25 +62,30 @@ export default function AnalyticsWrapper() {
         const isExplicitlyDisabled = localStorage.getItem('va-disable') === 'true';
 
         // -------------------------------------------------------------
-        // 5. 30-MINUTE DUPLICATE PAGEVIEW RATE LIMITER
+        // 5. 30-MINUTE DUPLICATE PAGEVIEW RATE LIMITER (localStorage)
         // -------------------------------------------------------------
         const pathname = window.location.pathname;
         const storageKey = `va_last_pv_${pathname}`;
-        const lastViewedTime = sessionStorage.getItem(storageKey);
+        
+        const lastViewedTime = localStorage.getItem(storageKey);
         const currentTime = Date.now();
 
         let isWithin30Minutes = false;
-        if (lastViewedTime && currentTime - parseInt(lastViewedTime, 10) < THIRTY_MINUTES_IN_MS) {
-          isWithin30Minutes = true;
+        if (lastViewedTime) {
+          const parsedTime = parseInt(lastViewedTime, 10);
+          if (!isNaN(parsedTime) && currentTime - parsedTime < THIRTY_MINUTES_IN_MS) {
+            isWithin30Minutes = true;
+          }
         }
 
         if (!isOfficialDomain || isBotAgent || isAutomatedBot || isExplicitlyDisabled || isWithin30Minutes) {
-          console.log(`CodingDatafy Analytics: Pageview Dropped (Within 30m: ${isWithin30Minutes}, Domain: ${isOfficialDomain}, Bot: ${isBotAgent || isAutomatedBot})`);
-          return null; //
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`CodingDatafy Analytics: Pageview Dropped (Within 30m: ${isWithin30Minutes}, Domain: ${isOfficialDomain}, Bot: ${isBotAgent || isAutomatedBot})`);
+          }
+          return null;
         }
 
-        // Save timestamp for valid visits to enforce 30-min delay
-        sessionStorage.setItem(storageKey, currentTime.toString());
+        localStorage.setItem(storageKey, currentTime.toString());
 
         return event;
       }) as BeforeSendType}
