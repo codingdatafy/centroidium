@@ -8,12 +8,7 @@
 import { getPageData, getAllPostSlugs } from "@/lib/markdown";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import Link from "next/link";
-
-/**
- * ENFORCE STRICT 404 RESPONSES
- */
-export const dynamicParams = false;
+import Link from "link";
 
 /**
  * PAGE COMPONENT PROPERTIES
