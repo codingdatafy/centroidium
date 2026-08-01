@@ -45,7 +45,12 @@ export function proxy(request: NextRequest) {
       pathname.startsWith('/data/') || 
       pathname.includes('/_sidebar')
     ) {
-      return new NextResponse(null, { status: 404 });
+      return new NextResponse(null, { 
+        status: 404,
+        headers: {
+          'Cache-Control': 'no-store, max-age=0',
+        },
+      });
     }
   }
 
@@ -71,3 +76,14 @@ export function proxy(request: NextRequest) {
 
   return response;
 }
+
+// 5. MATCHING BOUNDARY ROUTE CONFIGURATION
+export const config = {
+  matcher: [
+    /*
+     * Match all request paths except for static files:
+     * - favicon.ico, images, public assets
+     */
+    '/((?!_next/static|_next/image|favicon.ico|images/).*)',
+  ],
+};

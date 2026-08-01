@@ -15,6 +15,9 @@ interface PageProps {
   params: Promise<{ slug?: string[] }>;
 }
 
+// Enable dynamic rendering for non-prerendered routes while preserving strict 404 evaluation
+export const dynamicParams = true;
+
 export async function generateStaticParams() {
   const paths = getAllPostSlugs();
   return paths && paths.length > 0 ? paths : [];
@@ -26,7 +29,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   // Catch invalid paths or empty params that do not exist
   if (!slug || slug.length === 0) {
     const homeData = await getPageData(undefined);
-    if (!homeData) return {};
+    if (!homeData) {
+      notFound();
+    }
     return {
       title: homeData.meta.title,
       description: homeData.meta.description,
@@ -34,7 +39,11 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   }
 
   const data = await getPageData(slug);
-  if (!data) return {};
+  
+  // STRICT METADATA BOUNDARY: Explicitly trigger notFound to prevent metadata fallback loops
+  if (!data) {
+    notFound();
+  }
 
   const title = data.meta.title;
   const description = data.meta.description || "Master coding with CodingDatafy expert-led documentation.";
@@ -50,18 +59,15 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 }
 
 export default async function Page({ params }: PageProps) {
-  // Await the params Promise strictly (Next.js 16 requirement)
+  // Await the params Promise strictly
   const resolvedParams = await params;
   const slug = resolvedParams.slug;
 
-  // 1. If it's the home page root path
-  const isHomePage = !slug || slug.length === 0;
-
-  // 2. Fetch markdown page data
+  // Fetch markdown page data
   const data = await getPageData(slug);
 
-  // 3. STRICT 404 BOUNDARY:
-  // If data doesn't exist AND it's not the home page, trigger notFound()
+  // STRICT 404 BOUNDARY:
+  // Trigger absolute notFound() response if route content is completely missing
   if (!data) {
     notFound();
   }
