@@ -47,13 +47,10 @@ const getFileLastCommitDate = cache(async (targetFilePath: string): Promise<stri
     return fallbackDate;
   }
 
-  // Absolute local filesystem path to the file inside data/ directory
-  const localAbsolutePath = path.join(DATA_DIRECTORY, targetFilePath);
-
-  // 1. TRY LOCAL GIT COMMAND FIRST
+  // 1. TRY LOCAL GIT COMMAND FIRST (Executes directly inside data workspace)
   try {
     const { execSync } = await import('child_process');
-    const gitDate = execSync(`git log -1 --format=%cd --date=short "${localAbsolutePath}"`, {
+    const gitDate = execSync(`git -C "${DATA_DIRECTORY}" log -1 --format=%cd --date=short "${targetFilePath}"`, {
       encoding: 'utf-8',
     }).trim();
 
@@ -61,12 +58,12 @@ const getFileLastCommitDate = cache(async (targetFilePath: string): Promise<stri
       return gitDate;
     }
   } catch {
-    // Silently fallback to GitHub API if local git log fails
+    // Silently fallback to GitHub API if local git log execution fails
   }
 
   // 2. FALLBACK TO GITHUB COMMITS API
   const cleanRepoPath = targetFilePath.replace(/^data\//, '');
-  const commitApiUrl = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/commits?path=${encodeURIComponent(cleanRepoPath)}&page=1&per_page=1`;
+  const commitApiUrl = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/commits?path=data/${encodeURIComponent(cleanRepoPath)}&page=1&per_page=1`;
 
   const token = process.env.ORGANIZATION_GITHUB_TOKEN || process.env.CENTROIDIUM_PAT;
   const headers: HeadersInit = { 
@@ -75,7 +72,9 @@ const getFileLastCommitDate = cache(async (targetFilePath: string): Promise<stri
   };
 
   if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+    headers['Authorization'] = token.startsWith('github_pat_') || token.startsWith('ghp_') 
+      ? `Bearer ${token}` 
+      : `token ${token}`;
   }
 
   try {

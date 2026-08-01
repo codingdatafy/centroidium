@@ -37,15 +37,17 @@ jobs:
           repository: 'CodingDatafy/content'
           path: 'content-temp'
           token: ${{ secrets.CENTROIDIUM_PAT }}
-          fetch-depth: 0
+          fetch-depth: 0 # Retains complete commit history
 
       - name: Inject Content into Engine Root
         run: |
           rm -rf data
           mkdir -p data
           if [ -d "content-temp/data" ]; then
-            cp -r content-temp/data/* data/
-            echo "Data workspace successfully injected into root."
+            # Copy all files including hidden ones (.git)
+            shopt -s dotglob
+            cp -r content-temp/* data/
+            echo "Data workspace and Git history successfully injected."
             ls -la data
           else
             echo "Critical Error: Content workspace missing!" && exit 1
