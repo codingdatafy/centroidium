@@ -39,12 +39,19 @@ export interface PageData {
 }
 
 /**
+ * Helper to acquire the GitHub Token safely from environment
+ */
+function getGitHubToken(): string | undefined {
+  return process.env.GITHUB_TOKEN || process.env.ORGANIZATION_GITHUB_TOKEN || process.env.CENTROIDIUM_PAT;
+}
+
+/**
  * FETCH ATOMIC FILE DATA DIRECTLY FROM THE CONTENT REPOSITORY VIA GITHUB RAW API
  */
 const fetchFromGitHubApi = cache(async (relativePath: string): Promise<string | null> => {
   const rawUrl = `https://raw.githubusercontent.com/${GITHUB_OWNER}/${GITHUB_REPO}/${GITHUB_BRANCH}/data/${relativePath}`;
   
-  const token = process.env.ORGANIZATION_GITHUB_TOKEN || process.env.CENTROIDIUM_PAT;
+  const token = getGitHubToken();
   const headers: HeadersInit = { 'User-Agent': 'CodingDatafy-Engine' };
   
   if (token) {
@@ -56,6 +63,7 @@ const fetchFromGitHubApi = cache(async (relativePath: string): Promise<string | 
   try {
     const response = await fetch(rawUrl, { 
       headers,
+      cache: 'force-cache',
       next: { revalidate: 3600, tags: ['github-content'] }
     });
     if (!response.ok) return null;
@@ -76,25 +84,28 @@ const getFileLastCommitDate = cache(async (targetFilePath: string): Promise<stri
     return fallbackDate;
   }
 
+  const token = getGitHubToken();
+
+  // If token is missing, return fallback date gracefully during SSG prerender
+  if (!token) {
+    console.warn(`[CodingDatafy Engine]: GitHub Token missing. Utilizing default fallback date for ${targetFilePath}`);
+    return fallbackDate;
+  }
+
   const commitApiUrl = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/commits?path=data/${targetFilePath}&page=1&per_page=1`;
 
-  const token = process.env.ORGANIZATION_GITHUB_TOKEN || process.env.CENTROIDIUM_PAT;
   const headers: HeadersInit = { 
     'User-Agent': 'CodingDatafy-Engine',
-    'Accept': 'application/vnd.github.v3+json'
-  };
-
-  if (token) {
-    headers['Authorization'] = token.startsWith('github_pat_') || token.startsWith('ghp_') 
+    'Accept': 'application/vnd.github.v3+json',
+    'Authorization': token.startsWith('github_pat_') || token.startsWith('ghp_') 
       ? `Bearer ${token}` 
-      : `token ${token}`;
-  } else {
-    console.warn(`[CodingDatafy Engine]: ORGANIZATION_GITHUB_TOKEN is missing in environment variables.`);
-  }
+      : `token ${token}`
+  };
 
   try {
     const response = await fetch(commitApiUrl, { 
       headers,
+      cache: 'force-cache',
       next: { revalidate: 3600, tags: ['github-history'] }
     });
 
