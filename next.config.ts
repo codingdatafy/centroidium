@@ -27,6 +27,7 @@ const nextConfig: NextConfig = {
 
   // 4. IMAGE OPTIMIZATION
   images: {
+    unoptimized: true,
     dangerouslyAllowSVG: true,
     contentDispositionType: 'attachment',
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
@@ -56,7 +57,6 @@ const nextConfig: NextConfig = {
   // 5. SECURITY & EDGE CACHING HEADERS
   async headers() {
     return [
-      // 5.1. Standard Global Security Headers for ALL Routes
       {
         source: '/(.*)',
         headers: [
@@ -68,11 +68,10 @@ const nextConfig: NextConfig = {
           { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
         ],
       },
-      // 5.2. Edge Cache Control Headers ONLY for Valid Dynamic Content Routes
       {
         source: '/((?!_next/|api/|favicon.ico|images/|styles/|scripts/|404|not-found).*)',
         headers: [
-          { key: 'Cache-Control', value: 'public, max-age=0, s-maxage=300, stale-while-revalidate=59' },
+          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
         ],
       },
     ];
@@ -82,7 +81,6 @@ const nextConfig: NextConfig = {
   async rewrites() {
     return {
       beforeFiles: [
-        // PROXY FOR VERCEL ANALYTICS SHIELDING
         {
           source: '/va/lib.js',
           destination: 'https://va.vercel-scripts.com/v1/script.js',

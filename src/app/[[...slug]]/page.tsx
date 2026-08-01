@@ -10,10 +10,9 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import Link from "next/link";
 
-// Disable dynamic parameters to enforce hard 404 for non-generated static routes
+// Enforce full static HTML generation and block dynamic fallback
 export const dynamicParams = false;
 
-// Declaring params as Promise according to Next.js 16
 interface PageProps {
   params: Promise<{ slug?: string[] }>;
 }
