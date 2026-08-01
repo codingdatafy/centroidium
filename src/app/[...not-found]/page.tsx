@@ -6,6 +6,19 @@
  */
 
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
+
+/**
+ * Prevent dynamic metadata inference errors during SSG prerender in Next.js 16
+ */
+export const metadata: Metadata = {
+  title: "404 - Page Not Found",
+  description: "The requested page could not be found on CodingDatafy.",
+  robots: {
+    index: false,
+    follow: false,
+  },
+};
 
 /**
  * Catch-all route component for handling unknown and invalid URLs.
