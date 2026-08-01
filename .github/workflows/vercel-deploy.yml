@@ -18,7 +18,7 @@ jobs:
       # Step 1: Environment Initialization
       # ==========================================
       - name: Checkout Engine Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
       - name: Verify Environment Node Version
         run: |
@@ -29,10 +29,10 @@ jobs:
         run: npm install
 
       # ==========================================
-      # Step 2: Content Injection
+      # Step 2: Content Injection (With Full Git History)
       # ==========================================
       - name: Clone Content Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: 'CodingDatafy/content'
           path: 'content-temp'
@@ -45,7 +45,6 @@ jobs:
           mkdir -p data
           if [ -d "content-temp/data" ]; then
             cp -r content-temp/data/* data/
-            # Preserve .git directory inside data if needed, or allow git commands on workspace
             echo "Data workspace successfully injected into root."
             ls -la data
           else
