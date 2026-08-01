@@ -7,6 +7,10 @@
 
 import Link from 'next/link';
 
+// Disable caching for the 404 page to prevent router cache redirects
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 /**
  * NOT FOUND COMPONENT
  */

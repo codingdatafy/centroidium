@@ -8,7 +8,7 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  // 1. CORE PERFORMANCE & NEXT.JS 16 CACHE COMPONENTS
+  // 1. CORE PERFORMANCE
   reactStrictMode: true,
   poweredByHeader: false,
   reactCompiler: false,
@@ -56,6 +56,7 @@ const nextConfig: NextConfig = {
   // 6. SECURITY & EDGE CACHING HEADERS
   async headers() {
     return [
+      // 6.1. Standard Global Security Headers for ALL Routes
       {
         source: '/(.*)',
         headers: [
@@ -65,6 +66,13 @@ const nextConfig: NextConfig = {
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
           { key: 'X-Frame-Options', value: 'DENY' },
           { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+        ],
+      },
+      // 6.2. Edge Cache Control Headers ONLY for Valid Static / Dynamic Content
+      // Excludes static assets, internal next data, and error routes dynamically
+      {
+        source: '/((?!_next/|api/|favicon.ico|images/|styles/|scripts/).*)',
+        headers: [
           { key: 'Cache-Control', value: 'public, s-maxage=3600, stale-while-revalidate=59' },
         ],
       },
