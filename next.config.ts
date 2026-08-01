@@ -72,7 +72,7 @@ const nextConfig: NextConfig = {
       {
         source: '/((?!_next/|api/|favicon.ico|images/|styles/|scripts/|404|not-found).*)',
         headers: [
-          { key: 'Cache-Control', value: 'public, max-age=0, s-maxage=3600, stale-while-revalidate=59' },
+          { key: 'Cache-Control', value: 'public, max-age=0, s-maxage=300, stale-while-revalidate=59' },
         ],
       },
     ];

@@ -56,7 +56,7 @@ const fetchFromGitHubApi = cache(async (relativePath: string): Promise<string | 
   try {
     const response = await fetch(rawUrl, { 
       headers,
-      next: { revalidate: 3600, tags: ['github-content'] }
+      next: { revalidate: 300, tags: ['github-content'] }
     });
     if (!response.ok) return null;
     return await response.text();
