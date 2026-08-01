@@ -16,7 +16,6 @@ const DATA_DIRECTORY = path.join(process.cwd(), 'data');
 
 const GITHUB_OWNER = 'CodingDatafy';
 const GITHUB_REPO = 'content';
-const GITHUB_BRANCH = 'main';
 
 export interface PageMetadata {
   title: string;
@@ -39,7 +38,7 @@ export interface PageData {
 }
 
 /**
- * FETCH ATOMIC LAST UPDATED TIMESTAMP FROM GITHUB COMMITS API AT BUILD TIME
+ * FETCH ATOMIC LAST UPDATED TIMESTAMP FROM LOCAL GIT LOG OR GITHUB COMMITS API
  */
 const getFileLastCommitDate = cache(async (targetFilePath: string): Promise<string> => {
   const fallbackDate = "2026-05-01";
@@ -48,7 +47,26 @@ const getFileLastCommitDate = cache(async (targetFilePath: string): Promise<stri
     return fallbackDate;
   }
 
-  const commitApiUrl = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/commits?path=data/${targetFilePath}&page=1&per_page=1`;
+  // Absolute local filesystem path to the file inside data/ directory
+  const localAbsolutePath = path.join(DATA_DIRECTORY, targetFilePath);
+
+  // 1. TRY LOCAL GIT COMMAND FIRST
+  try {
+    const { execSync } = await import('child_process');
+    const gitDate = execSync(`git log -1 --format=%cd --date=short "${localAbsolutePath}"`, {
+      encoding: 'utf-8',
+    }).trim();
+
+    if (gitDate) {
+      return gitDate;
+    }
+  } catch {
+    // Silently fallback to GitHub API if local git log fails
+  }
+
+  // 2. FALLBACK TO GITHUB COMMITS API
+  const cleanRepoPath = targetFilePath.replace(/^data\//, '');
+  const commitApiUrl = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/commits?path=${encodeURIComponent(cleanRepoPath)}&page=1&per_page=1`;
 
   const token = process.env.ORGANIZATION_GITHUB_TOKEN || process.env.CENTROIDIUM_PAT;
   const headers: HeadersInit = { 
@@ -57,18 +75,22 @@ const getFileLastCommitDate = cache(async (targetFilePath: string): Promise<stri
   };
 
   if (token) {
-    headers['Authorization'] = token.startsWith('github_pat_') || token.startsWith('ghp_') 
-      ? `Bearer ${token}` 
-      : `token ${token}`;
+    headers['Authorization'] = `Bearer ${token}`;
   }
 
   try {
-    const response = await fetch(commitApiUrl, { headers });
+    const response = await fetch(commitApiUrl, { 
+      headers,
+      next: { revalidate: 3600 }
+    });
 
     if (response.ok) {
       const commits = await response.json();
-      if (Array.isArray(commits) && commits.length > 0 && commits[0]?.commit?.committer?.date) {
-        return commits[0].commit.committer.date.split('T')[0];
+      if (Array.isArray(commits) && commits.length > 0) {
+        const rawDate = commits[0]?.commit?.committer?.date || commits[0]?.commit?.author?.date;
+        if (rawDate) {
+          return rawDate.split('T')[0];
+        }
       }
     }
     return fallbackDate;
@@ -123,7 +145,7 @@ export async function getPageData(slugArray: string[] | undefined): Promise<Page
       sidebarHtml = processedSidebar.toString();
     }
 
-    // Extract exact commit timestamp from GitHub API during build step
+    // Extract exact commit timestamp from Git or GitHub API during build step
     const lastUpdatedDate = await getFileLastCommitDate(verifiedRepoPath);
 
     return {

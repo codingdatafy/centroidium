@@ -18,7 +18,7 @@ jobs:
       # Step 1: Environment Initialization
       # ==========================================
       - name: Checkout Engine Repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@v4
 
       - name: Verify Environment Node Version
         run: |
@@ -29,14 +29,15 @@ jobs:
         run: npm install
 
       # ==========================================
-      # Step 2: Content Injection (Root Layer)
+      # Step 2: Content Injection
       # ==========================================
       - name: Clone Content Repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@v4
         with:
           repository: 'CodingDatafy/content'
           path: 'content-temp'
           token: ${{ secrets.CENTROIDIUM_PAT }}
+          fetch-depth: 0
 
       - name: Inject Content into Engine Root
         run: |
@@ -44,6 +45,7 @@ jobs:
           mkdir -p data
           if [ -d "content-temp/data" ]; then
             cp -r content-temp/data/* data/
+            # Preserve .git directory inside data if needed, or allow git commands on workspace
             echo "Data workspace successfully injected into root."
             ls -la data
           else
@@ -68,6 +70,7 @@ jobs:
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          ORGANIZATION_GITHUB_TOKEN: ${{ secrets.CENTROIDIUM_PAT }}
 
       - name: Deploy Prebuilt Artifacts to Vercel Production
         run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
