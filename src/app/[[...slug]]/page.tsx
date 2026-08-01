@@ -11,6 +11,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 /**
+ * ALLOW DYNAMIC ROUTING FOR UNPRE-RENDERED SLUGS TO TRIGGER NOTFOUND BOUNDARY
+ */
+export const dynamicParams = true;
+
+/**
  * PAGE COMPONENT PROPERTIES
  */
 interface PageProps {
@@ -21,7 +26,6 @@ interface PageProps {
  * STATIC PATH GENERATION
  */
 export async function generateStaticParams() {
-  // Fetch paths from the markdown content library
   const paths = getAllPostSlugs();
   
   if (!paths || paths.length === 0) {
@@ -37,7 +41,6 @@ export async function generateStaticParams() {
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
   
-  // Return early if it is the fallback verification route
   if (slug && slug[0] === "_fallback") {
     return { title: "CodingDatafy" };
   }
@@ -82,7 +85,6 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 export default async function Page({ params }: PageProps) {
   const { slug } = await params;
 
-  // Handle fallback route synchronously and statically to prevent uncached data suspension errors
   if (slug && slug[0] === "_fallback") {
     return (
       <main id="main">
@@ -98,12 +100,12 @@ export default async function Page({ params }: PageProps) {
     );
   }
 
-  // Fetch the markdown data statically during compile time
   const data = await getPageData(slug);
 
-  if (!data) notFound();
+  if (!data) {
+    notFound();
+  }
 
-  // Define absolute URL instead of relative path to counter content scraping attempts
   const absoluteUrl = `https://www.codingdatafy.com/${slug?.join('/') || ''}`;
 
   return (

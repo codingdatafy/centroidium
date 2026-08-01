@@ -71,21 +71,11 @@ const nextConfig: NextConfig = {
     ];
   },
 
-  // 7. PROXY REWRITES FOR ANALYTICS SHIELDING & 404 ROUTE PROTECTION
+  // 7. PROXY REWRITES FOR ANALYTICS SHIELDING
   async rewrites() {
     return {
       beforeFiles: [
-        // A. BLOCK ESCAPED DOLLAR SIGN PATHS
-        {
-          source: '/\\$',
-          destination: '/404',
-        },
-        {
-          source: '/:path*(.*\\$.*)',
-          destination: '/404',
-        },
-
-        // B. PROXY FOR VERCEL ANALYTICS SHIELDING
+        // PROXY FOR VERCEL ANALYTICS SHIELDING
         {
           source: '/va/lib.js',
           destination: 'https://va.vercel-scripts.com/v1/script.js',
