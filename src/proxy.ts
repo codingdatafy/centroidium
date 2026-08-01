@@ -37,21 +37,18 @@ export function proxy(request: NextRequest) {
   }
 
   // 2. DIRECTORY & CONTENT PRIVACY SHIELD
-  const isStaticOrApi = pathname.startsWith('/_next') || pathname.startsWith('/api') || pathname.includes('.');
-
-  if (!isAnalyticsRoute && !isStaticOrApi) {
-    if (
-      pathname.endsWith('.md') || 
-      pathname.startsWith('/data/') || 
-      pathname.includes('/_sidebar')
-    ) {
-      return new NextResponse(null, { 
-        status: 404,
-        headers: {
-          'Cache-Control': 'no-store, max-age=0',
-        },
-      });
-    }
+  // Block internal content paths and raw Markdown files directly at edge level
+  if (
+    pathname.endsWith('.md') || 
+    pathname.startsWith('/data/') || 
+    pathname.includes('/_sidebar')
+  ) {
+    return new NextResponse(null, { 
+      status: 404,
+      headers: {
+        'Cache-Control': 'no-store, max-age=0',
+      },
+    });
   }
 
   // 3. CLOUDFLARE VISITOR IP SYNCHRONIZATION
@@ -76,6 +73,9 @@ export function proxy(request: NextRequest) {
 
   return response;
 }
+
+// Default export alias to serve as standard Next.js Middleware if needed
+export default proxy;
 
 // 5. MATCHING BOUNDARY ROUTE CONFIGURATION
 export const config = {

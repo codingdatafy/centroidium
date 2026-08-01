@@ -10,6 +10,9 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import Link from "next/link";
 
+// Disable dynamic parameters to enforce hard 404 for non-generated static routes
+export const dynamicParams = false;
+
 // Declaring params as Promise according to Next.js 16
 interface PageProps {
   params: Promise<{ slug?: string[] }>;
@@ -23,7 +26,6 @@ export async function generateStaticParams() {
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
 
-  // Catch invalid paths or empty params that do not exist
   if (!slug || slug.length === 0) {
     const homeData = await getPageData(undefined);
     if (!homeData) {
@@ -37,7 +39,6 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   const data = await getPageData(slug);
   
-  // STRICT METADATA BOUNDARY: Explicitly trigger notFound to prevent metadata fallback loops
   if (!data) {
     notFound();
   }
@@ -56,15 +57,11 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 }
 
 export default async function Page({ params }: PageProps) {
-  // Await the params Promise strictly (Next.js 16 requirement)
   const resolvedParams = await params;
   const slug = resolvedParams.slug;
 
-  // Fetch markdown page data
   const data = await getPageData(slug);
 
-  // STRICT 404 BOUNDARY:
-  // Trigger absolute notFound() response if route content is completely missing
   if (!data) {
     notFound();
   }

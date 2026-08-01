@@ -8,28 +8,24 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  // 1. CORE PERFORMANCE
+  // 1. CORE PERFORMANCE & OPTIMIZATION
   reactStrictMode: true,
   poweredByHeader: false,
   reactCompiler: false,
-  cacheComponents: true,
 
-  // 2. CLOUDFLARE INTEGRATION SECURITY
-  skipProxyUrlNormalize: true,
-
-  // 3. TURBOPACK CONFIGURATION
+  // 2. TURBOPACK CONFIGURATION
   turbopack: {
     resolveAlias: {
       fs: { browser: './empty.ts' },
     },
   },
 
-  // 4. EXPERIMENTAL FEATURES
+  // 3. EXPERIMENTAL FEATURES
   experimental: {
     turbopackFileSystemCacheForDev: true,
   },
 
-  // 5. IMAGE OPTIMIZATION
+  // 4. IMAGE OPTIMIZATION
   images: {
     dangerouslyAllowSVG: true,
     contentDispositionType: 'attachment',
@@ -50,13 +46,17 @@ const nextConfig: NextConfig = {
         protocol: 'https',
         hostname: 'github.com',
       },
+      {
+        protocol: 'https',
+        hostname: 'raw.githubusercontent.com',
+      },
     ],
   },
 
-  // 6. SECURITY & EDGE CACHING HEADERS
+  // 5. SECURITY & EDGE CACHING HEADERS
   async headers() {
     return [
-      // 6.1. Standard Global Security Headers for ALL Routes
+      // 5.1. Standard Global Security Headers for ALL Routes
       {
         source: '/(.*)',
         headers: [
@@ -68,18 +68,17 @@ const nextConfig: NextConfig = {
           { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
         ],
       },
-      // 6.2. Edge Cache Control Headers ONLY for Valid Static / Dynamic Content
-      // Excludes static assets, internal next data, and error routes dynamically
+      // 5.2. Edge Cache Control Headers ONLY for Valid Dynamic Content Routes
       {
-        source: '/((?!_next/|api/|favicon.ico|images/|styles/|scripts/).*)',
+        source: '/((?!_next/|api/|favicon.ico|images/|styles/|scripts/|404|not-found).*)',
         headers: [
-          { key: 'Cache-Control', value: 'public, s-maxage=3600, stale-while-revalidate=59' },
+          { key: 'Cache-Control', value: 'public, max-age=0, s-maxage=3600, stale-while-revalidate=59' },
         ],
       },
     ];
   },
 
-  // 7. PROXY REWRITES FOR ANALYTICS SHIELDING
+  // 6. PROXY REWRITES FOR ANALYTICS SHIELDING
   async rewrites() {
     return {
       beforeFiles: [
