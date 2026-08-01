@@ -39,14 +39,7 @@ export interface PageData {
 }
 
 /**
- * Helper to acquire the GitHub Token safely from environment
- */
-function getGitHubToken(): string | undefined {
-  return process.env.GITHUB_TOKEN || process.env.ORGANIZATION_GITHUB_TOKEN || process.env.CENTROIDIUM_PAT;
-}
-
-/**
- * Helper function to format ISO date string into readable "YYYY-MM-DD at HH:MM" or "YYYY-MM-DD"
+ * Safe Helper to format ISO Date strings cleanly
  */
 function formatDateString(isoString: string): string {
   if (!isoString) return "2026-05-01";
@@ -77,7 +70,7 @@ function formatDateString(isoString: string): string {
 const fetchFromGitHubApi = cache(async (relativePath: string): Promise<string | null> => {
   const rawUrl = `https://raw.githubusercontent.com/${GITHUB_OWNER}/${GITHUB_REPO}/${GITHUB_BRANCH}/data/${relativePath}`;
   
-  const token = getGitHubToken();
+  const token = process.env.ORGANIZATION_GITHUB_TOKEN || process.env.CENTROIDIUM_PAT;
   const headers: HeadersInit = { 'User-Agent': 'CodingDatafy-Engine' };
   
   if (token) {
@@ -89,7 +82,6 @@ const fetchFromGitHubApi = cache(async (relativePath: string): Promise<string | 
   try {
     const response = await fetch(rawUrl, { 
       headers,
-      cache: 'force-cache',
       next: { revalidate: 3600, tags: ['github-content'] }
     });
     if (!response.ok) return null;
@@ -110,13 +102,13 @@ const getFileLastCommitDate = cache(async (targetFilePath: string): Promise<stri
     return fallbackDate;
   }
 
-  const token = getGitHubToken();
   const cleanPath = targetFilePath.startsWith('/') ? targetFilePath.slice(1) : targetFilePath;
   const commitApiUrl = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/commits?path=data/${cleanPath}&sha=${GITHUB_BRANCH}&page=1&per_page=1`;
 
+  const token = process.env.ORGANIZATION_GITHUB_TOKEN || process.env.CENTROIDIUM_PAT;
   const headers: HeadersInit = { 
     'User-Agent': 'CodingDatafy-Engine',
-    'Accept': 'application/vnd.github.v3+json',
+    'Accept': 'application/vnd.github.v3+json'
   };
 
   if (token) {
@@ -124,20 +116,18 @@ const getFileLastCommitDate = cache(async (targetFilePath: string): Promise<stri
       ? `Bearer ${token}` 
       : `token ${token}`;
   } else {
-    console.warn(`[CodingDatafy Engine Warning]: GitHub Token missing. API rate limit may apply for ${cleanPath}`);
+    console.warn(`[CodingDatafy Engine]: ORGANIZATION_GITHUB_TOKEN is missing in environment variables.`);
   }
 
   try {
     const response = await fetch(commitApiUrl, { 
       headers,
-      cache: 'force-cache',
       next: { revalidate: 3600, tags: ['github-history'] }
     });
 
     if (response.ok) {
       const commits = await response.json();
       if (Array.isArray(commits) && commits.length > 0 && commits[0]?.commit?.committer?.date) {
-        // Format GitHub commit ISO date to "YYYY-MM-DD at HH:MM"
         return formatDateString(commits[0].commit.committer.date);
       }
     } else {
@@ -155,7 +145,9 @@ const getFileLastCommitDate = cache(async (targetFilePath: string): Promise<stri
  * CORE MARKDOWN TRANSLATION ENGINE
  */
 export async function getPageData(slugArray: string[] | undefined): Promise<PageData | null> {
-  const relativePath = slugArray && slugArray.length > 0 ? slugArray.join('/') : '';
+  const isHome = !slugArray || slugArray.length === 0;
+  const relativePath = isHome ? '' : slugArray.join('/');
+  
   let fileContents: string | null = null;
   let hasSidebar = false;
   let sidebarContents: string | null = null;
@@ -164,15 +156,15 @@ export async function getPageData(slugArray: string[] | undefined): Promise<Page
   /**
    * STRATEGY 1: ACTIONS COMPILED / LOCAL FS INJECTION
    */
-  const indexPath = relativePath ? path.join(DATA_DIRECTORY, relativePath, 'index.md') : path.join(DATA_DIRECTORY, 'index.md');
-  const directPath = relativePath ? path.join(DATA_DIRECTORY, `${relativePath}.md`) : path.join(DATA_DIRECTORY, 'index.md');
+  const indexPath = isHome ? path.join(DATA_DIRECTORY, 'index.md') : path.join(DATA_DIRECTORY, relativePath, 'index.md');
+  const directPath = isHome ? path.join(DATA_DIRECTORY, 'index.md') : path.join(DATA_DIRECTORY, `${relativePath}.md`);
 
   if (fs.existsSync(indexPath)) {
     fileContents = fs.readFileSync(indexPath, 'utf8');
-    verifiedRepoPath = relativePath ? `${relativePath}/index.md` : 'index.md';
+    verifiedRepoPath = isHome ? 'index.md' : `${relativePath}/index.md`;
   } else if (fs.existsSync(directPath)) {
     fileContents = fs.readFileSync(directPath, 'utf8');
-    verifiedRepoPath = `${relativePath}.md`;
+    verifiedRepoPath = isHome ? 'index.md' : `${relativePath}.md`;
   }
 
   if (fileContents) {
@@ -188,19 +180,21 @@ export async function getPageData(slugArray: string[] | undefined): Promise<Page
    * STRATEGY 2: LIVE GITHUB REPOSITORY RUNTIME FALLBACK
    */
   else {
-    const remoteIndexPath = relativePath ? `${relativePath}/index.md` : 'index.md';
-    const remoteDirectPath = `${relativePath}.md`;
+    console.log(`[CodingDatafy Engine]: FS target missing. Falling back to GitHub API for: ${relativePath || 'index'}`);
+    
+    const targetIndexPath = isHome ? 'index.md' : `${relativePath}/index.md`;
+    const targetDirectPath = isHome ? 'index.md' : `${relativePath}.md`;
 
-    fileContents = await fetchFromGitHubApi(remoteIndexPath);
+    fileContents = await fetchFromGitHubApi(targetIndexPath);
     if (fileContents) {
-      verifiedRepoPath = remoteIndexPath;
-      const sidebarTarget = relativePath ? `${relativePath}/_sidebar.md` : '_sidebar.md';
+      verifiedRepoPath = targetIndexPath;
+      const sidebarTarget = isHome ? '_sidebar.md' : `${relativePath}/_sidebar.md`;
       sidebarContents = await fetchFromGitHubApi(sidebarTarget);
       if (sidebarContents) hasSidebar = true;
-    } else if (relativePath) {
-      fileContents = await fetchFromGitHubApi(remoteDirectPath);
+    } else if (!isHome) {
+      fileContents = await fetchFromGitHubApi(targetDirectPath);
       if (fileContents) {
-        verifiedRepoPath = remoteDirectPath;
+        verifiedRepoPath = targetDirectPath;
         const parentDir = relativePath.includes('/') ? relativePath.substring(0, relativePath.lastIndexOf('/')) : '';
         const sidebarTarget = parentDir ? `${parentDir}/_sidebar.md` : '_sidebar.md';
         sidebarContents = await fetchFromGitHubApi(sidebarTarget);
@@ -226,7 +220,6 @@ export async function getPageData(slugArray: string[] | undefined): Promise<Page
       sidebarHtml = processedSidebar.toString();
     }
 
-    // Fetch GitHub commit date from API formatted as "YYYY-MM-DD at HH:MM"
     const lastUpdatedDate = await getFileLastCommitDate(verifiedRepoPath);
 
     return {
