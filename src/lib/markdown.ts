@@ -101,13 +101,7 @@ const getFileLastCommitDate = cache(async (targetFilePath: string): Promise<stri
     if (response.ok) {
       const commits = await response.json();
       if (Array.isArray(commits) && commits.length > 0 && commits[0]?.commit?.committer?.date) {
-        const rawDate = commits[0].commit.committer.date; // e.g., "2026-08-01T17:34:00Z"
-        const [datePart, timePart] = rawDate.split('T');
-        const timeFormatted = timePart ? timePart.substring(0, 5) : '';
-
-        return timeFormatted && timeFormatted !== '00:00' 
-          ? `${datePart} at ${timeFormatted}` 
-          : datePart;
+        return commits[0].commit.committer.date.split('T')[0];
       }
     } else {
       console.warn(`[GitHub Commits API Warning]: Status ${response.status} (${response.statusText}) for path data/${targetFilePath}`);
