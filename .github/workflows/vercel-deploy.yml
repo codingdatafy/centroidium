@@ -44,9 +44,11 @@ jobs:
           rm -rf data
           mkdir -p data
           if [ -d "content-temp/data" ]; then
-            # Copy all files including hidden ones (.git)
+            # Enable dotglob to include hidden files, then copy contents of data directory cleanly
             shopt -s dotglob
-            cp -r content-temp/* data/
+            cp -r content-temp/data/* data/
+            # Also preserve .git history from repository root for commit timestamps
+            cp -r content-temp/.git data/
             echo "Data workspace and Git history successfully injected."
             ls -la data
           else
