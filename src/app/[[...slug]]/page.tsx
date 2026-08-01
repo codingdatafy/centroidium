@@ -11,6 +11,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 /**
+ * ENFORCE STRICT 404 RESPONSES
+ */
+export const dynamicParams = false;
+
+/**
  * PAGE COMPONENT PROPERTIES
  */
 interface PageProps {
