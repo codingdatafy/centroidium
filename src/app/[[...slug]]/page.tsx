@@ -15,9 +15,6 @@ interface PageProps {
   params: Promise<{ slug?: string[] }>;
 }
 
-// Enable dynamic rendering for non-prerendered routes while preserving strict 404 evaluation
-export const dynamicParams = true;
-
 export async function generateStaticParams() {
   const paths = getAllPostSlugs();
   return paths && paths.length > 0 ? paths : [];
@@ -59,7 +56,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 }
 
 export default async function Page({ params }: PageProps) {
-  // Await the params Promise strictly
+  // Await the params Promise strictly (Next.js 16 requirement)
   const resolvedParams = await params;
   const slug = resolvedParams.slug;
 
