@@ -39,32 +39,6 @@ export interface PageData {
 }
 
 /**
- * Safe Helper to format ISO Date strings cleanly
- */
-function formatDateString(isoString: string): string {
-  if (!isoString) return "2026-05-01";
-  
-  try {
-    const dateObj = new Date(isoString);
-    if (isNaN(dateObj.getTime())) return isoString.split('T')[0];
-
-    const year = dateObj.getUTCFullYear();
-    const month = String(dateObj.getUTCMonth() + 1).padStart(2, '0');
-    const day = String(dateObj.getUTCDate()).padStart(2, '0');
-    const hours = String(dateObj.getUTCHours()).padStart(2, '0');
-    const minutes = String(dateObj.getUTCMinutes()).padStart(2, '0');
-
-    if (hours === '00' && minutes === '00') {
-      return `${year}-${month}-${day}`;
-    }
-
-    return `${year}-${month}-${day} at ${hours}:${minutes}`;
-  } catch {
-    return isoString.split('T')[0];
-  }
-}
-
-/**
  * FETCH ATOMIC FILE DATA DIRECTLY FROM THE CONTENT REPOSITORY VIA GITHUB RAW API
  */
 const fetchFromGitHubApi = cache(async (relativePath: string): Promise<string | null> => {
@@ -102,8 +76,7 @@ const getFileLastCommitDate = cache(async (targetFilePath: string): Promise<stri
     return fallbackDate;
   }
 
-  const cleanPath = targetFilePath.startsWith('/') ? targetFilePath.slice(1) : targetFilePath;
-  const commitApiUrl = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/commits?path=data/${cleanPath}&sha=${GITHUB_BRANCH}&page=1&per_page=1`;
+  const commitApiUrl = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/commits?path=data/${targetFilePath}&page=1&per_page=1`;
 
   const token = process.env.ORGANIZATION_GITHUB_TOKEN || process.env.CENTROIDIUM_PAT;
   const headers: HeadersInit = { 
@@ -128,15 +101,21 @@ const getFileLastCommitDate = cache(async (targetFilePath: string): Promise<stri
     if (response.ok) {
       const commits = await response.json();
       if (Array.isArray(commits) && commits.length > 0 && commits[0]?.commit?.committer?.date) {
-        return formatDateString(commits[0].commit.committer.date);
+        const rawDate = commits[0].commit.committer.date; // e.g., "2026-08-01T17:34:00Z"
+        const [datePart, timePart] = rawDate.split('T');
+        const timeFormatted = timePart ? timePart.substring(0, 5) : '';
+
+        return timeFormatted && timeFormatted !== '00:00' 
+          ? `${datePart} at ${timeFormatted}` 
+          : datePart;
       }
     } else {
-      console.warn(`[GitHub Commits API Warning]: Status ${response.status} (${response.statusText}) for path data/${cleanPath}`);
+      console.warn(`[GitHub Commits API Warning]: Status ${response.status} (${response.statusText}) for path data/${targetFilePath}`);
     }
 
     return fallbackDate;
   } catch (error) {
-    console.error(`[GitHub Commits API Error]: Failed to fetch history for ${cleanPath}`, error);
+    console.error(`[GitHub Commits API Error]: Failed to fetch history for ${targetFilePath}`, error);
     return fallbackDate;
   }
 });
@@ -145,9 +124,7 @@ const getFileLastCommitDate = cache(async (targetFilePath: string): Promise<stri
  * CORE MARKDOWN TRANSLATION ENGINE
  */
 export async function getPageData(slugArray: string[] | undefined): Promise<PageData | null> {
-  const isHome = !slugArray || slugArray.length === 0;
-  const relativePath = isHome ? '' : slugArray.join('/');
-  
+  const relativePath = slugArray && slugArray.length > 0 ? slugArray.join('/') : 'index';
   let fileContents: string | null = null;
   let hasSidebar = false;
   let sidebarContents: string | null = null;
@@ -156,20 +133,19 @@ export async function getPageData(slugArray: string[] | undefined): Promise<Page
   /**
    * STRATEGY 1: ACTIONS COMPILED / LOCAL FS INJECTION
    */
-  const indexPath = isHome ? path.join(DATA_DIRECTORY, 'index.md') : path.join(DATA_DIRECTORY, relativePath, 'index.md');
-  const directPath = isHome ? path.join(DATA_DIRECTORY, 'index.md') : path.join(DATA_DIRECTORY, `${relativePath}.md`);
-
-  if (fs.existsSync(indexPath)) {
-    fileContents = fs.readFileSync(indexPath, 'utf8');
-    verifiedRepoPath = isHome ? 'index.md' : `${relativePath}/index.md`;
-  } else if (fs.existsSync(directPath)) {
-    fileContents = fs.readFileSync(directPath, 'utf8');
-    verifiedRepoPath = isHome ? 'index.md' : `${relativePath}.md`;
+  let fullPath = path.join(DATA_DIRECTORY, relativePath, 'index.md');
+  if (!fs.existsSync(fullPath)) {
+    fullPath = path.join(DATA_DIRECTORY, `${relativePath}.md`);
+    if (fs.existsSync(fullPath)) {
+      verifiedRepoPath = `${relativePath}.md`;
+    }
+  } else {
+    verifiedRepoPath = `${relativePath}/index.md`;
   }
 
-  if (fileContents) {
-    const activePath = fs.existsSync(indexPath) ? indexPath : directPath;
-    const currentDir = path.dirname(activePath);
+  if (fs.existsSync(fullPath)) {
+    fileContents = fs.readFileSync(fullPath, 'utf8');
+    const currentDir = path.dirname(fullPath);
     const sidebarPath = path.join(currentDir, '_sidebar.md');
     if (fs.existsSync(sidebarPath)) {
       hasSidebar = true;
@@ -180,21 +156,17 @@ export async function getPageData(slugArray: string[] | undefined): Promise<Page
    * STRATEGY 2: LIVE GITHUB REPOSITORY RUNTIME FALLBACK
    */
   else {
-    console.log(`[CodingDatafy Engine]: FS target missing. Falling back to GitHub API for: ${relativePath || 'index'}`);
+    console.log(`[CodingDatafy Engine]: FS target missing. Falling back to GitHub API for: ${relativePath}`);
     
-    const targetIndexPath = isHome ? 'index.md' : `${relativePath}/index.md`;
-    const targetDirectPath = isHome ? 'index.md' : `${relativePath}.md`;
-
-    fileContents = await fetchFromGitHubApi(targetIndexPath);
+    fileContents = await fetchFromGitHubApi(`${relativePath}/index.md`);
     if (fileContents) {
-      verifiedRepoPath = targetIndexPath;
-      const sidebarTarget = isHome ? '_sidebar.md' : `${relativePath}/_sidebar.md`;
-      sidebarContents = await fetchFromGitHubApi(sidebarTarget);
+      verifiedRepoPath = `${relativePath}/index.md`;
+      sidebarContents = await fetchFromGitHubApi(`${relativePath}/_sidebar.md`);
       if (sidebarContents) hasSidebar = true;
-    } else if (!isHome) {
-      fileContents = await fetchFromGitHubApi(targetDirectPath);
+    } else {
+      fileContents = await fetchFromGitHubApi(`${relativePath}.md`);
       if (fileContents) {
-        verifiedRepoPath = targetDirectPath;
+        verifiedRepoPath = `${relativePath}.md`;
         const parentDir = relativePath.includes('/') ? relativePath.substring(0, relativePath.lastIndexOf('/')) : '';
         const sidebarTarget = parentDir ? `${parentDir}/_sidebar.md` : '_sidebar.md';
         sidebarContents = await fetchFromGitHubApi(sidebarTarget);
@@ -204,7 +176,7 @@ export async function getPageData(slugArray: string[] | undefined): Promise<Page
   }
 
   if (!fileContents) {
-    console.warn(`[CodingDatafy Engine Warning]: Asset could not be resolved: ${relativePath || 'index'}`);
+    console.warn(`[CodingDatafy Engine Warning]: Asset could not be resolved: ${relativePath}`);
     return null;
   }
 
@@ -239,7 +211,7 @@ export async function getPageData(slugArray: string[] | undefined): Promise<Page
       },
     };
   } catch (error) {
-    console.error(`[CodingDatafy Engine Critical Error]: Parse exception on asset path: ${relativePath || 'index'}`, error);
+    console.error(`[CodingDatafy Engine Critical Error]: Parse exception on asset path: ${relativePath}`, error);
     return null;
   }
 }
