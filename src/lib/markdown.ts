@@ -46,6 +46,32 @@ function getGitHubToken(): string | undefined {
 }
 
 /**
+ * Helper function to format ISO date string into readable "YYYY-MM-DD at HH:MM" or "YYYY-MM-DD"
+ */
+function formatDateString(isoString: string): string {
+  if (!isoString) return "2026-05-01";
+  
+  try {
+    const dateObj = new Date(isoString);
+    if (isNaN(dateObj.getTime())) return isoString.split('T')[0];
+
+    const year = dateObj.getUTCFullYear();
+    const month = String(dateObj.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(dateObj.getUTCDate()).padStart(2, '0');
+    const hours = String(dateObj.getUTCHours()).padStart(2, '0');
+    const minutes = String(dateObj.getUTCMinutes()).padStart(2, '0');
+
+    if (hours === '00' && minutes === '00') {
+      return `${year}-${month}-${day}`;
+    }
+
+    return `${year}-${month}-${day} at ${hours}:${minutes}`;
+  } catch {
+    return isoString.split('T')[0];
+  }
+}
+
+/**
  * FETCH ATOMIC FILE DATA DIRECTLY FROM THE CONTENT REPOSITORY VIA GITHUB RAW API
  */
 const fetchFromGitHubApi = cache(async (relativePath: string): Promise<string | null> => {
@@ -77,34 +103,29 @@ const fetchFromGitHubApi = cache(async (relativePath: string): Promise<string | 
 /**
  * FETCH ATOMIC LAST UPDATED TIMESTAMP FROM THE OFFICIALLY RECORDED GITHUB COMMITS API
  */
-const getFileLastCommitDate = cache(async (targetFilePath: string, localFullPath?: string): Promise<string> => {
-  let fallbackDate = "2026-05-01T00:00:00Z";
-  if (localFullPath && fs.existsSync(localFullPath)) {
-    const stats = fs.statSync(localFullPath);
-    fallbackDate = stats.mtime.toISOString();
-  }
+const getFileLastCommitDate = cache(async (targetFilePath: string): Promise<string> => {
+  const fallbackDate = "2026-05-01";
 
   if (!targetFilePath) {
     return fallbackDate;
   }
 
   const token = getGitHubToken();
-
-  if (!token) {
-    console.warn(`[CodingDatafy Engine]: GitHub Token missing. Utilizing fallback date for ${targetFilePath}`);
-    return fallbackDate;
-  }
-
   const cleanPath = targetFilePath.startsWith('/') ? targetFilePath.slice(1) : targetFilePath;
-  const commitApiUrl = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/commits?path=data/${cleanPath}&page=1&per_page=1`;
+  const commitApiUrl = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/commits?path=data/${cleanPath}&sha=${GITHUB_BRANCH}&page=1&per_page=1`;
 
   const headers: HeadersInit = { 
     'User-Agent': 'CodingDatafy-Engine',
     'Accept': 'application/vnd.github.v3+json',
-    'Authorization': token.startsWith('github_pat_') || token.startsWith('ghp_') 
-      ? `Bearer ${token}` 
-      : `token ${token}`
   };
+
+  if (token) {
+    headers['Authorization'] = token.startsWith('github_pat_') || token.startsWith('ghp_') 
+      ? `Bearer ${token}` 
+      : `token ${token}`;
+  } else {
+    console.warn(`[CodingDatafy Engine Warning]: GitHub Token missing. API rate limit may apply for ${cleanPath}`);
+  }
 
   try {
     const response = await fetch(commitApiUrl, { 
@@ -116,7 +137,8 @@ const getFileLastCommitDate = cache(async (targetFilePath: string, localFullPath
     if (response.ok) {
       const commits = await response.json();
       if (Array.isArray(commits) && commits.length > 0 && commits[0]?.commit?.committer?.date) {
-        return commits[0].commit.committer.date;
+        // Format GitHub commit ISO date to "YYYY-MM-DD at HH:MM"
+        return formatDateString(commits[0].commit.committer.date);
       }
     } else {
       console.warn(`[GitHub Commits API Warning]: Status ${response.status} (${response.statusText}) for path data/${cleanPath}`);
@@ -138,7 +160,6 @@ export async function getPageData(slugArray: string[] | undefined): Promise<Page
   let hasSidebar = false;
   let sidebarContents: string | null = null;
   let verifiedRepoPath = '';
-  let targetFullPath = '';
 
   /**
    * STRATEGY 1: ACTIONS COMPILED / LOCAL FS INJECTION
@@ -147,16 +168,16 @@ export async function getPageData(slugArray: string[] | undefined): Promise<Page
   const directPath = relativePath ? path.join(DATA_DIRECTORY, `${relativePath}.md`) : path.join(DATA_DIRECTORY, 'index.md');
 
   if (fs.existsSync(indexPath)) {
-    targetFullPath = indexPath;
+    fileContents = fs.readFileSync(indexPath, 'utf8');
     verifiedRepoPath = relativePath ? `${relativePath}/index.md` : 'index.md';
   } else if (fs.existsSync(directPath)) {
-    targetFullPath = directPath;
+    fileContents = fs.readFileSync(directPath, 'utf8');
     verifiedRepoPath = `${relativePath}.md`;
   }
 
-  if (targetFullPath && fs.existsSync(targetFullPath)) {
-    fileContents = fs.readFileSync(targetFullPath, 'utf8');
-    const currentDir = path.dirname(targetFullPath);
+  if (fileContents) {
+    const activePath = fs.existsSync(indexPath) ? indexPath : directPath;
+    const currentDir = path.dirname(activePath);
     const sidebarPath = path.join(currentDir, '_sidebar.md');
     if (fs.existsSync(sidebarPath)) {
       hasSidebar = true;
@@ -170,8 +191,6 @@ export async function getPageData(slugArray: string[] | undefined): Promise<Page
     const remoteIndexPath = relativePath ? `${relativePath}/index.md` : 'index.md';
     const remoteDirectPath = `${relativePath}.md`;
 
-    console.log(`[CodingDatafy Engine]: FS target missing. Falling back to GitHub API for: ${relativePath || 'index'}`);
-    
     fileContents = await fetchFromGitHubApi(remoteIndexPath);
     if (fileContents) {
       verifiedRepoPath = remoteIndexPath;
@@ -207,7 +226,8 @@ export async function getPageData(slugArray: string[] | undefined): Promise<Page
       sidebarHtml = processedSidebar.toString();
     }
 
-    const lastUpdatedDate = await getFileLastCommitDate(verifiedRepoPath, targetFullPath);
+    // Fetch GitHub commit date from API formatted as "YYYY-MM-DD at HH:MM"
+    const lastUpdatedDate = await getFileLastCommitDate(verifiedRepoPath);
 
     return {
       slug: relativePath,
