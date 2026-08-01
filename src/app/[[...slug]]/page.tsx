@@ -10,6 +10,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import Link from "next/link";
 
+// Declaring params as Promise according to Next.js 16
 interface PageProps {
   params: Promise<{ slug?: string[] }>;
 }
@@ -21,10 +22,15 @@ export async function generateStaticParams() {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  
-  // Clean invalid character routes directly
-  if (slug && slug.some(segment => segment.includes('$'))) {
-    return {};
+
+  // Catch invalid paths or empty params that do not exist
+  if (!slug || slug.length === 0) {
+    const homeData = await getPageData(undefined);
+    if (!homeData) return {};
+    return {
+      title: homeData.meta.title,
+      description: homeData.meta.description,
+    };
   }
 
   const data = await getPageData(slug);
@@ -32,8 +38,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   const title = data.meta.title;
   const description = data.meta.description || "Master coding with CodingDatafy expert-led documentation.";
-  const fullUrl = `https://www.codingdatafy.com/${slug?.join('/') || ''}`;
-  const isHomePage = !slug || slug.length === 0;
+  const fullUrl = `https://www.codingdatafy.com/${slug.join('/')}`;
 
   return {
     title,
@@ -41,41 +46,27 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     alternates: {
       canonical: fullUrl,
     },
-    openGraph: {
-      title,
-      description,
-      url: fullUrl,
-      siteName: 'CodingDatafy',
-      images: [
-        {
-          url: '/images/icon.png',
-          width: 1200,
-          height: 630,
-          alt: `CodingDatafy - ${title}`,
-        },
-      ],
-      type: isHomePage ? 'website' : 'article',
-    },
   };
 }
 
 export default async function Page({ params }: PageProps) {
-  const { slug } = await params;
+  // Await the params Promise strictly (Next.js 16 requirement)
+  const resolvedParams = await params;
+  const slug = resolvedParams.slug;
 
-  // 1. Block invalid symbols like '$' early to avoid unexpected mapping
-  if (slug && slug.some(segment => segment.includes('$'))) {
-    notFound();
-  }
+  // 1. If it's the home page root path
+  const isHomePage = !slug || slug.length === 0;
 
-  // Fetch the markdown data
+  // 2. Fetch markdown page data
   const data = await getPageData(slug);
 
-  // 2. Strict 404 boundary
+  // 3. STRICT 404 BOUNDARY:
+  // If data doesn't exist AND it's not the home page, trigger notFound()
   if (!data) {
     notFound();
   }
 
-  const absoluteUrl = `https://www.codingdatafy.com/${slug?.join('/') || ''}`;
+  const absoluteUrl = `https://www.codingdatafy.com/${slug ? slug.join('/') : ''}`;
 
   return (
     <>
