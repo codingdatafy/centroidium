@@ -10,46 +10,29 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import Link from "next/link";
 
-/**
- * PAGE COMPONENT PROPERTIES
- */
 interface PageProps {
   params: Promise<{ slug?: string[] }>;
 }
 
-/**
- * STATIC PATH GENERATION
- */
 export async function generateStaticParams() {
-  // Fetch paths from the markdown content library
   const paths = getAllPostSlugs();
-  
-  if (!paths || paths.length === 0) {
-    return [{ slug: ["_fallback"] }];
-  }
-
-  return paths;
+  return paths && paths.length > 0 ? paths : [];
 }
 
-/**
- * DYNAMIC METADATA GENERATION
- */
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
   
-  // Return early if it is the fallback verification route
-  if (slug && slug[0] === "_fallback") {
-    return { title: "CodingDatafy" };
+  // Clean invalid character routes directly
+  if (slug && slug.some(segment => segment.includes('$'))) {
+    return {};
   }
 
   const data = await getPageData(slug);
-  
   if (!data) return {};
 
   const title = data.meta.title;
   const description = data.meta.description || "Master coding with CodingDatafy expert-led documentation.";
   const fullUrl = `https://www.codingdatafy.com/${slug?.join('/') || ''}`;
-
   const isHomePage = !slug || slug.length === 0;
 
   return {
@@ -76,37 +59,22 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
-/**
- * MAIN PAGE RENDERER
- */
 export default async function Page({ params }: PageProps) {
   const { slug } = await params;
 
-  // Handle fallback route synchronously and statically to prevent uncached data suspension errors
-  if (slug && slug[0] === "_fallback") {
-    return (
-      <main id="main">
-        <article id="article">
-          <header id="article-header">
-            <h1 id="article-title">Initialization Workspace</h1>
-          </header>
-          <section>
-            <p>CodingDatafy engine is initializing. Content workspace will populate dynamically.</p>
-          </section>
-        </article>
-      </main>
-    );
+  // 1. Block invalid symbols like '$' early to avoid unexpected mapping
+  if (slug && slug.some(segment => segment.includes('$'))) {
+    notFound();
   }
 
-  // Fetch the markdown data statically during compile time
+  // Fetch the markdown data
   const data = await getPageData(slug);
 
-  // Trigger global Next.js 404 response boundary if requested asset does not exist
+  // 2. Strict 404 boundary
   if (!data) {
     notFound();
   }
 
-  // Define absolute URL instead of relative path to counter content scraping attempts
   const absoluteUrl = `https://www.codingdatafy.com/${slug?.join('/') || ''}`;
 
   return (
@@ -117,9 +85,7 @@ export default async function Page({ params }: PageProps) {
 
       {data.sidebarHtml && (
         <aside id="sidebar">
-          <nav 
-            dangerouslySetInnerHTML={{ __html: data.sidebarHtml }} 
-          />
+          <nav dangerouslySetInnerHTML={{ __html: data.sidebarHtml }} />
         </aside>
       )}
 
@@ -130,9 +96,7 @@ export default async function Page({ params }: PageProps) {
               <h1 id="article-title">{data.meta.title}</h1>
             </header>
             
-            <section
-              dangerouslySetInnerHTML={{ __html: data.contentHtml }} 
-            />
+            <section dangerouslySetInnerHTML={{ __html: data.contentHtml }} />
 
             <footer id="article-footer">
               {data.meta.lastUpdated && (
