@@ -10,6 +10,9 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import Link from "next/link";
 
+// Allow dynamic handling for paths not generated at build time
+export const dynamicParams = true;
+
 // Declaring params as Promise according to Next.js 16
 interface PageProps {
   params: Promise<{ slug?: string[] }>;
