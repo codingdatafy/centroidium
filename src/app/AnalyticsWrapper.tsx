@@ -56,13 +56,35 @@ export default function AnalyticsWrapper() {
         const hasNoLanguages = !navigator.languages || navigator.languages.length === 0;
         const isAutomatedBot = isWebDriver || isPhantom || isHeadlessWindow || hasNoLanguages;
 
-        // 4. Admin Privacy Verification
+        // 4. Advanced Hardware & Screen Anomaly Detection (Datacenter / Headless Stealth Bypass)
+        const hasZeroDimensions = window.outerWidth === 0 && window.outerHeight === 0;
+        const hasInvalidScreen = screen.width === 0 || screen.height === 0;
+        const hasNoHardwareConcurrency = !navigator.hardwareConcurrency || navigator.hardwareConcurrency < 1;
+
+        // 5. WebGL Renderer Detection (Datacenters/VPS use SwiftShader or LLVMpipe without real GPU)
+        const isSoftwareWebGL = () => {
+          try {
+            const canvas = document.createElement('canvas');
+            const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+            if (!gl) return false;
+            const debugInfo = (gl as WebGLRenderingContext).getExtension('WEBGL_debug_renderer_info');
+            if (!debugInfo) return false;
+            const renderer = (gl as WebGLRenderingContext).getParameter(debugInfo.UNMASKED_RENDERER_WEBGL).toLowerCase();
+            return renderer.includes('swiftshader') || renderer.includes('llvmpipe') || renderer.includes('mesa');
+          } catch {
+            return false;
+          }
+        };
+
+        const isDatacenterBot = hasZeroDimensions || hasInvalidScreen || hasNoHardwareConcurrency || isSoftwareWebGL();
+
+        // 6. Admin Privacy Verification
         const isExplicitlyDisabled = localStorage.getItem('va-disable') === 'true';
 
-        // Filter out non-official domains, bots, automated scripts, or admin sessions
-        if (!isOfficialDomain || isBotAgent || isAutomatedBot || isExplicitlyDisabled) {
+        // Filter out non-official domains, bots, automated scripts, datacenter headless browsers, or admin sessions
+        if (!isOfficialDomain || isBotAgent || isAutomatedBot || isDatacenterBot || isExplicitlyDisabled) {
           if (process.env.NODE_ENV === 'development') {
-            console.log(`CodingDatafy Analytics: Pageview Dropped (Domain: ${isOfficialDomain}, Bot: ${isBotAgent || isAutomatedBot}, Admin Disabled: ${isExplicitlyDisabled})`);
+            console.log(`CodingDatafy Analytics: Pageview Dropped (Domain: ${isOfficialDomain}, Bot: ${isBotAgent || isAutomatedBot || isDatacenterBot}, Admin Disabled: ${isExplicitlyDisabled})`);
           }
           return null;
         }
