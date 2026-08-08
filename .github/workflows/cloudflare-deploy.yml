@@ -63,6 +63,7 @@ jobs:
         run: npm run build
         env:
           ORGANIZATION_GITHUB_TOKEN: ${{ secrets.CENTROIDIUM_PAT }}
+          NEXT_PUBLIC_CLOUDFLARE_ANALYTICS_TOKEN: ${{ secrets.NEXT_PUBLIC_CLOUDFLARE_ANALYTICS_TOKEN }}
 
       - name: Deploy Out Directory to Cloudflare Pages Direct via CLI
         run: |
