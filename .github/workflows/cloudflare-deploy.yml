@@ -59,6 +59,11 @@ jobs:
       # ==========================================
       # Step 3: SSG Compilation & Cloudflare Pages Deployment
       # ==========================================
+      - name: Download Cloudflare Beacon Script
+        run: |
+          mkdir -p public/scripts
+          curl -s https://static.cloudflareinsights.com/beacon.min.js -o public/scripts/cf-beacon.js
+
       - name: Build Next.js Static Export (out)
         run: npm run build
         env:
