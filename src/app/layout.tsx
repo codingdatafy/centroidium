@@ -8,8 +8,8 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { Suspense } from "react"; // Added Suspense for Next.js 16 dynamic rendering safety
-import AnalyticsWrapper from "./AnalyticsWrapper"; 
+import { Suspense } from "react";
+import CloudflareAnalytics from "./cloudflare-analytics";
 
 /**
  * CONSOLIDATED SITE METADATA
@@ -102,7 +102,7 @@ export default function RootLayout({ children }: RootLayoutProps) {
               <li><Link href="/terms-of-use">Terms of Use</Link></li>
               <li><Link href="/privacy-policy">Privacy policy</Link></li>
               <li><Link href="/contribute">Contribute</Link></li>
-            </ul>            
+            </ul>          
             <ul id="social-networks">
               <li>
                 <a href="https://github.com/codingdatafy" target="_blank" rel="external noopener noreferrer">
@@ -122,8 +122,8 @@ export default function RootLayout({ children }: RootLayoutProps) {
           </footer>
         </div>
 
-        {/* PERFORMANCE & AUTOMATED FILTERING ANALYTICS */}
-        <AnalyticsWrapper />
+        {/* CLOUDFLARE ANALYTICS WITH AUTOMATED BOT & PRIVACY FILTERING */}
+        <CloudflareAnalytics />
         
         {/* EXTERNAL CORE SCRIPTS FROM PUBLIC DIRECTORY */}
         <script src="/scripts/centroidium.js" defer></script>
