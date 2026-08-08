@@ -8,6 +8,9 @@
 import type { MetadataRoute } from 'next';
 import { getAllPostSlugs, getPageData } from "@/lib/markdown";
 
+// Enforce static generation at build time for SSG (output: 'export')
+export const dynamic = 'force-static';
+
 const BASE_URL = 'https://www.codingdatafy.com';
 
 // Fallback timestamp if individual metadata is unavailable
