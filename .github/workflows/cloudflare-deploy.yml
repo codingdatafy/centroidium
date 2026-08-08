@@ -65,7 +65,7 @@ jobs:
           ORGANIZATION_GITHUB_TOKEN: ${{ secrets.CENTROIDIUM_PAT }}
 
       - name: Deploy Out Directory to Cloudflare Pages
-        uses: cloudflare/wrangler-action@392082e81ffedb49ab0104899534f5ddfa0192e4
+        uses: cloudflare/wrangler-action@6b677a2992dd54f7384742ecdb80cdbd09ca0733
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
