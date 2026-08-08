@@ -8,24 +8,27 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  // 1. CORE PERFORMANCE & OPTIMIZATION
+  // 1. STATIC EXPORT FOR CLOUDFLARE PAGES
+  output: 'export',
+
+  // 2. CORE PERFORMANCE & OPTIMIZATION
   reactStrictMode: true,
   poweredByHeader: false,
   reactCompiler: false,
 
-  // 2. TURBOPACK CONFIGURATION
+  // 3. TURBOPACK CONFIGURATION
   turbopack: {
     resolveAlias: {
       fs: { browser: './empty.ts' },
     },
   },
 
-  // 3. EXPERIMENTAL FEATURES
+  // 4. EXPERIMENTAL FEATURES
   experimental: {
     turbopackFileSystemCacheForDev: true,
   },
 
-  // 4. IMAGE OPTIMIZATION
+  // 5. IMAGE OPTIMIZATION
   images: {
     unoptimized: true,
     dangerouslyAllowSVG: true,
@@ -54,7 +57,7 @@ const nextConfig: NextConfig = {
     ],
   },
 
-  // 5. SECURITY & EDGE CACHING HEADERS
+  // 6. SECURITY & EDGE CACHING HEADERS
   async headers() {
     return [
       {
@@ -75,22 +78,6 @@ const nextConfig: NextConfig = {
         ],
       },
     ];
-  },
-
-  // 6. PROXY REWRITES FOR ANALYTICS SHIELDING
-  async rewrites() {
-    return {
-      beforeFiles: [
-        {
-          source: '/va/lib.js',
-          destination: 'https://va.vercel-scripts.com/v1/script.js',
-        },
-        {
-          source: '/va/:path*',
-          destination: 'https://va.vercel-scripts.com/v1/:path*',
-        },
-      ],
-    };
   },
 };
 
