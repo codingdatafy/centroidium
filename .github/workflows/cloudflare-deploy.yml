@@ -3,7 +3,7 @@
 # @copyright 2026 CodingDatafy Organization
 # @author CodingDatafy Team
 
-name: Deploy Content Update to Vercel
+name: Deploy Content Update to Cloudflare Pages
 
 on:
   repository_dispatch:
@@ -26,7 +26,7 @@ jobs:
           npm -v
 
       - name: Install Project Dependencies
-        run: npm install
+        run: npm ci
 
       # ==========================================
       # Step 2: Content Injection (With Full Git History)
@@ -57,26 +57,16 @@ jobs:
           rm -rf content-temp
 
       # ==========================================
-      # Step 3: Vercel Compilation & Production Deployment
+      # Step 3: SSG Compilation & Cloudflare Pages Deployment
       # ==========================================
-      - name: Install Vercel CLI Globally
-        run: npm install -g vercel@latest
-
-      - name: Pull Vercel Environment Management
-        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+      - name: Build Next.js Static Export (out)
+        run: npm run build
         env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-
-      - name: Build Local Project Artifacts (Prebuilt Mode)
-        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
           ORGANIZATION_GITHUB_TOKEN: ${{ secrets.CENTROIDIUM_PAT }}
 
-      - name: Deploy Prebuilt Artifacts to Vercel Production
-        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      - name: Deploy Out Directory to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy out --project-name=codingdatafy
