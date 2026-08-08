@@ -28,7 +28,7 @@ Example: `feat(routing): implement dynamic sub-directory slug resolution #1`
 
 ### Step 3: Quality Assurance
 - Push your changes to your fork.
-- Verify the build through GitHub Actions and the Vercel Preview URL provided in the Pull Request.
+- Verify the build through GitHub Actions and the Cloudflare Pages Deployment logs.
 
 ### Step 4: Pull Request (PR)
 - Submit a Pull Request from your feature branch to the CodingDatafy **develop** branch.
@@ -46,10 +46,3 @@ Example: `feat(routing): implement dynamic sub-directory slug resolution #1`
  * @copyright 2026 CodingDatafy Organization
  * @author CodingDatafy Team
  */
- ```
-
-### Technical Integrity
-- Do not bypass TypeScript compiler errors.
-- Ensure that no sensitive information (API keys, personal data) is included in your contribution.
-
-Copyright (c) 2026 CodingDatafy Organization.
