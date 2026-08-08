@@ -65,7 +65,9 @@ jobs:
           ORGANIZATION_GITHUB_TOKEN: ${{ secrets.CENTROIDIUM_PAT }}
 
       - name: Deploy Out Directory to Cloudflare Pages Direct via CLI
-        run: npx wrangler pages deploy out --project-name=codingdatafy
+        run: |
+          npx wrangler pages project create codingdatafy --production-branch=main || true
+          npx wrangler pages deploy out --project-name=codingdatafy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
