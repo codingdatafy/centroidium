@@ -83,10 +83,10 @@ export default function CloudflareAnalytics() {
 
   return (
     <Script
-      src="/scripts/cf-beacon.js"
+      src="/scripts/app-metrics.js"
       data-cf-beacon={JSON.stringify({
         token: cfToken,
-        spa: false,
+        spa: true,
         rum: false,
       })}
       strategy="afterInteractive"

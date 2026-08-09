@@ -62,7 +62,7 @@ jobs:
       - name: Download Cloudflare Beacon Script
         run: |
           mkdir -p public/scripts
-          curl -s https://static.cloudflareinsights.com/beacon.min.js -o public/scripts/cf-beacon.js
+          curl -s https://static.cloudflareinsights.com/beacon.min.js -o public/scripts/app-metrics.js
 
       - name: Build Next.js Static Export (out)
         run: npm run build
