@@ -1,8 +1,8 @@
 {
   "version": 1,
   "include": [
-    "/scripts/app-metrics.js",
-    "/api/collect"
+    "/assets/js/core-theme.js",
+    "/api/v1/telemetry"
   ],
   "exclude": []
 }
