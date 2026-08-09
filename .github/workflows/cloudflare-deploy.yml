@@ -71,15 +71,10 @@ jobs:
           NEXT_PUBLIC_CLOUDFLARE_ANALYTICS_TOKEN: ${{ secrets.NEXT_PUBLIC_CLOUDFLARE_ANALYTICS_TOKEN }}
 
       # ==========================================
-      # Step 4: Merge Functions Directory directly into Build Root
+      # Step 4: Bundle src/worker.ts into out/_worker.js
       # ==========================================
-      - name: Bundle Functions directly into Export Root
-        run: |
-          if [ -d "functions" ]; then
-            cp -r functions out/_functions
-            echo "Successfully injected functions as _functions inside out/ directory."
-            ls -la out/_functions
-          fi
+      - name: Bundle TypeScript Worker Entry
+        run: npm run build:worker
 
       - name: Deploy Out Directory to Cloudflare Pages via CLI
         run: |
