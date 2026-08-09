@@ -35,7 +35,6 @@
     "data/**/*.md"
   ],
   "exclude": [
-    "node_modules",
-    "functions"
+    "node_modules"
   ]
 }
