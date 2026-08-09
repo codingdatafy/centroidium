@@ -70,14 +70,9 @@ jobs:
           ORGANIZATION_GITHUB_TOKEN: ${{ secrets.CENTROIDIUM_PAT }}
           NEXT_PUBLIC_CLOUDFLARE_ANALYTICS_TOKEN: ${{ secrets.NEXT_PUBLIC_CLOUDFLARE_ANALYTICS_TOKEN }}
 
-      # ==========================================
-      # Step 4: Bundle src/worker.ts into out/_worker.js
-      # ==========================================
-      - name: Bundle TypeScript Worker Entry
-        run: npm run build:worker
-
-      - name: Deploy Out Directory to Cloudflare Pages via CLI
+      - name: Deploy Out Directory to Cloudflare Pages Direct via CLI
         run: |
+          npx wrangler pages project create codingdatafy --production-branch=main || true
           npx wrangler pages deploy out --project-name=codingdatafy --branch=main
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
