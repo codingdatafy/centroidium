@@ -82,15 +82,14 @@ export default function CloudflareAnalytics() {
   if (!cfToken) return null;
 
   return (
-  <Script
-    src="/assets/js/core-theme.js"
-    data-cf-beacon={JSON.stringify({
-      token: cfToken,
-      spa: true,
-      rum: false,
-      sendTo: "/api/v1/telemetry",
-    })}
-    strategy="afterInteractive"
-  />
-);
+    <Script
+      src="/scripts/app-metrics.js"
+      data-cf-beacon={JSON.stringify({
+        token: cfToken,
+        spa: true,
+        rum: false,
+      })}
+      strategy="afterInteractive"
+    />
+  );
 }

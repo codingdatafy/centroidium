@@ -1,8 +1,0 @@
-{
-  "version": 1,
-  "include": [
-    "/assets/js/core-theme.js",
-    "/api/v1/telemetry"
-  ],
-  "exclude": []
-}
