@@ -59,10 +59,12 @@ jobs:
       # ==========================================
       # Step 3: SSG Compilation & Cloudflare Pages Deployment
       # ==========================================
-      - name: Download Cloudflare Beacon Script
+      - name: Download & Patch Cloudflare Beacon Script
         run: |
           mkdir -p public/scripts
           curl -s https://static.cloudflareinsights.com/beacon.min.js -o public/scripts/main-app.js
+          # Replace default endpoint with the first-party proxy subdomain
+          sed -i 's|https://cloudflareinsights.com/cdn-cgi/rum|https://metrics.codingdatafy.com/cdn-cgi/rum|g' public/scripts/main-app.js
 
       - name: Build Next.js Static Export (out)
         run: npm run build

@@ -68,16 +68,15 @@ export default function CloudflareAnalytics() {
       const cfToken = process.env.NEXT_PUBLIC_CLOUDFLARE_ANALYTICS_TOKEN || "";
       if (!cfToken) return;
 
-      // DYNAMIC SCRIPT INJECTION (PREVENTS ADBLOCK DOM/ATTRIBUTE SCANNING)
+      // DYNAMIC SCRIPT INJECTION (MATCHES WORKFLOW OBFUSCATED SCRIPT NAME)
       const script = document.createElement('script');
-      script.src = '/scripts/app-metrics.js';
+      script.src = '/scripts/main-app.js';
       script.defer = true;
       script.setAttribute(
         'data-cf-beacon',
         JSON.stringify({
           token: cfToken,
           spa: true,
-          rum: false,
         })
       );
 
