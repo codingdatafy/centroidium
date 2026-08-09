@@ -10,7 +10,7 @@
     "build": "next build",
     "start": "next start",
     "type-check": "tsc --noEmit",
-	"build:worker": "esbuild src/worker.ts --bundle --target=es2022 --format=esm --outfile=out/_worker.js"
+	"build:worker": "npx esbuild src/worker.ts --bundle --target=es2022 --format=esm --outfile=out/_worker.js"
   },
   "dependencies": {
     "next": "16.3.0",
