@@ -71,13 +71,14 @@ jobs:
           NEXT_PUBLIC_CLOUDFLARE_ANALYTICS_TOKEN: ${{ secrets.NEXT_PUBLIC_CLOUDFLARE_ANALYTICS_TOKEN }}
 
       # ==========================================
-      # Step 4: Inject Functions into Out Output Directory
+      # Step 4: Merge Functions Directory directly into Build Root
       # ==========================================
-      - name: Bundle Functions with Exported Static Assets
+      - name: Bundle Functions directly into Export Root
         run: |
           if [ -d "functions" ]; then
-            cp -r functions out/
-            echo "Successfully bundled functions directory inside out/ for deployment."
+            cp -r functions out/_functions
+            echo "Successfully injected functions as _functions inside out/ directory."
+            ls -la out/_functions
           fi
 
       - name: Deploy Out Directory to Cloudflare Pages via CLI
