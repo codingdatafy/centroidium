@@ -70,6 +70,16 @@ jobs:
           ORGANIZATION_GITHUB_TOKEN: ${{ secrets.CENTROIDIUM_PAT }}
           NEXT_PUBLIC_CLOUDFLARE_ANALYTICS_TOKEN: ${{ secrets.NEXT_PUBLIC_CLOUDFLARE_ANALYTICS_TOKEN }}
 
+      # ==========================================
+      # Step 4: Bundle Edge Functions into Static Export Root
+      # ==========================================
+      - name: Inject Functions into Build Artifact
+        run: |
+          if [ -d "functions" ]; then
+            cp -r functions out/functions
+            echo "Edge Functions injected into out/ directory for deployment."
+          fi
+
       - name: Deploy Out Directory to Cloudflare Pages Direct via CLI
         run: |
           npx wrangler pages project create codingdatafy --production-branch=main || true
