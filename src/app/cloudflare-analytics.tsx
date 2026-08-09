@@ -7,9 +7,12 @@
 
 'use client';
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import Script from "next/script";
 
 export default function CloudflareAnalytics() {
+  const [shouldTrack, setShouldTrack] = useState<boolean>(false);
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -63,28 +66,30 @@ export default function CloudflareAnalytics() {
     // 7. ADMIN PRIVACY VERIFICATION
     const isExplicitlyDisabled = localStorage.getItem('cf-analytics-disable') === 'true';
 
-    // VERIFY ALL FILTERS BEFORE INJECTING
+    // VERIFY ALL FILTERS
     if (isOfficialDomain && !isBotAgent && !isAutomatedBot && !isDatacenterBot && !isExplicitlyDisabled) {
-      const cfToken = process.env.NEXT_PUBLIC_CLOUDFLARE_ANALYTICS_TOKEN || "";
-      if (!cfToken) return;
-
-      // DYNAMIC SCRIPT INJECTION (MATCHES WORKFLOW OBFUSCATED SCRIPT NAME)
-      const script = document.createElement('script');
-      script.src = '/scripts/main-app.js';
-      script.defer = true;
-      script.setAttribute(
-        'data-cf-beacon',
-        JSON.stringify({
-          token: cfToken,
-          spa: true,
-        })
-      );
-
-      document.head.appendChild(script);
+      setShouldTrack(true);
     } else if (process.env.NODE_ENV === 'development') {
       console.log(`CodingDatafy Analytics: Pageview Dropped (Domain: ${isOfficialDomain}, Bot: ${isBotAgent || isAutomatedBot || isDatacenterBot}, Admin Disabled: ${isExplicitlyDisabled})`);
     }
   }, []);
 
-  return null;
+  if (!shouldTrack) return null;
+
+  // Cloudflare Web Analytics JS Beacon Token
+  const cfToken = process.env.NEXT_PUBLIC_CLOUDFLARE_ANALYTICS_TOKEN || "";
+
+  if (!cfToken) return null;
+
+  return (
+    <Script
+      src="/scripts/app-metrics.js"
+      data-cf-beacon={JSON.stringify({
+        token: cfToken,
+        spa: true,
+        rum: false,
+      })}
+      strategy="afterInteractive"
+    />
+  );
 }
