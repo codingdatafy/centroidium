@@ -9,7 +9,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
 	"build:worker": "esbuild src/worker.ts --bundle --target=es2022 --format=esm --outfile=out/_worker.js"
   },
   "dependencies": {
