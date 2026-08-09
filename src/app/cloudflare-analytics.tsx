@@ -88,6 +88,7 @@ export default function CloudflareAnalytics() {
         token: cfToken,
         spa: true,
         rum: false,
+        send: { to: "/cf-a/event" }
       })}
       strategy="afterInteractive"
     />
