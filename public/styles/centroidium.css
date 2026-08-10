@@ -381,11 +381,6 @@ canvas {
 }
 /* --------------------------- Header ---------------------------------- */
 #header {
-	display: flex;
-	justify-content: space-between;
-	flex-flow: row wrap;
-	margin: 1px;
-	padding: 1px;
 	border: solid 1px rgb(0 0 139);
 }
 #logo {

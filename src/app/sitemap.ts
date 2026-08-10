@@ -16,6 +16,30 @@ const BASE_URL = 'https://www.codingdatafy.com';
 // Fallback timestamp if individual metadata is unavailable
 const BUILD_DATE = new Date();
 
+// Define Header & Footer route classifications for SEO priority mapping
+const HEADER_ROUTES = [
+  '/languages',
+  '/frameworks',
+  '/apis',
+  '/protocols',
+  '/databases',
+  '/tools',
+  '/compatibility',
+  '/development',
+  '/roadmaps',
+  '/glossary'
+];
+
+const FOOTER_ROUTES = [
+  '/about',
+  '/terms-of-use',
+  '/privacy-policy',
+  '/contact',
+  '/faq',
+  '/contribute',
+  '/sponsors'
+];
+
 /**
  * GENERATE STATIC SITEMAP ENTRIES AT BUILD TIME WITH REAL COMMIT DATES
  */
@@ -38,23 +62,30 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         ? new Date(pageData.meta.lastUpdated) 
         : BUILD_DATE;
 
-      // 2. ADAPTIVE SEO PRIORITY LOGIC
+      // 2. ADAPTIVE SEO PRIORITY & FREQUENCY LOGIC
       let priority = 0.7;
-      
+      let changeFrequency: 'daily' | 'weekly' | 'monthly' = 'weekly';
+
       if (fullUrlPath === '') {
-        // Root context (Homepage) maps to absolute maximum index priority
+        // Root context (Homepage) -> Top Priority
         priority = 1.0;
-      } else if (fullUrlPath.startsWith('/languages')) {
-        // Prioritize primary and secondary programming documentation directory paths higher
+        changeFrequency = 'daily';
+      } else if (HEADER_ROUTES.some((route) => fullUrlPath.startsWith(route))) {
+        // Primary Header Knowledge Pillars -> High Priority
         const depth = fullUrlPath.split('/').filter(Boolean).length;
-        priority = depth <= 2 ? 0.9 : 0.8;
+        priority = depth === 1 ? 0.9 : 0.8;
+        changeFrequency = 'weekly';
+      } else if (FOOTER_ROUTES.some((route) => fullUrlPath.startsWith(route))) {
+        // Static Utility & Legal Footer Pages -> Standard Priority
+        priority = 0.5;
+        changeFrequency = 'monthly';
       }
 
       return {
         url: `${BASE_URL}${fullUrlPath}`,
         lastModified: lastModifiedDate,
-        changeFrequency: 'weekly' as const,
-        priority: priority,
+        changeFrequency,
+        priority,
       };
     })
   );

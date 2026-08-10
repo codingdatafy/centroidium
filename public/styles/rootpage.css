@@ -12,6 +12,44 @@
 ******************************************************** */
 /* --------------------------- Homepage --------------------------- */
 /* --------------------------- Languages --------------------------- */
+/* Unify the total width of all sortable tables and enforce fixed layout rules */
+table.table.sortable {
+    width: 100%;
+    table-layout: fixed; /* Forces browser to respect explicit column percentage widths */
+    border-collapse: collapse;
+    margin-bottom: 2rem;
+}
+
+/* Set fixed specific width for Column 1: Language */
+table.table.sortable th:nth-child(1),
+table.table.sortable td:nth-child(1) {
+    width: 10%;
+}
+
+/* Set fixed specific width for Column 2: Type */
+table.table.sortable th:nth-child(2),
+table.table.sortable td:nth-child(2) {
+    width: 12%;
+}
+
+/* Set fixed specific width for Column 3: Requirement Level */
+table.table.sortable th:nth-child(3),
+table.table.sortable td:nth-child(3) {
+    width: 8%;
+}
+
+/* Set fixed specific width for Column 4: Primary Job Market Role */
+table.table.sortable th:nth-child(4),
+table.table.sortable td:nth-child(4) {
+    width: 35%;
+}
+
+/* Handle long text strings safely within cells to prevent UI deformation */
+table.table.sortable td {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    vertical-align: middle;
+}
 /* --------------------------- FAQ --------------------------- */
 /* --------------------------- About --------------------------- */
 /* --------------------------- Contact --------------------------- */
