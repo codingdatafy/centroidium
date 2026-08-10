@@ -7,11 +7,12 @@
 
 'use client';
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+
+// OBFUSCATED SERVICE ENDPOINT
+const METRICS_ENDPOINT = '/lib';
 
 export default function Analytics() {
-  const [shouldTrack, setShouldTrack] = useState<boolean>(false);
-
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -66,15 +67,69 @@ export default function Analytics() {
     const isExplicitlyDisabled = localStorage.getItem('analytics-disable') === 'true';
 
     // VERIFY ALL FILTERS
-    if (isOfficialDomain && !isBotAgent && !isAutomatedBot && !isDatacenterBot && !isExplicitlyDisabled) {
-      setShouldTrack(true);
+    const isValidVisitor = isOfficialDomain && !isBotAgent && !isAutomatedBot && !isDatacenterBot && !isExplicitlyDisabled;
 
-    } else if (process.env.NODE_ENV === 'development') {
-      console.log(`CodingDatafy Analytics: Pageview Dropped (Domain: ${isOfficialDomain}, Bot: ${isBotAgent || isAutomatedBot || isDatacenterBot}, Admin Disabled: ${isExplicitlyDisabled})`);
+    if (!isValidVisitor) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`CodingDatafy Analytics: Pageview Dropped (Domain: ${isOfficialDomain}, Bot: ${isBotAgent || isAutomatedBot || isDatacenterBot}, Admin Disabled: ${isExplicitlyDisabled})`);
+      }
+      return;
     }
-  }, []);
 
-  if (!shouldTrack) return null;
+    // =========================================================
+    // INGESTION & ENGAGEMENT DISPATCHER
+    // =========================================================
+    const startTime = Date.now();
+    let hasInteracted = false;
+
+    // Dispatch payload with minimal key structures
+    const sendMetrics = (isFinal = false) => {
+      const duration = Math.floor((Date.now() - startTime) / 1000);
+      const isBounce = !hasInteracted && duration < 10;
+
+      const payload = JSON.stringify({
+        p: window.location.pathname,
+        r: document.referrer || '',
+        d: duration,
+        b: isBounce,
+      });
+
+      if (isFinal && navigator.sendBeacon) {
+        navigator.sendBeacon(METRICS_ENDPOINT, payload);
+      } else {
+        fetch(METRICS_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: payload,
+          keepalive: true,
+        }).catch(() => {});
+      }
+    };
+
+    // Flag user interaction to compute accurate bounce rate
+    const registerInteraction = () => {
+      hasInteracted = true;
+    };
+
+    window.addEventListener('scroll', registerInteraction, { once: true, passive: true });
+    window.addEventListener('click', registerInteraction, { once: true });
+
+    sendMetrics(false);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        sendMetrics(true);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('scroll', registerInteraction);
+      window.removeEventListener('click', registerInteraction);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
 
   return null;
 }
