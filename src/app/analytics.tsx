@@ -24,7 +24,7 @@ export default function Analytics() {
       return;
     }
 
-    // 2. PREFETCHING & BACKGROUND LOAD GUARD (PREVENTS NEXT.JS LINK PREFETCH FROM TRIGGERING TRACKING)
+    // 2. PREFETCHING & BACKGROUND LOAD GUARD
     if (document.visibilityState === 'hidden') {
       return;
     }
@@ -85,59 +85,25 @@ export default function Analytics() {
     }
 
     // =========================================================
-    // INGESTION & ENGAGEMENT DISPATCHER (SPA & PREFETCH SAFE)
+    // SINGLE INGESTION DISPATCHER (PREVENTS DOUBLE RECORDING)
     // =========================================================
     lastTrackedPath.current = pathname;
 
-    const startTime = Date.now();
-    let hasInteracted = false;
+    // Send single pageview event on active navigation
+    const payload = JSON.stringify({
+      p: pathname,
+      r: document.referrer || '',
+      d: 0,
+      b: true,
+    });
 
-    const sendMetrics = (isFinal = false) => {
-      const duration = Math.floor((Date.now() - startTime) / 1000);
-      const isBounce = !hasInteracted && duration < 10;
+    fetch(METRICS_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: payload,
+      keepalive: true,
+    }).catch(() => {});
 
-      const payload = JSON.stringify({
-        p: pathname,
-        r: document.referrer || '',
-        d: duration,
-        b: isBounce,
-      });
-
-      if (isFinal && navigator.sendBeacon) {
-        navigator.sendBeacon(METRICS_ENDPOINT, payload);
-      } else {
-        fetch(METRICS_ENDPOINT, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: payload,
-          keepalive: true,
-        }).catch(() => {});
-      }
-    };
-
-    const registerInteraction = () => {
-      hasInteracted = true;
-    };
-
-    window.addEventListener('scroll', registerInteraction, { once: true, passive: true });
-    window.addEventListener('click', registerInteraction, { once: true });
-
-    // EXECUTE IMMEDIATE TRACKING ONLY ON VISIBLE RENDER
-    sendMetrics(false);
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') {
-        sendMetrics(true);
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    return () => {
-      window.removeEventListener('scroll', registerInteraction);
-      window.removeEventListener('click', registerInteraction);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
   }, [pathname]);
 
   return null;
