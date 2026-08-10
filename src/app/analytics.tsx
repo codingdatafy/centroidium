@@ -85,60 +85,23 @@ export default function Analytics() {
     }
 
     // =========================================================
-    // DURATION & ENGAGEMENT SETUP (WITHOUT COOKIES OR DUPLICATE VIEWS)
+    // SINGLE INGESTION DISPATCHER (STRICT SINGLE VIEW GUARANTEE)
     // =========================================================
     lastTrackedPath.current = pathname;
-    const startTime = Date.now();
-    let hasInteracted = false;
 
-    const handleInteraction = () => {
-      hasInteracted = true;
-    };
-
-    window.addEventListener('scroll', handleInteraction, { once: true });
-    window.addEventListener('click', handleInteraction, { once: true });
-
-    // Send exit duration/engagement update using sendBeacon without incrementing pageviews count
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') {
-        const durationSec = Math.round((Date.now() - startTime) / 1000);
-        
-        if (navigator.sendBeacon) {
-          const updatePayload = JSON.stringify({
-            p: pathname,
-            r: document.referrer || '',
-            d: durationSec,
-            b: !hasInteracted,
-            action: 'update' // Flag for backend to update metrics instead of adding a new view
-          });
-          navigator.sendBeacon(METRICS_ENDPOINT, updatePayload);
-        }
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    // Send initial pageview on mount
-    const initialPayload = JSON.stringify({
+    const payload = JSON.stringify({
       p: pathname,
       r: document.referrer || '',
       d: 0,
       b: true,
-      action: 'view' // Flag for backend to insert a new view
     });
 
     fetch(METRICS_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: initialPayload,
+      body: payload,
       keepalive: true,
     }).catch(() => {});
-
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('scroll', handleInteraction);
-      window.removeEventListener('click', handleInteraction);
-    };
 
   }, [pathname]);
 
