@@ -8,9 +8,8 @@
 'use client';
 
 import { useEffect, useState } from "react";
-import Script from "next/script";
 
-export default function CloudflareAnalytics() {
+export default function Analytics() {
   const [shouldTrack, setShouldTrack] = useState<boolean>(false);
 
   useEffect(() => {
@@ -19,11 +18,11 @@ export default function CloudflareAnalytics() {
     // 1. SECRET ADMIN ACCESS TRIGGER CONTEXT
     const queryParams = new URLSearchParams(window.location.search);
     if (queryParams.get('admin') === 'true') {
-      localStorage.setItem('cf-analytics-disable', 'true');
-      console.log('CodingDatafy: Admin mode activated. Cloudflare tracking disabled.');
+      localStorage.setItem('analytics-disable', 'true');
+      console.log('CodingDatafy: Admin mode activated. Tracking disabled.');
       const newUrl = window.location.pathname;
       window.history.replaceState({}, '', newUrl); 
-      alert('Success: Cloudflare tracking is now disabled for this browser.');
+      alert('Success: Tracking is now disabled for this browser.');
     }
 
     // 2. HOSTNAME STRICT DOMAIN CHECK
@@ -64,11 +63,12 @@ export default function CloudflareAnalytics() {
     const isDatacenterBot = hasZeroDimensions || hasInvalidScreen || hasNoHardwareConcurrency || isSoftwareWebGL();
 
     // 7. ADMIN PRIVACY VERIFICATION
-    const isExplicitlyDisabled = localStorage.getItem('cf-analytics-disable') === 'true';
+    const isExplicitlyDisabled = localStorage.getItem('analytics-disable') === 'true';
 
     // VERIFY ALL FILTERS
     if (isOfficialDomain && !isBotAgent && !isAutomatedBot && !isDatacenterBot && !isExplicitlyDisabled) {
       setShouldTrack(true);
+
     } else if (process.env.NODE_ENV === 'development') {
       console.log(`CodingDatafy Analytics: Pageview Dropped (Domain: ${isOfficialDomain}, Bot: ${isBotAgent || isAutomatedBot || isDatacenterBot}, Admin Disabled: ${isExplicitlyDisabled})`);
     }
@@ -76,20 +76,5 @@ export default function CloudflareAnalytics() {
 
   if (!shouldTrack) return null;
 
-  // Cloudflare Web Analytics JS Beacon Token
-  const cfToken = process.env.NEXT_PUBLIC_CLOUDFLARE_ANALYTICS_TOKEN || "";
-
-  if (!cfToken) return null;
-
-  return (
-    <Script
-      src="/scripts/app-metrics.js"
-      data-cf-beacon={JSON.stringify({
-        token: cfToken,
-        spa: true,
-        rum: false,
-      })}
-      strategy="afterInteractive"
-    />
-  );
+  return null;
 }
