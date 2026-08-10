@@ -10,7 +10,6 @@
 import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 
-// OBFUSCATED RELATIVE ROUTE ENDPOINT
 const METRICS_ENDPOINT = '/lib';
 
 export default function Analytics() {
@@ -20,12 +19,17 @@ export default function Analytics() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    // 1. HARD DEDUPING: PREVENT DUPLICATE TRACKING ON RE-RENDERS OR STRICT MODE
+    // 1. HARD DEDUPING: PREVENT DUPLICATE TRACKING
     if (lastTrackedPath.current === pathname) {
       return;
     }
 
-    // 2. SECRET ADMIN ACCESS TRIGGER CONTEXT
+    // 2. PREFETCHING & BACKGROUND LOAD GUARD (PREVENTS NEXT.JS LINK PREFETCH FROM TRIGGERING TRACKING)
+    if (document.visibilityState === 'hidden') {
+      return;
+    }
+
+    // 3. SECRET ADMIN ACCESS TRIGGER CONTEXT
     const queryParams = new URLSearchParams(window.location.search);
     if (queryParams.get('admin') === 'true') {
       localStorage.setItem('analytics-disable', 'true');
@@ -35,27 +39,27 @@ export default function Analytics() {
       alert('Success: Tracking is now disabled for this browser.');
     }
 
-    // 3. HOSTNAME STRICT DOMAIN CHECK
+    // 4. HOSTNAME STRICT DOMAIN CHECK
     const hostname = window.location.hostname;
     const isOfficialDomain = hostname === 'www.codingdatafy.com' || hostname === 'codingdatafy.com';
 
-    // 4. ADVANCED BOT & CRAWLER VERIFICATION
+    // 5. ADVANCED BOT & CRAWLER VERIFICATION
     const ua = navigator.userAgent.toLowerCase();
     const isBotAgent = /bot|googlebot|crawler|spider|robot|crawling|lighthouse|chrome-lighthouse|google-inspectiontool|ahrefsbot|semrushbot|gptbot|chatgpt|claudebot|coherebot|headlesschrome|python|node-fetch|axios/i.test(ua);
 
-    // 5. CLIENT-SIDE AUTOMATION & STEALTH BROWSER DETECTION
+    // 6. CLIENT-SIDE AUTOMATION & STEALTH BROWSER DETECTION
     const isWebDriver = navigator.webdriver === true;
     const isPhantom = 'callPhantom' in window || '_phantom' in window;
     const isHeadlessWindow = 'Buffer' in window || 'emit' in window;
     const hasNoLanguages = !navigator.languages || navigator.languages.length === 0;
     const isAutomatedBot = isWebDriver || isPhantom || isHeadlessWindow || hasNoLanguages;
 
-    // 6. HARDWARE & SCREEN ANOMALY DETECTION (DATACENTER / HEADLESS STEALTH BYPASS)
+    // 7. HARDWARE & SCREEN ANOMALY DETECTION
     const hasZeroDimensions = window.outerWidth === 0 && window.outerHeight === 0;
     const hasInvalidScreen = screen.width === 0 || screen.height === 0;
     const hasNoHardwareConcurrency = !navigator.hardwareConcurrency || navigator.hardwareConcurrency < 1;
 
-    // 7. WEBGL RENDERER DETECTION
+    // 8. WEBGL RENDERER DETECTION
     const isSoftwareWebGL = () => {
       try {
         const canvas = document.createElement('canvas');
@@ -71,30 +75,23 @@ export default function Analytics() {
     };
 
     const isDatacenterBot = hasZeroDimensions || hasInvalidScreen || hasNoHardwareConcurrency || isSoftwareWebGL();
-
-    // 8. ADMIN PRIVACY VERIFICATION
     const isExplicitlyDisabled = localStorage.getItem('analytics-disable') === 'true';
 
     // VERIFY ALL FILTERS
     const isValidVisitor = isOfficialDomain && !isBotAgent && !isAutomatedBot && !isDatacenterBot && !isExplicitlyDisabled;
 
     if (!isValidVisitor) {
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`CodingDatafy Analytics: Pageview Dropped (Domain: ${isOfficialDomain}, Bot: ${isBotAgent || isAutomatedBot || isDatacenterBot}, Admin Disabled: ${isExplicitlyDisabled})`);
-      }
       return;
     }
 
     // =========================================================
-    // INGESTION & ENGAGEMENT DISPATCHER (SPA ROUTING READY)
+    // INGESTION & ENGAGEMENT DISPATCHER (SPA & PREFETCH SAFE)
     // =========================================================
-    // LOCK CURRENT PATH TO PREVENT DUPLICATE CALLS
     lastTrackedPath.current = pathname;
 
     const startTime = Date.now();
     let hasInteracted = false;
 
-    // DISPATCH PAYLOAD WITH MINIMAL KEY STRUCTURES
     const sendMetrics = (isFinal = false) => {
       const duration = Math.floor((Date.now() - startTime) / 1000);
       const isBounce = !hasInteracted && duration < 10;
@@ -118,7 +115,6 @@ export default function Analytics() {
       }
     };
 
-    // FLAG USER INTERACTION TO COMPUTE ACCURATE BOUNCE RATE
     const registerInteraction = () => {
       hasInteracted = true;
     };
@@ -126,10 +122,9 @@ export default function Analytics() {
     window.addEventListener('scroll', registerInteraction, { once: true, passive: true });
     window.addEventListener('click', registerInteraction, { once: true });
 
-    // 1. DISPATCH INITIAL PAGEVIEW EVENT
+    // EXECUTE IMMEDIATE TRACKING ONLY ON VISIBLE RENDER
     sendMetrics(false);
 
-    // 2. DISPATCH UPDATED DURATION/BOUNCE STATUS WHEN USER EXITS OR SWITCHES TABS
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
         sendMetrics(true);
@@ -143,7 +138,7 @@ export default function Analytics() {
       window.removeEventListener('click', registerInteraction);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [pathname]); // RE-TRIGGER AUTOMATICALLY ON SPA PATHNAME CHANGES
+  }, [pathname]);
 
   return null;
 }
