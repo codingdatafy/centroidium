@@ -79,12 +79,20 @@ export default function RootLayout({ children }: RootLayoutProps) {
               />
             </Link>
             <nav id="navigation">
-              <ul>
-                <li><Link href="/">Homepage</Link></li>
-                <li><Link href="/languages">Languages</Link></li>
-                <li><Link href="/faq">FAQ</Link></li>
-              </ul>
-            </nav>
+				<ul>
+					<li><Link href="/">Homepage</Link></li>
+					<li><Link href="/languages">Languages</Link></li>
+					<li><Link href="/frameworks">Frameworks</Link></li>
+					<li><Link href="/apis">APIs</Link></li>
+					<li><Link href="/protocols">Protocols</Link></li>
+					<li><Link href="/databases">Databases</Link></li>
+					<li><Link href="/tools">Tools</Link></li>
+					<li><Link href="/compatibility">Compatibility</Link></li>
+					<li><Link href="/development">Development</Link></li>
+					<li><Link href="/roadmaps">Roadmaps</Link></li>
+					<li><Link href="/glossary">Glossary</Link></li>
+				</ul>
+			</nav>
           </header>
 
           {/* MAIN CONTENT AREA WRAPPED IN SUSPENSE TO PREVENT UNCACHED DATA ERRORS */}
@@ -97,12 +105,14 @@ export default function RootLayout({ children }: RootLayoutProps) {
           {/* APPLICATION FOOTER */}
           <footer id="footer">
             <ul id="footer-links">
-              <li><Link href="/about">About</Link></li>
-              <li><Link href="/contact">Contact</Link></li>
-              <li><Link href="/terms-of-use">Terms of Use</Link></li>
-              <li><Link href="/privacy-policy">Privacy policy</Link></li>
-              <li><Link href="/contribute">Contribute</Link></li>
-            </ul>          
+			  <li><Link href="/about">About</Link></li>
+			  <li><Link href="/terms-of-use">Terms of Use</Link></li>
+			  <li><Link href="/privacy-policy">Privacy Policy</Link></li>
+			  <li><Link href="/contact">Contact</Link></li>
+			  <li><Link href="/faq">FAQ</Link></li>
+			  <li><Link href="/contribute">Contribute</Link></li>
+			  <li><Link href="/sponsors">Sponsors</Link></li>
+			</ul>          
             <ul id="social-networks">
               <li>
                 <a href="https://github.com/codingdatafy" target="_blank" rel="external noopener noreferrer">
