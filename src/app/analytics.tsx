@@ -85,7 +85,7 @@ export default function Analytics() {
     }
 
     // =========================================================
-    // DEFERRED SINGLE DISPATCHER (REAL DURATION & BOUNCE RATE)
+    // Adjusting the page view recording logic
     // =========================================================
     lastTrackedPath.current = pathname;
 
