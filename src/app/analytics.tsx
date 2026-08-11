@@ -19,13 +19,13 @@ export default function Analytics() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    // 1. HARD DEDUPING
+    // Prevent duplicate executions for the same path
     if (lastTrackedPath.current === pathname) return;
 
-    // 2. PREFETCHING GUARD
+    // Skip tracking if page is preloaded in background
     if (document.visibilityState === 'hidden') return;
 
-    // 3. ADMIN OVERRIDE TRIGGER
+    // Admin override trigger
     const queryParams = new URLSearchParams(window.location.search);
     if (queryParams.get('admin') === 'true') {
       localStorage.setItem('analytics-disable', 'true');
@@ -34,27 +34,27 @@ export default function Analytics() {
       alert('CodingDatafy: Analytics tracking is now disabled for this browser.');
     }
 
-    // 4. DOMAIN CHECK
+    // Domain validation check
     const hostname = window.location.hostname;
     const isOfficialDomain = hostname === 'www.codingdatafy.com' || hostname === 'codingdatafy.com';
 
-    // 5. BOT & CRAWLER VERIFICATION
+    // Bot and crawler verification
     const ua = navigator.userAgent.toLowerCase();
     const isBotAgent = /bot|googlebot|crawler|spider|robot|crawling|lighthouse|chrome-lighthouse|google-inspectiontool|ahrefsbot|semrushbot|gptbot|chatgpt|claudebot|coherebot|headlesschrome|python|node-fetch|axios/i.test(ua);
 
-    // 6. CLIENT-SIDE AUTOMATION DETECTION
+    // Client-side automation detection
     const isWebDriver = navigator.webdriver === true;
     const isPhantom = 'callPhantom' in window || '_phantom' in window;
     const isHeadlessWindow = 'Buffer' in window || 'emit' in window;
     const hasNoLanguages = !navigator.languages || navigator.languages.length === 0;
     const isAutomatedBot = isWebDriver || isPhantom || isHeadlessWindow || hasNoLanguages;
 
-    // 7. HARDWARE ANOMALY DETECTION
+    // Hardware anomaly detection
     const hasZeroDimensions = window.outerWidth === 0 && window.outerHeight === 0;
     const hasInvalidScreen = screen.width === 0 || screen.height === 0;
     const hasNoHardwareConcurrency = !navigator.hardwareConcurrency || navigator.hardwareConcurrency < 1;
 
-    // 8. WEBGL RENDERER DETECTION
+    // WebGL software renderer detection
     const isSoftwareWebGL = () => {
       try {
         const canvas = document.createElement('canvas');
@@ -72,21 +72,19 @@ export default function Analytics() {
     const isDatacenterBot = hasZeroDimensions || hasInvalidScreen || hasNoHardwareConcurrency || isSoftwareWebGL();
     const isExplicitlyDisabled = localStorage.getItem('analytics-disable') === 'true';
 
-    // VERIFY ALL FILTERS
+    // Verify all visitor filters
     const isValidVisitor = isOfficialDomain && !isBotAgent && !isAutomatedBot && !isDatacenterBot && !isExplicitlyDisabled;
 
     if (!isValidVisitor) return;
 
-    // =========================================================
-    // ACCURATE DURATION & BOUNCE DISPATCHER
-    // =========================================================
     lastTrackedPath.current = pathname;
 
     const startTime = Date.now();
     let hasInteracted = false;
-    let hasDispatched = false;
+    let recordId: number | null = null;
+    let hasDispatchedEngagement = false;
 
-    // Track user engagement
+    // Track user engagement interactions
     const handleInteraction = () => {
       hasInteracted = true;
     };
@@ -94,47 +92,67 @@ export default function Analytics() {
     window.addEventListener('scroll', handleInteraction, { once: true, passive: true });
     window.addEventListener('click', handleInteraction, { once: true, passive: true });
 
-    const dispatchMetrics = () => {
-      if (hasDispatched) return;
-      hasDispatched = true;
+    // 1. Immediately dispatch initial pageview when all criteria pass
+    const initialPayload = JSON.stringify({
+      action: 'pageview',
+      p: pathname,
+      r: document.referrer || '',
+    });
+
+    fetch(METRICS_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: initialPayload,
+      keepalive: true,
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.id) recordId = data.id;
+      })
+      .catch(() => {});
+
+    // 2. Dispatch duration and engagement update on page exit
+    const dispatchEngagement = () => {
+      if (hasDispatchedEngagement || !recordId) return;
+      hasDispatchedEngagement = true;
 
       const durationSec = Math.max(0, Math.round((Date.now() - startTime) / 1000));
-      const payload = JSON.stringify({
-        p: pathname,
-        r: document.referrer || '',
+      const engagementPayload = JSON.stringify({
+        action: 'engagement',
+        id: recordId,
         d: durationSec,
         b: !hasInteracted,
       });
 
       if (navigator.sendBeacon) {
-        const blob = new Blob([payload], { type: 'application/json' });
+        const blob = new Blob([engagementPayload], { type: 'application/json' });
         navigator.sendBeacon(METRICS_ENDPOINT, blob);
       } else {
         fetch(METRICS_ENDPOINT, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: payload,
+          body: engagementPayload,
           keepalive: true,
         }).catch(() => {});
       }
     };
 
-    // Dispatch on tab hide, page unload, or route change
+    // Attach unload listeners
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
-        dispatchMetrics();
+        dispatchEngagement();
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('pagehide', dispatchMetrics);
+    window.addEventListener('pagehide', dispatchEngagement);
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('pagehide', dispatchMetrics);
+      window.removeEventListener('pagehide', dispatchEngagement);
       window.removeEventListener('scroll', handleInteraction);
       window.removeEventListener('click', handleInteraction);
-      dispatchMetrics();
+      dispatchEngagement();
     };
 
   }, [pathname]);
