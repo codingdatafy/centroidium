@@ -78,28 +78,64 @@ export default function Analytics() {
     if (!isValidVisitor) return;
 
     // =========================================================
-    // IMMEDIATE PAGEVIEW DISPATCH (ZERO DATA LOSS)
+    // ACCURATE DURATION & BOUNCE DISPATCHER
     // =========================================================
     lastTrackedPath.current = pathname;
 
-    const payload = JSON.stringify({
-      p: pathname,
-      r: document.referrer || '',
-      d: 0,
-      b: true,
-    });
+    const startTime = Date.now();
+    let hasInteracted = false;
+    let hasDispatched = false;
 
-    if (navigator.sendBeacon) {
-      const blob = new Blob([payload], { type: 'application/json' });
-      navigator.sendBeacon(METRICS_ENDPOINT, blob);
-    } else {
-      fetch(METRICS_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: payload,
-        keepalive: true,
-      }).catch(() => {});
-    }
+    // Track user engagement
+    const handleInteraction = () => {
+      hasInteracted = true;
+    };
+
+    window.addEventListener('scroll', handleInteraction, { once: true, passive: true });
+    window.addEventListener('click', handleInteraction, { once: true, passive: true });
+
+    const dispatchMetrics = () => {
+      if (hasDispatched) return;
+      hasDispatched = true;
+
+      const durationSec = Math.max(0, Math.round((Date.now() - startTime) / 1000));
+      const payload = JSON.stringify({
+        p: pathname,
+        r: document.referrer || '',
+        d: durationSec,
+        b: !hasInteracted,
+      });
+
+      if (navigator.sendBeacon) {
+        const blob = new Blob([payload], { type: 'application/json' });
+        navigator.sendBeacon(METRICS_ENDPOINT, blob);
+      } else {
+        fetch(METRICS_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: payload,
+          keepalive: true,
+        }).catch(() => {});
+      }
+    };
+
+    // Dispatch on tab hide, page unload, or route change
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        dispatchMetrics();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('pagehide', dispatchMetrics);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pagehide', dispatchMetrics);
+      window.removeEventListener('scroll', handleInteraction);
+      window.removeEventListener('click', handleInteraction);
+      dispatchMetrics();
+    };
 
   }, [pathname]);
 
