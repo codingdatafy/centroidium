@@ -19,42 +19,37 @@ export default function Analytics() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    // 1. HARD DEDUPING: PREVENT DUPLICATE TRACKING
-    if (lastTrackedPath.current === pathname) {
-      return;
-    }
+    // 1. HARD DEDUPING
+    if (lastTrackedPath.current === pathname) return;
 
-    // 2. PREFETCHING & BACKGROUND LOAD GUARD
-    if (document.visibilityState === 'hidden') {
-      return;
-    }
+    // 2. PREFETCHING GUARD
+    if (document.visibilityState === 'hidden') return;
 
-    // 3. SECRET ADMIN ACCESS TRIGGER CONTEXT
+    // 3. ADMIN OVERRIDE TRIGGER
     const queryParams = new URLSearchParams(window.location.search);
     if (queryParams.get('admin') === 'true') {
       localStorage.setItem('analytics-disable', 'true');
-      console.log('CodingDatafy: Admin mode activated. Tracking disabled.');
       const newUrl = window.location.pathname;
       window.history.replaceState({}, '', newUrl); 
-      alert('Success: Tracking is now disabled for this browser.');
+      alert('CodingDatafy: Analytics tracking is now disabled for this browser.');
     }
 
-    // 4. HOSTNAME STRICT DOMAIN CHECK
+    // 4. DOMAIN CHECK
     const hostname = window.location.hostname;
     const isOfficialDomain = hostname === 'www.codingdatafy.com' || hostname === 'codingdatafy.com';
 
-    // 5. ADVANCED BOT & CRAWLER VERIFICATION
+    // 5. BOT & CRAWLER VERIFICATION
     const ua = navigator.userAgent.toLowerCase();
     const isBotAgent = /bot|googlebot|crawler|spider|robot|crawling|lighthouse|chrome-lighthouse|google-inspectiontool|ahrefsbot|semrushbot|gptbot|chatgpt|claudebot|coherebot|headlesschrome|python|node-fetch|axios/i.test(ua);
 
-    // 6. CLIENT-SIDE AUTOMATION & STEALTH BROWSER DETECTION
+    // 6. CLIENT-SIDE AUTOMATION DETECTION
     const isWebDriver = navigator.webdriver === true;
     const isPhantom = 'callPhantom' in window || '_phantom' in window;
     const isHeadlessWindow = 'Buffer' in window || 'emit' in window;
     const hasNoLanguages = !navigator.languages || navigator.languages.length === 0;
     const isAutomatedBot = isWebDriver || isPhantom || isHeadlessWindow || hasNoLanguages;
 
-    // 7. HARDWARE & SCREEN ANOMALY DETECTION
+    // 7. HARDWARE ANOMALY DETECTION
     const hasZeroDimensions = window.outerWidth === 0 && window.outerHeight === 0;
     const hasInvalidScreen = screen.width === 0 || screen.height === 0;
     const hasNoHardwareConcurrency = !navigator.hardwareConcurrency || navigator.hardwareConcurrency < 1;
@@ -80,65 +75,31 @@ export default function Analytics() {
     // VERIFY ALL FILTERS
     const isValidVisitor = isOfficialDomain && !isBotAgent && !isAutomatedBot && !isDatacenterBot && !isExplicitlyDisabled;
 
-    if (!isValidVisitor) {
-      return;
-    }
+    if (!isValidVisitor) return;
 
     // =========================================================
-    // Adjusting the page view recording logic
+    // IMMEDIATE PAGEVIEW DISPATCH (ZERO DATA LOSS)
     // =========================================================
     lastTrackedPath.current = pathname;
 
-    const startTime = Date.now();
-    let hasInteracted = false;
-    let hasDispatched = false;
+    const payload = JSON.stringify({
+      p: pathname,
+      r: document.referrer || '',
+      d: 0,
+      b: true,
+    });
 
-    const handleInteraction = () => {
-      hasInteracted = true;
-    };
-
-    window.addEventListener('scroll', handleInteraction, { once: true, passive: true });
-    window.addEventListener('click', handleInteraction, { once: true, passive: true });
-
-    const dispatchMetrics = () => {
-      if (hasDispatched) return;
-      hasDispatched = true;
-
-      const durationSec = Math.max(0, Math.round((Date.now() - startTime) / 1000));
-      const payload = JSON.stringify({
-        p: pathname,
-        r: document.referrer || '',
-        d: durationSec,
-        b: !hasInteracted,
-      });
-
-      if (navigator.sendBeacon) {
-        const blob = new Blob([payload], { type: 'application/json' });
-        navigator.sendBeacon(METRICS_ENDPOINT, blob);
-      } else {
-        fetch(METRICS_ENDPOINT, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: payload,
-          keepalive: true,
-        }).catch(() => {});
-      }
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') {
-        dispatchMetrics();
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('scroll', handleInteraction);
-      window.removeEventListener('click', handleInteraction);
-      dispatchMetrics();
-    };
+    if (navigator.sendBeacon) {
+      const blob = new Blob([payload], { type: 'application/json' });
+      navigator.sendBeacon(METRICS_ENDPOINT, blob);
+    } else {
+      fetch(METRICS_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: payload,
+        keepalive: true,
+      }).catch(() => {});
+    }
 
   }, [pathname]);
 
