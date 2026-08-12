@@ -81,10 +81,10 @@ export default function Analytics() {
 
     const startTime = Date.now();
     let hasInteracted = false;
-    let recordId: number | null = null;
-    let hasDispatchedEngagement = false;
+    let hasSentPayload = false;
+    const referrer = document.referrer || '';
 
-    // Track user engagement interactions
+    // Track user interaction for bounce rate verification
     const handleInteraction = () => {
       hasInteracted = true;
     };
@@ -92,67 +92,49 @@ export default function Analytics() {
     window.addEventListener('scroll', handleInteraction, { once: true, passive: true });
     window.addEventListener('click', handleInteraction, { once: true, passive: true });
 
-    // 1. Immediately dispatch initial pageview when all criteria pass
-    const initialPayload = JSON.stringify({
-      action: 'pageview',
-      p: pathname,
-      r: document.referrer || '',
-    });
-
-    fetch(METRICS_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: initialPayload,
-      keepalive: true,
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        if (data?.id) recordId = data.id;
-      })
-      .catch(() => {});
-
-    // 2. Dispatch duration and engagement update on page exit
-    const dispatchEngagement = () => {
-      if (hasDispatchedEngagement || !recordId) return;
-      hasDispatchedEngagement = true;
+    // Single unified payload dispatcher upon page exit or navigation
+    const sendFinalAnalytics = () => {
+      if (hasSentPayload) return;
+      hasSentPayload = true;
 
       const durationSec = Math.max(0, Math.round((Date.now() - startTime) / 1000));
-      const engagementPayload = JSON.stringify({
-        action: 'engagement',
-        id: recordId,
+      
+      const payload = JSON.stringify({
+        p: pathname,
+        r: referrer,
         d: durationSec,
         b: !hasInteracted,
       });
 
       if (navigator.sendBeacon) {
-        const blob = new Blob([engagementPayload], { type: 'application/json' });
+        const blob = new Blob([payload], { type: 'application/json' });
         navigator.sendBeacon(METRICS_ENDPOINT, blob);
       } else {
         fetch(METRICS_ENDPOINT, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: engagementPayload,
+          body: payload,
           keepalive: true,
         }).catch(() => {});
       }
     };
 
-    // Attach unload listeners
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
-        dispatchEngagement();
+        sendFinalAnalytics();
       }
     };
 
+    // Attach lifecycle listeners for standard page exit
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('pagehide', dispatchEngagement);
+    window.addEventListener('pagehide', sendFinalAnalytics);
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('pagehide', dispatchEngagement);
+      window.removeEventListener('pagehide', sendFinalAnalytics);
       window.removeEventListener('scroll', handleInteraction);
       window.removeEventListener('click', handleInteraction);
-      dispatchEngagement();
+      sendFinalAnalytics();
     };
 
   }, [pathname]);
