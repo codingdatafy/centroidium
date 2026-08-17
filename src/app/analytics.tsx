@@ -19,13 +19,13 @@ export default function Analytics() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    // Prevent duplicate executions for the same path
+    // Prevent duplicate execution for the same path
     if (lastTrackedPath.current === pathname) return;
 
-    // Skip tracking if page is preloaded in background
+    // Skip tracking if page is loaded in the background
     if (document.visibilityState === 'hidden') return;
 
-    // Admin override trigger
+    // Admin override trigger to disable analytics for testing/maintenance
     const queryParams = new URLSearchParams(window.location.search);
     if (queryParams.get('admin') === 'true') {
       localStorage.setItem('analytics-disable', 'true');
@@ -38,11 +38,11 @@ export default function Analytics() {
     const hostname = window.location.hostname;
     const isOfficialDomain = hostname === 'www.codingdatafy.com' || hostname === 'codingdatafy.com';
 
-    // Bot and crawler verification
+    // Bot agent pattern matching
     const ua = navigator.userAgent.toLowerCase();
     const isBotAgent = /bot|googlebot|crawler|spider|robot|crawling|lighthouse|chrome-lighthouse|google-inspectiontool|ahrefsbot|semrushbot|gptbot|chatgpt|claudebot|coherebot|headlesschrome|python|node-fetch|axios/i.test(ua);
 
-    // Client-side automation detection
+    // Automation and headless browser detection
     const isWebDriver = navigator.webdriver === true;
     const isPhantom = 'callPhantom' in window || '_phantom' in window;
     const isHeadlessWindow = 'Buffer' in window || 'emit' in window;
@@ -54,7 +54,7 @@ export default function Analytics() {
     const hasInvalidScreen = screen.width === 0 || screen.height === 0;
     const hasNoHardwareConcurrency = !navigator.hardwareConcurrency || navigator.hardwareConcurrency < 1;
 
-    // WebGL software renderer detection
+    // Software WebGL renderer detection for virtualized/datacenter environments
     const isSoftwareWebGL = () => {
       try {
         const canvas = document.createElement('canvas');
@@ -72,7 +72,7 @@ export default function Analytics() {
     const isDatacenterBot = hasZeroDimensions || hasInvalidScreen || hasNoHardwareConcurrency || isSoftwareWebGL();
     const isExplicitlyDisabled = localStorage.getItem('analytics-disable') === 'true';
 
-    // Verify all visitor filters
+    // Verify all security, bot, and domain constraints
     const isValidVisitor = isOfficialDomain && !isBotAgent && !isAutomatedBot && !isDatacenterBot && !isExplicitlyDisabled;
 
     if (!isValidVisitor) return;
@@ -81,32 +81,21 @@ export default function Analytics() {
 
     const startTime = Date.now();
     let hasInteracted = false;
-    let hasSentPayload = false;
     const referrer = document.referrer || '';
 
-    // Track user interaction for bounce rate verification
-    const handleInteraction = () => {
-      hasInteracted = true;
-    };
-
-    window.addEventListener('scroll', handleInteraction, { once: true, passive: true });
-    window.addEventListener('click', handleInteraction, { once: true, passive: true });
-
-    // Single unified payload dispatcher upon page exit or navigation
-    const sendFinalAnalytics = () => {
-      if (hasSentPayload) return;
-      hasSentPayload = true;
-
-      const durationSec = Math.max(0, Math.round((Date.now() - startTime) / 1000));
+    // Dispatch analytics payload (initial hit or exit ping)
+    const sendPayload = (isFinal = false) => {
+      const durationSec = isFinal ? Math.max(0, Math.round((Date.now() - startTime) / 1000)) : 0;
       
       const payload = JSON.stringify({
         p: pathname,
         r: referrer,
         d: durationSec,
         b: !hasInteracted,
+        type: isFinal ? 'ping' : 'init'
       });
 
-      if (navigator.sendBeacon) {
+      if (isFinal && navigator.sendBeacon) {
         const blob = new Blob([payload], { type: 'application/json' });
         navigator.sendBeacon(METRICS_ENDPOINT, blob);
       } else {
@@ -119,22 +108,33 @@ export default function Analytics() {
       }
     };
 
+    // Immediate initial hit dispatch to guarantee pageview recording
+    sendPayload(false);
+
+    // Track user interaction to determine bounce state
+    const handleInteraction = () => {
+      hasInteracted = true;
+    };
+
+    window.addEventListener('scroll', handleInteraction, { once: true, passive: true });
+    window.addEventListener('click', handleInteraction, { once: true, passive: true });
+
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
-        sendFinalAnalytics();
+        sendPayload(true);
       }
     };
 
-    // Attach lifecycle listeners for standard page exit
+    // Lifecycle event listeners for page exit and cleanup
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('pagehide', sendFinalAnalytics);
+    window.addEventListener('pagehide', () => sendPayload(true));
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('pagehide', sendFinalAnalytics);
+      window.removeEventListener('pagehide', () => sendPayload(true));
       window.removeEventListener('scroll', handleInteraction);
       window.removeEventListener('click', handleInteraction);
-      sendFinalAnalytics();
+      sendPayload(true);
     };
 
   }, [pathname]);
