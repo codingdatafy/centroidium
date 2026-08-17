@@ -84,12 +84,15 @@ export default function Analytics() {
     const activePath = cleanPathname;
     const startTime = Date.now();
     let hasInteracted = false;
+    let sentFinal = false;
     const referrer = document.referrer || '';
 
     lastTrackedPath.current = activePath;
 
     // Dispatch analytics payload (initial hit or exit ping)
     const sendPayload = (isFinal = false) => {
+      if (isFinal && sentFinal) return; // Prevent multiple ping triggers for the same page view
+      
       const durationSec = isFinal ? Math.max(0, Math.round((Date.now() - startTime) / 1000)) : 0;
       
       const payload = JSON.stringify({
@@ -100,17 +103,23 @@ export default function Analytics() {
         type: isFinal ? 'ping' : 'init'
       });
 
-      if (isFinal && navigator.sendBeacon) {
-        const blob = new Blob([payload], { type: 'application/json' });
-        navigator.sendBeacon(METRICS_ENDPOINT, blob);
-      } else {
-        fetch(METRICS_ENDPOINT, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: payload,
-          keepalive: true,
-        }).catch(() => {});
+      if (isFinal) {
+        sentFinal = true;
+        // Preferred mechanism for non-blocking asynchronous unload requests
+        if (navigator.sendBeacon) {
+          const blob = new Blob([payload], { type: 'application/json' });
+          const success = navigator.sendBeacon(METRICS_ENDPOINT, blob);
+          if (success) return;
+        }
       }
+
+      // Fallback for init hits or if sendBeacon fails
+      fetch(METRICS_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: payload,
+        keepalive: true,
+      }).catch(() => {});
     };
 
     // Immediate initial hit dispatch to guarantee pageview recording
@@ -140,7 +149,7 @@ export default function Analytics() {
       window.removeEventListener('scroll', handleInteraction);
       window.removeEventListener('click', handleInteraction);
       
-      // Ping completion on SPA page navigation
+      // Ping completion on SPA route navigation
       sendPayload(true);
     };
 
