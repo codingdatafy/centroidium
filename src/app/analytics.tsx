@@ -13,14 +13,17 @@ import { usePathname } from "next/navigation";
 const METRICS_ENDPOINT = '/lib';
 
 export default function Analytics() {
-  const pathname = usePathname();
+  const rawPathname = usePathname();
   const lastTrackedPath = useRef<string | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    // Prevent duplicate execution for the same path
-    if (lastTrackedPath.current === pathname) return;
+    // Normalize path: strip query parameters and remove trailing slashes
+    const cleanPathname = (rawPathname?.split('?')[0] || '/').replace(/\/+$/, '') || '/';
+
+    // Prevent duplicate execution for the same clean path
+    if (lastTrackedPath.current === cleanPathname) return;
 
     // Skip tracking if page is loaded in the background
     if (document.visibilityState === 'hidden') return;
@@ -77,18 +80,20 @@ export default function Analytics() {
 
     if (!isValidVisitor) return;
 
-    lastTrackedPath.current = pathname;
-
+    // Track active path and start time locally for clean exit/transition logging
+    const activePath = cleanPathname;
     const startTime = Date.now();
     let hasInteracted = false;
     const referrer = document.referrer || '';
+
+    lastTrackedPath.current = activePath;
 
     // Dispatch analytics payload (initial hit or exit ping)
     const sendPayload = (isFinal = false) => {
       const durationSec = isFinal ? Math.max(0, Math.round((Date.now() - startTime) / 1000)) : 0;
       
       const payload = JSON.stringify({
-        p: pathname,
+        p: activePath,
         r: referrer,
         d: durationSec,
         b: !hasInteracted,
@@ -125,7 +130,7 @@ export default function Analytics() {
       }
     };
 
-    // Lifecycle event listeners for page exit and cleanup
+    // Lifecycle event listeners for page exit
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('pagehide', () => sendPayload(true));
 
@@ -134,10 +139,12 @@ export default function Analytics() {
       window.removeEventListener('pagehide', () => sendPayload(true));
       window.removeEventListener('scroll', handleInteraction);
       window.removeEventListener('click', handleInteraction);
+      
+      // Ping completion on SPA page navigation
       sendPayload(true);
     };
 
-  }, [pathname]);
+  }, [rawPathname]);
 
   return null;
 }
