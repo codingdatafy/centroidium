@@ -91,7 +91,7 @@ export default function Analytics() {
 
     // Dispatch analytics payload (initial hit or exit ping)
     const sendPayload = (isFinal = false) => {
-      if (isFinal && sentFinal) return; // Prevent multiple ping triggers for the same page view
+      if (isFinal && sentFinal) return; // Prevent duplicate payload for same cycle
       
       const durationSec = isFinal ? Math.max(0, Math.round((Date.now() - startTime) / 1000)) : 0;
       
@@ -113,7 +113,7 @@ export default function Analytics() {
         }
       }
 
-      // Fallback for init hits or if sendBeacon fails (keepalive keeps request alive on page switch)
+      // Fallback for init hits or if sendBeacon fails
       fetch(METRICS_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -125,7 +125,6 @@ export default function Analytics() {
     // Immediate initial hit dispatch to guarantee pageview recording
     sendPayload(false);
 
-    // Track user interaction to determine bounce state
     const handleInteraction = () => {
       hasInteracted = true;
     };
@@ -136,6 +135,9 @@ export default function Analytics() {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
         sendPayload(true);
+      } else if (document.visibilityState === 'visible') {
+        // Unlock sentFinal so the duration updates if user continues reading and then leaves
+        sentFinal = false;
       }
     };
 
@@ -149,7 +151,8 @@ export default function Analytics() {
       window.removeEventListener('scroll', handleInteraction);
       window.removeEventListener('click', handleInteraction);
       
-      // Ping completion on SPA route navigation
+      // Force reset lock on unmount to guarantee SPA route navigation duration is recorded
+      sentFinal = false;
       sendPayload(true);
     };
 
