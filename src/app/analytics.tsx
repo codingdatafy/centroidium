@@ -91,25 +91,29 @@ export default function Analytics() {
 
     // Dispatch analytics payload (initial hit or exit ping)
     const sendPayload = (isFinal = false) => {
-      if (isFinal && sentFinal) return; // Prevent duplicate payload for same cycle
+      if (isFinal && sentFinal) return; // Prevent duplicate final pings
       
       const durationSec = isFinal ? Math.max(0, Math.round((Date.now() - startTime) / 1000)) : 0;
       
-      const payload = JSON.stringify({
+      const payloadObj = {
         p: activePath,
         r: referrer,
         d: durationSec,
         b: !hasInteracted,
         type: isFinal ? 'ping' : 'init'
-      });
+      };
+
+      const payload = JSON.stringify(payloadObj);
 
       if (isFinal) {
         sentFinal = true;
         
+        // Reliability Optimization 1: Use direct string with text/plain blob for sendBeacon
         if (navigator.sendBeacon) {
-          const blob = new Blob([payload], { type: 'text/plain' });
-          const success = navigator.sendBeacon(METRICS_ENDPOINT, blob);
-          if (success) return;
+          const blob = new Blob([payload], { type: 'text/plain;charset=UTF-8' });
+          if (navigator.sendBeacon(METRICS_ENDPOINT, blob)) {
+            return;
+          }
         }
       }
 
@@ -132,27 +136,33 @@ export default function Analytics() {
     window.addEventListener('scroll', handleInteraction, { once: true, passive: true });
     window.addEventListener('click', handleInteraction, { once: true, passive: true });
 
+    // Reliability Optimization 2: Comprehensive page termination listener
+    const handleExit = () => {
+      sendPayload(true);
+    };
+
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
         sendPayload(true);
       } else if (document.visibilityState === 'visible') {
-        // Unlock sentFinal so the duration updates if user continues reading and then leaves
+        // Reset lock in case user returns to tab before closing
         sentFinal = false;
       }
     };
 
-    // Lifecycle event listeners for page exit
+    // Attach listeners for both page visibility and tab/window termination
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('pagehide', () => sendPayload(true));
+    window.addEventListener('pagehide', handleExit);
+    window.addEventListener('beforeunload', handleExit);
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('pagehide', () => sendPayload(true));
+      window.removeEventListener('pagehide', handleExit);
+      window.removeEventListener('beforeunload', handleExit);
       window.removeEventListener('scroll', handleInteraction);
       window.removeEventListener('click', handleInteraction);
       
-      // Force reset lock on unmount to guarantee SPA route navigation duration is recorded
-      sentFinal = false;
+      // Force final dispatch on component unmount (SPA route changes)
       sendPayload(true);
     };
 
