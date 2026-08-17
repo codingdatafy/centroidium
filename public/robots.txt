@@ -6,66 +6,85 @@
 # =================================================================
 
 # -----------------------------------------------------------------
-# GROUP 1: BLOCKED AI TRAINING CRAWLERS & SPIDERS
+# GROUP 1: GLOBAL DEFAULT RULE
 # -----------------------------------------------------------------
-# OpenAI: Blocks ChatGPT model training
+User-agent: *
+Allow: /
+
+# -----------------------------------------------------------------
+# GROUP 2: BLOCKED AI TRAINING CRAWLERS & SPIDERS
+# -----------------------------------------------------------------
+# OpenAI
 User-agent: GPTBot
 Disallow: /
 
-# Google: Blocks Gemini model training & AI Overviews future training
+# Google AI
+User-agent: Google-CloudVertexBot
+Disallow: /
+
 User-agent: Google-Extended
 Disallow: /
 
-# Anthropic: Blocks Claude model training
+# Anthropic AI
 User-agent: ClaudeBot
 Disallow: /
 
-# Common Crawl: Blocks open-source AI models data scraping
+# Common Crawl
 User-agent: CCBot
 Disallow: /
 
-# Other known AI training scrapers
-User-agent: Diffbot
-Disallow: /
-
-User-agent: Omgili
-Disallow: /
-
-User-agent: MistralAI-User
-Disallow: /
-
-User-agent: Meta-ExternalAgent
-Disallow: /
-
-# BLOCKED OTHER SPIDERS / CRAWLERS
-User-agent: Amazonbot
-Disallow: /
-
+# ByteDance
 User-agent: Bytespider
+Disallow: /
+
+User-agent: TikTok-Spider
 Disallow: /
 
 User-agent: TikTokSpider
 Disallow: /
 
-User-agent: TerracottaBot
+# Meta AI
+User-agent: FacebookBot
+Disallow: /
+
+User-agent: Meta-ExternalAgent
+Disallow: /
+
+# Other AI
+User-agent: Amazonbot
+Disallow: /
+
+User-agent: AnchorBrowser
+Disallow: /
+
+User-agent: Arquivo-Web-Crawler
+Disallow: /
+
+User-agent: Cloudflare-Crawler
+Disallow: /
+
+User-agent: Diffbot
 Disallow: /
 
 User-agent: ManusBot
 Disallow: /
 
-User-agent: FacebookBot
-Disallow: /
-
-User-agent: Meta-ExternalFetcher
-Disallow: /
-
 User-agent: NovellumAICrawl
+Disallow: /
+
+User-agent: NovellumAICrawler
+Disallow: /
+
+User-agent: Omgili
+Disallow: /
+
+User-agent: PetalBot
 Disallow: /
 
 User-agent: ProRataInc
 Disallow: /
 
-User-agent: AnchorBrowser
+User-agent: TerracottaBot
 Disallow: /
 
 User-agent: Timpibot
@@ -74,9 +93,8 @@ Disallow: /
 User-agent: Scrapy
 Disallow: /
 
-
 # -----------------------------------------------------------------
-# GROUP 2: BLOCKED SEO & COMPETITOR INTELLIGENCE BOTS
+# GROUP 3: BLOCKED SEO & COMPETITOR INTELLIGENCE BOTS
 # -----------------------------------------------------------------
 # Ahrefs
 User-agent: AhrefsBot
@@ -99,11 +117,17 @@ Disallow: /
 User-agent: rogerbot
 Disallow: /
 
-# Majestic & Data Providers
-User-agent: MJ12bot
+# Data Providers
+User-agent: BLEXBot
 Disallow: /
 
 User-agent: DataForSeoBot
+Disallow: /
+
+User-agent: MegaIndex.ru
+Disallow: /
+
+User-agent: MJ12bot
 Disallow: /
 
 User-agent: SerpstatBot
@@ -112,80 +136,74 @@ Disallow: /
 User-agent: SpyFu
 Disallow: /
 
-User-agent: BLEXBot
-Disallow: /
-
-User-agent: MegaIndex.ru
-Disallow: /
-
-
 # -----------------------------------------------------------------
-# GROUP 3: ALLOWED BOT PARTNERS (Search & Real-time Indexing Only)
+# GROUP 4: EXPLICITLY ALLOWED SEARCH & AI-SEARCH BOTS
 # -----------------------------------------------------------------
-# OpenAI: Allows real-time search in ChatGPT (ChatGPT-User / Search)
-User-agent: OAI-SearchBot
-Allow: /
-
+# OpenAI
 User-agent: ChatGPT-User
 Allow: /
 
-# Google: Allows core search indexing (Googlebot) and Vertex API Search
+User-agent: OAI-SearchBot
+Allow: /
+
+# Google
 User-agent: Googlebot
 Allow: /
 
-User-agent: Google-CloudVertexBot
-Allow: /
-
-# Anthropic: Allows Claude's real-time web browsing/search features
+# Anthropic
 User-agent: Claude-SearchBot
 Allow: /
 
 User-agent: Claude-User
 Allow: /
 
-# Perplexity: Allows real-time AI Answer engine search
-User-agent: PerplexityBot
+# Meta
+User-agent: Meta-ExternalFetcher
 Allow: /
 
+# Perplexity AI
 User-agent: Perplexity-User
 Allow: /
 
-# Standard Search & Infrastructure Bots
-User-agent: BingBot
+User-agent: PerplexityBot
 Allow: /
 
+# Search Engines
 User-agent: Applebot
-Allow: /
-
-User-agent: DuckAssistBot
-Allow: /
-
-User-agent: Cloudflare-Crawler
-Allow: /
-
-User-agent: YandexBot
-Allow: /
-
-User-agent: Baiduspider
-Allow: /
-
-User-agent: NaverBot
-Allow: /
-
-User-agent: LinkedInBot
 Allow: /
 
 User-agent: archive.org_bot
 Allow: /
 
+User-agent: Baidu
+Allow: /
+
+User-agent: Baiduspider
+Allow: /
+
+User-agent: BingBot
+Allow: /
+
+
+User-agent: DuckAssistBot
+Allow: /
+
 User-agent: ia_archiver
 Allow: /
 
-
-# -----------------------------------------------------------------
-# GROUP 4: GLOBAL RULES & SITEMAP
-# -----------------------------------------------------------------
-User-agent: *
+User-agent: LinkedInBot
 Allow: /
 
+User-agent: MistralAI-User
+Allow: /
+
+User-agent: NaverBot
+Allow: /
+
+User-agent: YandexBot
+Allow: /
+
+# -----------------------------------------------------------------
+# SITEMAP LOCATION
+# -----------------------------------------------------------------
 Sitemap: https://www.codingdatafy.com/sitemap.xml
