@@ -86,7 +86,8 @@ export default async function Page({ params }: PageProps) {
               <h1 id="article-title">{data.meta.title}</h1>
             </header>
             
-            <section dangerouslySetInnerHTML={{ __html: data.contentHtml }} />
+            {/* Wrapper div applied here because data.contentHtml automatically contains sectionized <section> tags */}
+            <div dangerouslySetInnerHTML={{ __html: data.contentHtml }} />
 
             <footer id="article-footer">
               {data.meta.lastUpdated && (

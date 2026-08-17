@@ -9,7 +9,8 @@ import fs from 'fs';
 import path from 'path';
 import matter from 'gray-matter';
 import { remark } from 'remark';
-import html from 'remark-html';
+import remarkRehype from 'remark-rehype';
+import rehypeStringify from 'rehype-stringify';
 import { cache } from 'react';
 
 const DATA_DIRECTORY = path.join(process.cwd(), 'data');
@@ -35,6 +36,35 @@ export interface PageData {
   contentHtml: string;
   sidebarHtml: string | null;
   meta: PageMetadata;
+}
+
+/**
+ * CUSTOM INLINE REHYPE PLUGIN: AUTOMATICALLY WRAP HEADINGS IN <section> TAGS
+ */
+function rehypeSectionizeCustom() {
+  return (tree: any) => {
+    const children = tree.children || [];
+    const newChildren: any[] = [];
+    let currentSection: any = null;
+
+    for (const node of children) {
+      if (node.type === 'element' && /^h[1-6]$/.test(node.tagName)) {
+        currentSection = {
+          type: 'element',
+          tagName: 'section',
+          properties: {},
+          children: [node],
+        };
+        newChildren.push(currentSection);
+      } else if (currentSection) {
+        currentSection.children.push(node);
+      } else {
+        newChildren.push(node);
+      }
+    }
+
+    tree.children = newChildren;
+  };
 }
 
 /**
@@ -135,12 +165,23 @@ export async function getPageData(slugArray: string[] | undefined): Promise<Page
   try {
     const { data, content } = matter(fileContents);
 
-    const processedContent = await remark().use(html, { sanitize: false }).process(content);
+    // 1. Process primary content and automatically wrap sections using native custom rehype plugin
+    const processedContent = await remark()
+      .use(remarkRehype, { allowDangerousHtml: true })
+      .use(rehypeSectionizeCustom)
+      .use(rehypeStringify, { allowDangerousHtml: true })
+      .process(content);
+
     const contentHtml = processedContent.toString();
 
+    // 2. Process sidebar content (without sectionizing)
     let sidebarHtml: string | null = null;
     if (hasSidebar && sidebarContents) {
-      const processedSidebar = await remark().use(html, { sanitize: false }).process(sidebarContents);
+      const processedSidebar = await remark()
+        .use(remarkRehype, { allowDangerousHtml: true })
+        .use(rehypeStringify, { allowDangerousHtml: true })
+        .process(sidebarContents);
+
       sidebarHtml = processedSidebar.toString();
     }
 
