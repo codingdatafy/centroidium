@@ -105,15 +105,15 @@ export default function Analytics() {
 
       if (isFinal) {
         sentFinal = true;
-        // Preferred mechanism for non-blocking asynchronous unload requests
+        
         if (navigator.sendBeacon) {
-          const blob = new Blob([payload], { type: 'application/json' });
+          const blob = new Blob([payload], { type: 'text/plain' });
           const success = navigator.sendBeacon(METRICS_ENDPOINT, blob);
           if (success) return;
         }
       }
 
-      // Fallback for init hits or if sendBeacon fails
+      // Fallback for init hits or if sendBeacon fails (keepalive keeps request alive on page switch)
       fetch(METRICS_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
