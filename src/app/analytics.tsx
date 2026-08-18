@@ -7,29 +7,19 @@
 
 'use client';
 
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 
 const METRICS_ENDPOINT = '/lib';
 
 export default function Analytics() {
   const rawPathname = usePathname();
-  const lastTrackedPath = useRef<string | null>(null);
-
-  // Use refs to retain state accurately across async browser events
-  const isInitializedRef = useRef(false);
-  const startTimeRef = useRef<number>(0);
-  const hasInteractedRef = useRef(false);
-  const heartbeatTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    // Normalize path: strip query parameters and remove trailing slashes
+    // Standardize path representation
     const cleanPathname = (rawPathname?.split('?')[0] || '/').replace(/\/+$/, '') || '/';
-
-    // Prevent duplicate execution for the same clean path
-    if (lastTrackedPath.current === cleanPathname) return;
 
     // Admin override trigger to disable analytics for testing/maintenance
     const queryParams = new URLSearchParams(window.location.search);
@@ -83,36 +73,30 @@ export default function Analytics() {
 
     if (!isValidVisitor) return;
 
-    // Reset tracking flags for new route transition
-    isInitializedRef.current = false;
-    hasInteractedRef.current = false;
-    startTimeRef.current = 0;
-    if (heartbeatTimeoutRef.current) clearTimeout(heartbeatTimeoutRef.current);
+    let isInitialized = false;
+    let startTime = 0;
+    let hasInteracted = false;
+    let heartbeatId: NodeJS.Timeout | null = null;
 
-    const activePath = cleanPathname;
-    const referrer = document.referrer || '';
-
-    // Dispatch analytics payload (initial hit, interval heartbeat, or exit ping)
     const sendPayload = (isUpdate = false) => {
       if (isUpdate && document.visibilityState === 'hidden') return;
 
-      const durationSec = isUpdate && startTimeRef.current > 0 
-        ? Math.max(0, Math.round((Date.now() - startTimeRef.current) / 1000)) 
+      const durationSec = isUpdate && startTime > 0 
+        ? Math.max(0, Math.round((Date.now() - startTime) / 1000)) 
         : 0;
       
-      const isBounce = isUpdate ? (!hasInteractedRef.current && durationSec < 10) : true;
+      const isBounce = isUpdate ? (!hasInteracted && durationSec < 10) : true;
 
       const payload = JSON.stringify({
-        p: activePath,
-        r: referrer,
+        p: cleanPathname,
+        r: document.referrer || '',
         d: durationSec,
         b: isBounce,
         type: isUpdate ? 'ping' : 'init'
       });
 
       if (isUpdate && navigator.sendBeacon) {
-        const success = navigator.sendBeacon(METRICS_ENDPOINT, payload);
-        if (success) return;
+        if (navigator.sendBeacon(METRICS_ENDPOINT, payload)) return;
       }
 
       fetch(METRICS_ENDPOINT, {
@@ -124,16 +108,16 @@ export default function Analytics() {
     };
 
     const handleInteraction = () => {
-      hasInteractedRef.current = true;
+      hasInteracted = true;
     };
 
     const scheduleHeartbeat = () => {
       if (document.visibilityState === 'hidden') return;
 
-      const elapsedSec = startTimeRef.current > 0 ? Math.round((Date.now() - startTimeRef.current) / 1000) : 0;
+      const elapsedSec = startTime > 0 ? Math.round((Date.now() - startTime) / 1000) : 0;
       const nextIntervalMs = elapsedSec > 60 ? 20000 : 10000;
 
-      heartbeatTimeoutRef.current = setTimeout(() => {
+      heartbeatId = setTimeout(() => {
         if (document.visibilityState === 'visible') {
           sendPayload(true);
         }
@@ -141,65 +125,59 @@ export default function Analytics() {
       }, nextIntervalMs);
     };
 
-    // Initialize session tracking only when tab becomes active and visible
-    const initializeTracking = () => {
-      if (isInitializedRef.current) return;
-      
-      isInitializedRef.current = true;
-      startTimeRef.current = Date.now();
-      lastTrackedPath.current = activePath;
+    const runInit = () => {
+      if (isInitialized) return;
+      isInitialized = true;
+      startTime = Date.now();
 
       // Send initial pageview hit
       sendPayload(false);
 
-      // Start interaction listeners
       window.addEventListener('scroll', handleInteraction, { once: true, passive: true });
       window.addEventListener('click', handleInteraction, { once: true, passive: true });
+      window.addEventListener('mousemove', handleInteraction, { once: true, passive: true });
+      window.addEventListener('keydown', handleInteraction, { once: true, passive: true });
 
-      // Start Adaptive Heartbeat
       scheduleHeartbeat();
     };
 
-    const handleVisibilityOrFocus = () => {
+    // If tab is already visible, execute immediately
+    if (document.visibilityState === 'visible' && document.hasFocus()) {
+      runInit();
+    }
+
+    // High-priority triggers for background tab activation
+    const triggerEvents = ['visibilitychange', 'focus', 'pointermove', 'touchstart'];
+    
+    const onActivate = () => {
       if (document.visibilityState === 'visible') {
-        if (!isInitializedRef.current) {
-          initializeTracking();
-        }
-      } else if (document.visibilityState === 'hidden') {
-        if (isInitializedRef.current) {
-          sendPayload(true);
-          if (heartbeatTimeoutRef.current) clearTimeout(heartbeatTimeoutRef.current);
-        }
+        runInit();
+        // Remove activation triggers once initialized
+        triggerEvents.forEach(evt => window.removeEventListener(evt, onActivate));
+      } else if (document.visibilityState === 'hidden' && isInitialized) {
+        sendPayload(true);
+        if (heartbeatId) clearTimeout(heartbeatId);
       }
     };
 
-    // Check immediate visibility state on mount
-    if (document.visibilityState === 'visible') {
-      initializeTracking();
-    }
-
-    // Attach comprehensive window active triggers for tabs opened in background
-    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
-    window.addEventListener('focus', handleVisibilityOrFocus);
-    window.addEventListener('pageshow', handleVisibilityOrFocus);
+    triggerEvents.forEach(evt => window.addEventListener(evt, onActivate, { passive: true }));
 
     const handlePageHide = () => {
-      if (isInitializedRef.current) sendPayload(true);
+      if (isInitialized) sendPayload(true);
     };
 
     window.addEventListener('pagehide', handlePageHide);
 
     return () => {
-      if (heartbeatTimeoutRef.current) clearTimeout(heartbeatTimeoutRef.current);
-      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
-      window.removeEventListener('focus', handleVisibilityOrFocus);
-      window.removeEventListener('pageshow', handleVisibilityOrFocus);
+      if (heartbeatId) clearTimeout(heartbeatId);
+      triggerEvents.forEach(evt => window.removeEventListener(evt, onActivate));
       window.removeEventListener('pagehide', handlePageHide);
       window.removeEventListener('scroll', handleInteraction);
       window.removeEventListener('click', handleInteraction);
+      window.removeEventListener('mousemove', handleInteraction);
+      window.removeEventListener('keydown', handleInteraction);
       
-      // Send final duration update on SPA route navigation unmount if active
-      if (isInitializedRef.current) {
+      if (isInitialized) {
         sendPayload(true);
       }
     };
