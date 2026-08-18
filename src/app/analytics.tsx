@@ -18,7 +18,6 @@ export default function Analytics() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    // Standardize path representation
     const cleanPathname = (rawPathname?.split('?')[0] || '/').replace(/\/+$/, '') || '/';
 
     // Admin override trigger to disable analytics for testing/maintenance
@@ -141,26 +140,33 @@ export default function Analytics() {
       scheduleHeartbeat();
     };
 
-    // If tab is already visible, execute immediately
+    // If active and focused right now, run immediately
     if (document.visibilityState === 'visible' && document.hasFocus()) {
       runInit();
     }
 
-    // High-priority triggers for background tab activation
-    const triggerEvents = ['visibilitychange', 'focus', 'pointermove', 'touchstart'];
-    
-    const onActivate = () => {
+    // Handle tab focus / activation when coming from background state
+    const handleActivation = () => {
       if (document.visibilityState === 'visible') {
         runInit();
-        // Remove activation triggers once initialized
-        triggerEvents.forEach(evt => window.removeEventListener(evt, onActivate));
       } else if (document.visibilityState === 'hidden' && isInitialized) {
         sendPayload(true);
         if (heartbeatId) clearTimeout(heartbeatId);
       }
     };
 
-    triggerEvents.forEach(evt => window.addEventListener(evt, onActivate, { passive: true }));
+    // Global events attached directly to window and document
+    window.addEventListener('focus', handleActivation);
+    document.addEventListener('visibilitychange', handleActivation);
+
+    // Fallback: Immediate execution on first user interaction if focus event was missed
+    const handleFirstTouchOrMove = () => {
+      if (!isInitialized && document.visibilityState === 'visible') {
+        runInit();
+      }
+    };
+    window.addEventListener('mousemove', handleFirstTouchOrMove, { once: true, passive: true });
+    window.addEventListener('touchstart', handleFirstTouchOrMove, { once: true, passive: true });
 
     const handlePageHide = () => {
       if (isInitialized) sendPayload(true);
@@ -170,7 +176,10 @@ export default function Analytics() {
 
     return () => {
       if (heartbeatId) clearTimeout(heartbeatId);
-      triggerEvents.forEach(evt => window.removeEventListener(evt, onActivate));
+      window.removeEventListener('focus', handleActivation);
+      document.removeEventListener('visibilitychange', handleActivation);
+      window.removeEventListener('mousemove', handleFirstTouchOrMove);
+      window.removeEventListener('touchstart', handleFirstTouchOrMove);
       window.removeEventListener('pagehide', handlePageHide);
       window.removeEventListener('scroll', handleInteraction);
       window.removeEventListener('click', handleInteraction);
