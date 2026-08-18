@@ -22,10 +22,10 @@ export default function Analytics() {
     // Normalize path: strip query parameters and remove trailing slashes
     const cleanPathname = (rawPathname?.split('?')[0] || '/').replace(/\/+$/, '') || '/';
 
-    // Prevent duplicate execution if already tracked in this active session
+    // Prevent duplicate execution for the same clean path
     if (lastTrackedPath.current === cleanPathname) return;
 
-    // Admin override trigger
+    // Admin override trigger to disable analytics for testing/maintenance
     const queryParams = new URLSearchParams(window.location.search);
     if (queryParams.get('admin') === 'true') {
       localStorage.setItem('analytics-disable', 'true');
@@ -51,17 +51,42 @@ export default function Analytics() {
 
     const isExplicitlyDisabled = localStorage.getItem('analytics-disable') === 'true';
 
-    // Static environmental validation
-    const isValidEnvironment = isOfficialDomain && !isBotAgent && !isAutomatedBot && !isExplicitlyDisabled;
+    // Hardware & WebGL anomaly detection (ONLY evaluated if tab is already visible)
+    // Background tabs (Ctrl+Click) naturally have zero dimensions, so we bypass this check for hidden tabs
+    const isDatacenterBot = () => {
+      if (document.visibilityState === 'hidden') return false;
 
-    if (!isValidEnvironment) return;
+      const hasZeroDimensions = window.outerWidth === 0 && window.outerHeight === 0;
+      const hasInvalidScreen = screen.width === 0 || screen.height === 0;
+      const hasNoHardwareConcurrency = !navigator.hardwareConcurrency || navigator.hardwareConcurrency < 1;
+
+      try {
+        const canvas = document.createElement('canvas');
+        const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+        if (!gl) return hasZeroDimensions || hasInvalidScreen || hasNoHardwareConcurrency;
+        const debugInfo = (gl as WebGLRenderingContext).getExtension('WEBGL_debug_renderer_info');
+        if (!debugInfo) return hasZeroDimensions || hasInvalidScreen || hasNoHardwareConcurrency;
+        const renderer = (gl as WebGLRenderingContext).getParameter(debugInfo.UNMASKED_RENDERER_WEBGL).toLowerCase();
+        const isSoftware = renderer.includes('swiftshader') || renderer.includes('llvmpipe') || renderer.includes('mesa');
+        return hasZeroDimensions || hasInvalidScreen || hasNoHardwareConcurrency || isSoftware;
+      } catch {
+        return false;
+      }
+    };
+
+    // Verify all security, bot, and domain constraints
+    const isValidVisitor = isOfficialDomain && !isBotAgent && !isAutomatedBot && !isExplicitlyDisabled && !isDatacenterBot();
+
+    if (!isValidVisitor) return;
+
+    // Mark current path as tracked
+    lastTrackedPath.current = cleanPathname;
 
     const activePath = cleanPathname;
     const referrer = document.referrer || '';
 
-    let startTime = 0;
+    let startTime = Date.now();
     let hasInteracted = false;
-    let isInitialized = false;
     let heartbeatTimeoutId: NodeJS.Timeout | null = null;
 
     // Dispatch analytics payload
@@ -80,9 +105,11 @@ export default function Analytics() {
       });
 
       if (isUpdate && navigator.sendBeacon) {
-        if (navigator.sendBeacon(METRICS_ENDPOINT, payload)) return;
+        const success = navigator.sendBeacon(METRICS_ENDPOINT, payload);
+        if (success) return;
       }
 
+      // Use keepalive: true so requests sent from background tabs are guaranteed to complete
       fetch(METRICS_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -95,6 +122,7 @@ export default function Analytics() {
       hasInteracted = true;
     };
 
+    // Adaptive Heartbeat scheduler: active only when tab is visible
     const scheduleHeartbeat = () => {
       if (document.visibilityState === 'hidden') return;
 
@@ -109,74 +137,32 @@ export default function Analytics() {
       }, nextIntervalMs);
     };
 
-    // Lazy initialization: Triggers ONLY when the page actually becomes visible to the user
-    const initializeTracking = () => {
-      if (isInitialized) return;
+    // 1. ALWAYS send the initial pageview hit immediately (even in background tabs)
+    sendPayload(false);
 
-      // Hardware & WebGL anomaly detection (Safe to evaluate now as tab is active)
-      const hasZeroDimensions = window.outerWidth === 0 && window.outerHeight === 0;
-      const hasInvalidScreen = screen.width === 0 || screen.height === 0;
-      const hasNoHardwareConcurrency = !navigator.hardwareConcurrency || navigator.hardwareConcurrency < 1;
+    // 2. Start interaction listeners
+    window.addEventListener('scroll', handleInteraction, { once: true, passive: true });
+    window.addEventListener('click', handleInteraction, { once: true, passive: true });
 
-      const isSoftwareWebGL = () => {
-        try {
-          const canvas = document.createElement('canvas');
-          const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-          if (!gl) return false;
-          const debugInfo = (gl as WebGLRenderingContext).getExtension('WEBGL_debug_renderer_info');
-          if (!debugInfo) return false;
-          const renderer = (gl as WebGLRenderingContext).getParameter(debugInfo.UNMASKED_RENDERER_WEBGL).toLowerCase();
-          return renderer.includes('swiftshader') || renderer.includes('llvmpipe') || renderer.includes('mesa');
-        } catch {
-          return false;
-        }
-      };
-
-      if (hasZeroDimensions || hasInvalidScreen || hasNoHardwareConcurrency || isSoftwareWebGL()) {
-        return;
-      }
-
-      // Mark path as tracked ONLY upon actual active view
-      lastTrackedPath.current = activePath;
-      isInitialized = true;
-      startTime = Date.now();
-
-      // Send initial pageview hit NOW
-      sendPayload(false);
-
-      // Listen for interaction events
-      window.addEventListener('scroll', handleInteraction, { once: true, passive: true });
-      window.addEventListener('click', handleInteraction, { once: true, passive: true });
-
-      // Start heartbeat
-      scheduleHeartbeat();
-    };
-
-    // 1. If tab is already active on load, initialize immediately
+    // 3. Start heartbeat if currently visible
     if (document.visibilityState === 'visible') {
-      initializeTracking();
+      scheduleHeartbeat();
     }
 
-    // 2. Listen for visibility changes (Triggers when user clicks onto background tab)
+    // Visibility change handler to control heartbeat when tab focus shifts
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        if (!isInitialized) {
-          initializeTracking();
-        } else {
-          scheduleHeartbeat();
-        }
+        scheduleHeartbeat();
       } else if (document.visibilityState === 'hidden') {
-        if (isInitialized) {
-          sendPayload(true);
-          if (heartbeatTimeoutId) clearTimeout(heartbeatTimeoutId);
-        }
+        sendPayload(true);
+        if (heartbeatTimeoutId) clearTimeout(heartbeatTimeoutId);
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     const handlePageHide = () => {
-      if (isInitialized) sendPayload(true);
+      sendPayload(true);
     };
 
     window.addEventListener('pagehide', handlePageHide);
@@ -188,10 +174,7 @@ export default function Analytics() {
       window.removeEventListener('scroll', handleInteraction);
       window.removeEventListener('click', handleInteraction);
 
-      // Send exit payload ONLY IF the view was ever initialized/seen
-      if (isInitialized) {
-        sendPayload(true);
-      }
+      sendPayload(true);
     };
 
   }, [rawPathname]);
