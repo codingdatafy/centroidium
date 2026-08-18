@@ -49,37 +49,18 @@ export default function Analytics() {
     const hasNoLanguages = !navigator.languages || navigator.languages.length === 0;
     const isAutomatedBot = isWebDriver || isPhantom || isHeadlessWindow || hasNoLanguages;
 
-    // Hardware anomaly detection
-    const hasZeroDimensions = window.outerWidth === 0 && window.outerHeight === 0;
-    const hasInvalidScreen = screen.width === 0 || screen.height === 0;
-    const hasNoHardwareConcurrency = !navigator.hardwareConcurrency || navigator.hardwareConcurrency < 1;
+    const isExplicitlyDisabled = localStorage.setItem ? localStorage.getItem('analytics-disable') === 'true' : false;
 
-    // Software WebGL renderer detection for virtualized/datacenter environments
-    const isSoftwareWebGL = () => {
-      try {
-        const canvas = document.createElement('canvas');
-        const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-        if (!gl) return false;
-        const debugInfo = (gl as WebGLRenderingContext).getExtension('WEBGL_debug_renderer_info');
-        if (!debugInfo) return false;
-        const renderer = (gl as WebGLRenderingContext).getParameter(debugInfo.UNMASKED_RENDERER_WEBGL).toLowerCase();
-        return renderer.includes('swiftshader') || renderer.includes('llvmpipe') || renderer.includes('mesa');
-      } catch {
-        return false;
-      }
-    };
+    // Static environmental validation (Safe to run immediately in background tabs)
+    const isValidEnvironment = isOfficialDomain && !isBotAgent && !isAutomatedBot && !isExplicitlyDisabled;
 
-    const isDatacenterBot = hasZeroDimensions || hasInvalidScreen || hasNoHardwareConcurrency || isSoftwareWebGL();
-    const isExplicitlyDisabled = localStorage.getItem('analytics-disable') === 'true';
-
-    // Verify all security, bot, and domain constraints
-    const isValidVisitor = isOfficialDomain && !isBotAgent && !isAutomatedBot && !isDatacenterBot && !isExplicitlyDisabled;
-
-    if (!isValidVisitor) return;
+    if (!isValidEnvironment) return;
 
     // Track active path locally for clean exit/transition logging
     const activePath = cleanPathname;
     const referrer = document.referrer || '';
+
+    lastTrackedPath.current = activePath;
 
     let startTime = 0;
     let hasInteracted = false;
@@ -88,7 +69,7 @@ export default function Analytics() {
 
     // Dispatch analytics payload (initial hit, interval heartbeat, or exit ping)
     const sendPayload = (isUpdate = false) => {
-      // Do not send duration updates when the document is hidden in the background
+      // Do not send updates when the document is hidden in the background
       if (isUpdate && document.visibilityState === 'hidden') return;
 
       const durationSec = isUpdate && startTime > 0 ? Math.max(0, Math.round((Date.now() - startTime) / 1000)) : 0;
@@ -137,39 +118,58 @@ export default function Analytics() {
       }, nextIntervalMs);
     };
 
-    // Initialize session tracking immediately for pageview logging
+    // Initialize session tracking only when tab becomes active and visible
     const initializeTracking = () => {
       if (isInitialized) return;
+
+      // Dynamic Hardware & WebGL anomaly detection (Evaluated only when tab is active/visible)
+      const hasZeroDimensions = window.outerWidth === 0 && window.outerHeight === 0;
+      const hasInvalidScreen = screen.width === 0 || screen.height === 0;
+      const hasNoHardwareConcurrency = !navigator.hardwareConcurrency || navigator.hardwareConcurrency < 1;
+
+      const isSoftwareWebGL = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+          if (!gl) return false;
+          const debugInfo = (gl as WebGLRenderingContext).getExtension('WEBGL_debug_renderer_info');
+          if (!debugInfo) return false;
+          const renderer = (gl as WebGLRenderingContext).getParameter(debugInfo.UNMASKED_RENDERER_WEBGL).toLowerCase();
+          return renderer.includes('swiftshader') || renderer.includes('llvmpipe') || renderer.includes('mesa');
+        } catch {
+          return false;
+        }
+      };
+
+      const isDatacenterBot = hasZeroDimensions || hasInvalidScreen || hasNoHardwareConcurrency || isSoftwareWebGL();
       
+      // Abort execution if hardware anomalies indicate a datacenter bot
+      if (isDatacenterBot) return;
+
       isInitialized = true;
-      lastTrackedPath.current = activePath; // Record reference path only upon actual initialization
       startTime = Date.now();
 
-      // Send initial pageview hit immediately (even if opened in background tab via Ctrl+Click)
+      // Send initial pageview hit
       sendPayload(false);
 
       // Start interaction listeners
       window.addEventListener('scroll', handleInteraction, { once: true, passive: true });
       window.addEventListener('click', handleInteraction, { once: true, passive: true });
 
-      // Start Adaptive Heartbeat only if tab is currently visible
-      if (document.visibilityState === 'visible') {
-        scheduleHeartbeat();
-      }
+      // Start Adaptive Heartbeat
+      scheduleHeartbeat();
     };
 
-    // Execute initial tracking right away regardless of initial tab visibility
-    initializeTracking();
+    // Check visibility state on mount
+    if (document.visibilityState === 'visible') {
+      initializeTracking();
+    }
 
-    // Visibility change handler for tab activation/deactivation updates
+    // Visibility change handler for initial activation and background updates
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         if (!isInitialized) {
           initializeTracking();
-        } else {
-          // Reset startTime reference when returning to the tab to avoid skewed idle duration
-          if (startTime === 0) startTime = Date.now();
-          scheduleHeartbeat();
         }
       } else if (document.visibilityState === 'hidden') {
         if (isInitialized) {
