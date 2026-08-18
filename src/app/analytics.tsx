@@ -14,16 +14,14 @@ const METRICS_ENDPOINT = '/lib';
 
 export default function Analytics() {
   const rawPathname = usePathname();
-  const lastTrackedPath = useRef<string | null>(null);
+  const isInitializedRef = useRef(false);
+  const activePathRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
     // Normalize path: strip query parameters and remove trailing slashes
     const cleanPathname = (rawPathname?.split('?')[0] || '/').replace(/\/+$/, '') || '/';
-
-    // Prevent duplicate execution for the same clean path IF ALREADY INITIALIZED
-    if (lastTrackedPath.current === cleanPathname) return;
 
     // Admin override trigger to disable analytics for testing/maintenance
     const queryParams = new URLSearchParams(window.location.search);
@@ -77,21 +75,24 @@ export default function Analytics() {
 
     if (!isValidVisitor) return;
 
+    // Reset tracking state on path change
+    if (activePathRef.current !== cleanPathname) {
+      isInitializedRef.current = false;
+      activePathRef.current = cleanPathname;
+    }
+
     const activePath = cleanPathname;
     const referrer = document.referrer || '';
 
     let startTime = 0;
     let hasInteracted = false;
-    let isInitialized = false;
     let heartbeatTimeoutId: NodeJS.Timeout | null = null;
 
-    // Dispatch analytics payload (initial hit, interval heartbeat, or exit ping)
+    // Dispatch analytics payload
     const sendPayload = (isUpdate = false) => {
       if (isUpdate && document.visibilityState === 'hidden') return;
 
       const durationSec = isUpdate && startTime > 0 ? Math.max(0, Math.round((Date.now() - startTime) / 1000)) : 0;
-      
-      // Global Standard Bounce Definition: Interacted OR stayed for 10+ seconds
       const isBounce = isUpdate ? (!hasInteracted && durationSec < 10) : true;
 
       const payload = JSON.stringify({
@@ -107,7 +108,6 @@ export default function Analytics() {
         if (success) return;
       }
 
-      // Fallback for init hits or if sendBeacon is unsupported/fails
       fetch(METRICS_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -120,7 +120,6 @@ export default function Analytics() {
       hasInteracted = true;
     };
 
-    // Adaptive Heartbeat scheduler: 10s during initial minute, then 20s
     const scheduleHeartbeat = () => {
       if (document.visibilityState === 'hidden') return;
 
@@ -135,12 +134,10 @@ export default function Analytics() {
       }, nextIntervalMs);
     };
 
-    // Initialize session tracking only when tab becomes active and visible
     const initializeTracking = () => {
-      if (isInitialized) return;
+      if (isInitializedRef.current) return;
       
-      isInitialized = true;
-      lastTrackedPath.current = activePath; // Set only upon actual initialization
+      isInitializedRef.current = true;
       startTime = Date.now();
 
       // Send initial pageview hit
@@ -154,19 +151,19 @@ export default function Analytics() {
       scheduleHeartbeat();
     };
 
-    // Check visibility state on mount
+    // 1. Direct check: If tab is already visible, initialize right away
     if (document.visibilityState === 'visible') {
       initializeTracking();
     }
 
-    // Visibility change handler for initial activation and background updates
+    // 2. Global listener: Triggers initialization the exact moment tab becomes visible (Ctrl+Click case)
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        if (!isInitialized) {
+        if (!isInitializedRef.current) {
           initializeTracking();
         }
       } else if (document.visibilityState === 'hidden') {
-        if (isInitialized) {
+        if (isInitializedRef.current) {
           sendPayload(true);
           if (heartbeatTimeoutId) clearTimeout(heartbeatTimeoutId);
         }
@@ -174,9 +171,9 @@ export default function Analytics() {
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    
+
     const handlePageHide = () => {
-      if (isInitialized) sendPayload(true);
+      if (isInitializedRef.current) sendPayload(true);
     };
 
     window.addEventListener('pagehide', handlePageHide);
@@ -187,9 +184,8 @@ export default function Analytics() {
       window.removeEventListener('pagehide', handlePageHide);
       window.removeEventListener('scroll', handleInteraction);
       window.removeEventListener('click', handleInteraction);
-      
-      // Send final duration update on SPA route navigation unmount if active
-      if (isInitialized) {
+
+      if (isInitializedRef.current) {
         sendPayload(true);
       }
     };
