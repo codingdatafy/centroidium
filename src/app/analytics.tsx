@@ -22,7 +22,7 @@ export default function Analytics() {
     // Normalize path: strip query parameters and remove trailing slashes
     const cleanPathname = (rawPathname?.split('?')[0] || '/').replace(/\/+$/, '') || '/';
 
-    // Prevent duplicate execution for the same clean path
+    // Prevent duplicate execution for the same clean path ONLY if already initialized
     if (lastTrackedPath.current === cleanPathname) return;
 
     // Admin override trigger to disable analytics for testing/maintenance
@@ -77,11 +77,8 @@ export default function Analytics() {
 
     if (!isValidVisitor) return;
 
-    // Track active path locally for clean exit/transition logging
     const activePath = cleanPathname;
     const referrer = document.referrer || '';
-
-    lastTrackedPath.current = activePath;
 
     let startTime = 0;
     let hasInteracted = false;
@@ -90,37 +87,28 @@ export default function Analytics() {
 
     // Dispatch analytics payload (initial hit, interval heartbeat, or exit ping)
     const sendPayload = (isUpdate = false) => {
-      // Do not send updates when the document is hidden in the background
       if (isUpdate && document.visibilityState === 'hidden') return;
 
       const durationSec = isUpdate && startTime > 0 ? Math.max(0, Math.round((Date.now() - startTime) / 1000)) : 0;
-      
-      // Global Standard Bounce Definition: Interacted OR stayed for 10+ seconds
       const isBounce = isUpdate ? (!hasInteracted && durationSec < 10) : true;
 
-      // Prepare URLSearchParams string for standard text/plain simple requests
-      const params = new URLSearchParams({
+      const payload = JSON.stringify({
         p: activePath,
         r: referrer,
-        d: durationSec.toString(),
-        b: isBounce ? 'true' : 'false',
+        d: durationSec,
+        b: isBounce,
         type: isUpdate ? 'ping' : 'init'
       });
 
-      const payloadString = params.toString();
-
-      // Use sendBeacon with Blob for seamless exit pings without preflight
       if (isUpdate && navigator.sendBeacon) {
-        const blob = new Blob([payloadString], { type: 'text/plain;charset=UTF-8' });
-        const success = navigator.sendBeacon(METRICS_ENDPOINT, blob);
+        const success = navigator.sendBeacon(METRICS_ENDPOINT, payload);
         if (success) return;
       }
 
-      // Fallback fetch with Simple Request format to bypass background CORS blocking
       fetch(METRICS_ENDPOINT, {
         method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-        body: payloadString,
+        headers: { 'Content-Type': 'application/json' },
+        body: payload,
         keepalive: true,
       }).catch(() => {});
     };
@@ -129,7 +117,6 @@ export default function Analytics() {
       hasInteracted = true;
     };
 
-    // Adaptive Heartbeat scheduler: 10s during initial minute, then 20s
     const scheduleHeartbeat = () => {
       if (document.visibilityState === 'hidden') return;
 
@@ -149,6 +136,7 @@ export default function Analytics() {
       if (isInitialized) return;
       
       isInitialized = true;
+      lastTrackedPath.current = activePath;
       startTime = Date.now();
 
       // Send initial pageview hit
@@ -196,7 +184,6 @@ export default function Analytics() {
       window.removeEventListener('scroll', handleInteraction);
       window.removeEventListener('click', handleInteraction);
       
-      // Send final duration update on SPA route navigation unmount if active
       if (isInitialized) {
         sendPayload(true);
       }
