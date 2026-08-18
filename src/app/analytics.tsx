@@ -19,8 +19,7 @@ export default function Analytics() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    // Read directly from window.location.pathname to handle background tabs (Ctrl + Click) 
-    // without relying solely on Next.js Router state updates.
+    // Get exact pathname from DOM to bypass router prefetch delays
     const actualPath = window.location.pathname || rawPathname || '/';
     const cleanPathname = (actualPath.split('?')[0] || '/').replace(/\/+$/, '') || '/';
 
@@ -83,21 +82,16 @@ export default function Analytics() {
     const activePath = cleanPathname;
     const referrer = document.referrer || '';
 
-    lastTrackedPath.current = activePath;
-
     let startTime = 0;
     let hasInteracted = false;
     let isInitialized = false;
     let heartbeatTimeoutId: NodeJS.Timeout | null = null;
 
-    // Dispatch analytics payload (initial hit, interval heartbeat, or exit ping)
+    // Dispatch analytics payload
     const sendPayload = (isUpdate = false) => {
-      // Do not send duration updates when the document is hidden in the background
       if (isUpdate && document.visibilityState === 'hidden') return;
 
       const durationSec = isUpdate && startTime > 0 ? Math.max(0, Math.round((Date.now() - startTime) / 1000)) : 0;
-      
-      // Global Standard Bounce Definition: Interacted OR stayed for 10+ seconds
       const isBounce = isUpdate ? (!hasInteracted && durationSec < 10) : true;
 
       const payload = JSON.stringify({
@@ -113,7 +107,6 @@ export default function Analytics() {
         if (success) return;
       }
 
-      // Fallback for init hits or if sendBeacon is unsupported/fails
       fetch(METRICS_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -126,7 +119,7 @@ export default function Analytics() {
       hasInteracted = true;
     };
 
-    // Adaptive Heartbeat scheduler: 10s during initial minute, then 20s
+    // Adaptive Heartbeat scheduler
     const scheduleHeartbeat = () => {
       if (document.visibilityState === 'hidden') return;
 
@@ -141,33 +134,36 @@ export default function Analytics() {
       }, nextIntervalMs);
     };
 
-    // Initialize session tracking
+    // Initialize session tracking only when tab becomes visible to user
     const initializeTracking = () => {
       if (isInitialized) return;
       
       isInitialized = true;
+      lastTrackedPath.current = activePath;
       startTime = Date.now();
 
-      // Always send initial pageview hit immediately
+      // Send initial pageview hit
       sendPayload(false);
 
       // Start interaction listeners
       window.addEventListener('scroll', handleInteraction, { once: true, passive: true });
       window.addEventListener('click', handleInteraction, { once: true, passive: true });
 
-      // Start Adaptive Heartbeat if tab is currently visible
-      if (document.visibilityState === 'visible') {
-        scheduleHeartbeat();
-      }
+      // Start Adaptive Heartbeat
+      scheduleHeartbeat();
     };
 
-    // Execute tracking setup immediately
-    initializeTracking();
+    // If tab is already visible (normal navigation), initialize immediately
+    if (document.visibilityState === 'visible') {
+      initializeTracking();
+    }
 
-    // Visibility change handler for heartbeat scheduling and background updates
+    // Visibility change handler: Triggers tracking when background tab is opened/focused
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        if (isInitialized && !heartbeatTimeoutId) {
+        if (!isInitialized) {
+          initializeTracking();
+        } else if (!heartbeatTimeoutId) {
           scheduleHeartbeat();
         }
       } else if (document.visibilityState === 'hidden') {
@@ -196,7 +192,6 @@ export default function Analytics() {
       window.removeEventListener('scroll', handleInteraction);
       window.removeEventListener('click', handleInteraction);
       
-      // Send final duration update on SPA route navigation unmount if active
       if (isInitialized) {
         sendPayload(true);
       }
