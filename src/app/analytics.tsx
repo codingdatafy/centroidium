@@ -19,9 +19,8 @@ export default function Analytics() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    // Get exact pathname from DOM to bypass router prefetch delays
-    const actualPath = window.location.pathname || rawPathname || '/';
-    const cleanPathname = (actualPath.split('?')[0] || '/').replace(/\/+$/, '') || '/';
+    // Normalize path: strip query parameters and remove trailing slashes
+    const cleanPathname = (rawPathname?.split('?')[0] || '/').replace(/\/+$/, '') || '/';
 
     // Prevent duplicate execution for the same clean path
     if (lastTrackedPath.current === cleanPathname) return;
@@ -87,11 +86,14 @@ export default function Analytics() {
     let isInitialized = false;
     let heartbeatTimeoutId: NodeJS.Timeout | null = null;
 
-    // Dispatch analytics payload
+    // Dispatch analytics payload (initial hit, interval heartbeat, or exit ping)
     const sendPayload = (isUpdate = false) => {
+      // Do not send duration updates when the document is hidden in the background
       if (isUpdate && document.visibilityState === 'hidden') return;
 
       const durationSec = isUpdate && startTime > 0 ? Math.max(0, Math.round((Date.now() - startTime) / 1000)) : 0;
+      
+      // Global Standard Bounce Definition: Interacted OR stayed for 10+ seconds
       const isBounce = isUpdate ? (!hasInteracted && durationSec < 10) : true;
 
       const payload = JSON.stringify({
@@ -107,6 +109,7 @@ export default function Analytics() {
         if (success) return;
       }
 
+      // Fallback for init hits or if sendBeacon is unsupported/fails
       fetch(METRICS_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -119,7 +122,7 @@ export default function Analytics() {
       hasInteracted = true;
     };
 
-    // Adaptive Heartbeat scheduler
+    // Adaptive Heartbeat scheduler: 10s during initial minute, then 20s
     const scheduleHeartbeat = () => {
       if (document.visibilityState === 'hidden') return;
 
@@ -134,45 +137,44 @@ export default function Analytics() {
       }, nextIntervalMs);
     };
 
-    // Initialize session tracking only when tab becomes visible to user
+    // Initialize session tracking immediately for pageview logging
     const initializeTracking = () => {
       if (isInitialized) return;
       
       isInitialized = true;
-      lastTrackedPath.current = activePath;
+      lastTrackedPath.current = activePath; // Record reference path only upon actual initialization
       startTime = Date.now();
 
-      // Send initial pageview hit
+      // Send initial pageview hit immediately (even if opened in background tab via Ctrl+Click)
       sendPayload(false);
 
       // Start interaction listeners
       window.addEventListener('scroll', handleInteraction, { once: true, passive: true });
       window.addEventListener('click', handleInteraction, { once: true, passive: true });
 
-      // Start Adaptive Heartbeat
-      scheduleHeartbeat();
+      // Start Adaptive Heartbeat only if tab is currently visible
+      if (document.visibilityState === 'visible') {
+        scheduleHeartbeat();
+      }
     };
 
-    // If tab is already visible (normal navigation), initialize immediately
-    if (document.visibilityState === 'visible') {
-      initializeTracking();
-    }
+    // Execute initial tracking right away regardless of initial tab visibility
+    initializeTracking();
 
-    // Visibility change handler: Triggers tracking when background tab is opened/focused
+    // Visibility change handler for tab activation/deactivation updates
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         if (!isInitialized) {
           initializeTracking();
-        } else if (!heartbeatTimeoutId) {
+        } else {
+          // Reset startTime reference when returning to the tab to avoid skewed idle duration
+          if (startTime === 0) startTime = Date.now();
           scheduleHeartbeat();
         }
       } else if (document.visibilityState === 'hidden') {
         if (isInitialized) {
           sendPayload(true);
-          if (heartbeatTimeoutId) {
-            clearTimeout(heartbeatTimeoutId);
-            heartbeatTimeoutId = null;
-          }
+          if (heartbeatTimeoutId) clearTimeout(heartbeatTimeoutId);
         }
       }
     };
@@ -192,6 +194,7 @@ export default function Analytics() {
       window.removeEventListener('scroll', handleInteraction);
       window.removeEventListener('click', handleInteraction);
       
+      // Send final duration update on SPA route navigation unmount if active
       if (isInitialized) {
         sendPayload(true);
       }
