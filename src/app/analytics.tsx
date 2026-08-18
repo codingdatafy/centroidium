@@ -49,7 +49,7 @@ export default function Analytics() {
     const hasNoLanguages = !navigator.languages || navigator.languages.length === 0;
     const isAutomatedBot = isWebDriver || isPhantom || isHeadlessWindow || hasNoLanguages;
 
-    const isExplicitlyDisabled = localStorage.setItem ? localStorage.getItem('analytics-disable') === 'true' : false;
+    const isExplicitlyDisabled = localStorage.getItem('analytics-disable') === 'true';
 
     // Static environmental validation (Safe to run immediately in background tabs)
     const isValidEnvironment = isOfficialDomain && !isBotAgent && !isAutomatedBot && !isExplicitlyDisabled;
