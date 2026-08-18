@@ -34,52 +34,54 @@ export default function Analytics() {
       alert('CodingDatafy: Analytics tracking is now disabled for this browser.');
     }
 
-    // Dynamic verification helper: Executed ONLY when the tab is fully active/visible
-    const verifyValidVisitor = () => {
-      // Domain validation check
-      const hostname = window.location.hostname;
-      const isOfficialDomain = hostname === 'www.codingdatafy.com' || hostname === 'codingdatafy.com';
+    // Domain validation check
+    const hostname = window.location.hostname;
+    const isOfficialDomain = hostname === 'www.codingdatafy.com' || hostname === 'codingdatafy.com';
 
-      // Bot agent pattern matching
-      const ua = navigator.userAgent.toLowerCase();
-      const isBotAgent = /bot|googlebot|crawler|spider|robot|crawling|lighthouse|chrome-lighthouse|google-inspectiontool|ahrefs|semrush|gptbot|chatgpt|claudebot|claude-user|coherebot|headlesschrome|python|node-fetch|axios|bytespider|ccbot|facebookbot|meta-external|amazonbot|petalbot|scrapy|diffbot|dotbot|rogerbot|blexbot|dataforseo|mj12bot|serpstatbot|perplexity|applebot|yandex|bingbot|baidu/i.test(ua);
+    // Bot agent pattern matching
+    const ua = navigator.userAgent.toLowerCase();
+    const isBotAgent = /bot|googlebot|crawler|spider|robot|crawling|lighthouse|chrome-lighthouse|google-inspectiontool|ahrefs|semrush|gptbot|chatgpt|claudebot|claude-user|coherebot|headlesschrome|python|node-fetch|axios|bytespider|ccbot|facebookbot|meta-external|amazonbot|petalbot|scrapy|diffbot|dotbot|rogerbot|blexbot|dataforseo|mj12bot|serpstatbot|perplexity|applebot|yandex|bingbot|baidu/i.test(ua);
 
-      // Automation and headless browser detection
-      const isWebDriver = navigator.webdriver === true;
-      const isPhantom = 'callPhantom' in window || '_phantom' in window;
-      const isHeadlessWindow = 'Buffer' in window || 'emit' in window;
-      const hasNoLanguages = !navigator.languages || navigator.languages.length === 0;
-      const isAutomatedBot = isWebDriver || isPhantom || isHeadlessWindow || hasNoLanguages;
+    // Automation and headless browser detection
+    const isWebDriver = navigator.webdriver === true;
+    const isPhantom = 'callPhantom' in window || '_phantom' in window;
+    const isHeadlessWindow = 'Buffer' in window || 'emit' in window;
+    const hasNoLanguages = !navigator.languages || navigator.languages.length === 0;
+    const isAutomatedBot = isWebDriver || isPhantom || isHeadlessWindow || hasNoLanguages;
 
-      // Hardware anomaly detection
-      const hasZeroDimensions = window.outerWidth === 0 && window.outerHeight === 0;
-      const hasInvalidScreen = screen.width === 0 || screen.height === 0;
-      const hasNoHardwareConcurrency = !navigator.hardwareConcurrency || navigator.hardwareConcurrency < 1;
+    // Hardware anomaly detection
+    const hasZeroDimensions = window.outerWidth === 0 && window.outerHeight === 0;
+    const hasInvalidScreen = screen.width === 0 || screen.height === 0;
+    const hasNoHardwareConcurrency = !navigator.hardwareConcurrency || navigator.hardwareConcurrency < 1;
 
-      // Software WebGL renderer detection for virtualized/datacenter environments
-      const isSoftwareWebGL = () => {
-        try {
-          const canvas = document.createElement('canvas');
-          const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-          if (!gl) return false;
-          const debugInfo = (gl as WebGLRenderingContext).getExtension('WEBGL_debug_renderer_info');
-          if (!debugInfo) return false;
-          const renderer = (gl as WebGLRenderingContext).getParameter(debugInfo.UNMASKED_RENDERER_WEBGL).toLowerCase();
-          return renderer.includes('swiftshader') || renderer.includes('llvmpipe') || renderer.includes('mesa');
-        } catch {
-          return false;
-        }
-      };
-
-      const isDatacenterBot = hasZeroDimensions || hasInvalidScreen || hasNoHardwareConcurrency || isSoftwareWebGL();
-      const isExplicitlyDisabled = localStorage.getItem('analytics-disable') === 'true';
-
-      return isOfficialDomain && !isBotAgent && !isAutomatedBot && !isDatacenterBot && !isExplicitlyDisabled;
+    // Software WebGL renderer detection for virtualized/datacenter environments
+    const isSoftwareWebGL = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+        if (!gl) return false;
+        const debugInfo = (gl as WebGLRenderingContext).getExtension('WEBGL_debug_renderer_info');
+        if (!debugInfo) return false;
+        const renderer = (gl as WebGLRenderingContext).getParameter(debugInfo.UNMASKED_RENDERER_WEBGL).toLowerCase();
+        return renderer.includes('swiftshader') || renderer.includes('llvmpipe') || renderer.includes('mesa');
+      } catch {
+        return false;
+      }
     };
+
+    const isDatacenterBot = hasZeroDimensions || hasInvalidScreen || hasNoHardwareConcurrency || isSoftwareWebGL();
+    const isExplicitlyDisabled = localStorage.getItem('analytics-disable') === 'true';
+
+    // Verify all security, bot, and domain constraints
+    const isValidVisitor = isOfficialDomain && !isBotAgent && !isAutomatedBot && !isDatacenterBot && !isExplicitlyDisabled;
+
+    if (!isValidVisitor) return;
 
     // Track active path locally for clean exit/transition logging
     const activePath = cleanPathname;
     const referrer = document.referrer || '';
+
+    lastTrackedPath.current = activePath;
 
     let startTime = 0;
     let hasInteracted = false;
@@ -88,7 +90,7 @@ export default function Analytics() {
 
     // Dispatch analytics payload (initial hit, interval heartbeat, or exit ping)
     const sendPayload = (isUpdate = false) => {
-      // Do not send updates when the document is hidden in the background
+      // Do not send duration updates when the document is hidden in the background
       if (isUpdate && document.visibilityState === 'hidden') return;
 
       const durationSec = isUpdate && startTime > 0 ? Math.max(0, Math.round((Date.now() - startTime) / 1000)) : 0;
@@ -137,45 +139,42 @@ export default function Analytics() {
       }, nextIntervalMs);
     };
 
-    // Initialize session tracking only when tab becomes active, visible, AND valid
+    // Initialize session tracking regardless of tab visibility on mount
     const initializeTracking = () => {
       if (isInitialized) return;
-
-      // Perform validation check ONLY now, when GPU and rendering engines are fully active
-      if (!verifyValidVisitor()) return;
-      
-      // Mark path as tracked ONLY when initialization actually succeeds
-      lastTrackedPath.current = activePath;
       
       isInitialized = true;
       startTime = Date.now();
 
-      // Send initial pageview hit
+      // Always send initial pageview hit immediately
       sendPayload(false);
 
       // Start interaction listeners
       window.addEventListener('scroll', handleInteraction, { once: true, passive: true });
       window.addEventListener('click', handleInteraction, { once: true, passive: true });
 
-      // Start Adaptive Heartbeat
-      scheduleHeartbeat();
+      // Start Adaptive Heartbeat if the tab is visible
+      if (document.visibilityState === 'visible') {
+        scheduleHeartbeat();
+      }
     };
 
-    // Check visibility state on mount
-    if (document.visibilityState === 'visible') {
-      initializeTracking();
-    }
+    // Execute tracking setup immediately
+    initializeTracking();
 
-    // Visibility change handler for initial activation and background updates
+    // Visibility change handler for heartbeat scheduling and exit/background updates
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        if (!isInitialized) {
-          initializeTracking();
+        if (isInitialized && !heartbeatTimeoutId) {
+          scheduleHeartbeat();
         }
       } else if (document.visibilityState === 'hidden') {
         if (isInitialized) {
           sendPayload(true);
-          if (heartbeatTimeoutId) clearTimeout(heartbeatTimeoutId);
+          if (heartbeatTimeoutId) {
+            clearTimeout(heartbeatTimeoutId);
+            heartbeatTimeoutId = null;
+          }
         }
       }
     };
