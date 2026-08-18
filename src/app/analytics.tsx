@@ -22,7 +22,7 @@ export default function Analytics() {
     // Normalize path: strip query parameters and remove trailing slashes
     const cleanPathname = (rawPathname?.split('?')[0] || '/').replace(/\/+$/, '') || '/';
 
-    // Prevent duplicate execution for the same clean path
+    // Prevent duplicate execution for the same clean path IF ALREADY INITIALIZED
     if (lastTrackedPath.current === cleanPathname) return;
 
     // Admin override trigger to disable analytics for testing/maintenance
@@ -40,7 +40,7 @@ export default function Analytics() {
 
     // Bot agent pattern matching
     const ua = navigator.userAgent.toLowerCase();
-	const isBotAgent = /bot|googlebot|crawler|spider|robot|crawling|lighthouse|chrome-lighthouse|google-inspectiontool|ahrefs|semrush|gptbot|chatgpt|claudebot|claude-user|coherebot|headlesschrome|python|node-fetch|axios|bytespider|ccbot|facebookbot|meta-external|amazonbot|petalbot|scrapy|diffbot|dotbot|rogerbot|blexbot|dataforseo|mj12bot|serpstatbot|perplexity|applebot|yandex|bingbot|baidu/i.test(ua);
+    const isBotAgent = /bot|googlebot|crawler|spider|robot|crawling|lighthouse|chrome-lighthouse|google-inspectiontool|ahrefs|semrush|gptbot|chatgpt|claudebot|claude-user|coherebot|headlesschrome|python|node-fetch|axios|bytespider|ccbot|facebookbot|amazonbot|petalbot|scrapy|diffbot|dotbot|rogerbot|blexbot|dataforseo|mj12bot|serpstatbot|perplexity|applebot|yandex|bingbot|baidu/i.test(ua);
 
     // Automation and headless browser detection
     const isWebDriver = navigator.webdriver === true;
@@ -77,11 +77,8 @@ export default function Analytics() {
 
     if (!isValidVisitor) return;
 
-    // Track active path locally for clean exit/transition logging
     const activePath = cleanPathname;
     const referrer = document.referrer || '';
-
-    lastTrackedPath.current = activePath;
 
     let startTime = 0;
     let hasInteracted = false;
@@ -90,7 +87,6 @@ export default function Analytics() {
 
     // Dispatch analytics payload (initial hit, interval heartbeat, or exit ping)
     const sendPayload = (isUpdate = false) => {
-      // Do not send updates when the document is hidden in the background
       if (isUpdate && document.visibilityState === 'hidden') return;
 
       const durationSec = isUpdate && startTime > 0 ? Math.max(0, Math.round((Date.now() - startTime) / 1000)) : 0;
@@ -144,6 +140,7 @@ export default function Analytics() {
       if (isInitialized) return;
       
       isInitialized = true;
+      lastTrackedPath.current = activePath; // Set only upon actual initialization
       startTime = Date.now();
 
       // Send initial pageview hit
