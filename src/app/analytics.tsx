@@ -22,7 +22,7 @@ export default function Analytics() {
     // Normalize path: strip query parameters and remove trailing slashes
     const cleanPathname = (rawPathname?.split('?')[0] || '/').replace(/\/+$/, '') || '/';
 
-    // Prevent duplicate execution for the same clean path
+    // Prevent duplicate execution ONLY if already initialized for this path
     if (lastTrackedPath.current === cleanPathname) return;
 
     // Admin override trigger to disable analytics for testing/maintenance
@@ -51,30 +51,24 @@ export default function Analytics() {
 
     const isExplicitlyDisabled = localStorage.getItem('analytics-disable') === 'true';
 
-    // Static environmental validation (Safe to run immediately in background tabs)
+    // Static environmental validation
     const isValidEnvironment = isOfficialDomain && !isBotAgent && !isAutomatedBot && !isExplicitlyDisabled;
 
     if (!isValidEnvironment) return;
 
-    // Track active path locally for clean exit/transition logging
     const activePath = cleanPathname;
     const referrer = document.referrer || '';
-
-    lastTrackedPath.current = activePath;
 
     let startTime = 0;
     let hasInteracted = false;
     let isInitialized = false;
     let heartbeatTimeoutId: NodeJS.Timeout | null = null;
 
-    // Dispatch analytics payload (initial hit, interval heartbeat, or exit ping)
+    // Dispatch analytics payload
     const sendPayload = (isUpdate = false) => {
-      // Do not send updates when the document is hidden in the background
       if (isUpdate && document.visibilityState === 'hidden') return;
 
       const durationSec = isUpdate && startTime > 0 ? Math.max(0, Math.round((Date.now() - startTime) / 1000)) : 0;
-      
-      // Global Standard Bounce Definition: Interacted OR stayed for 10+ seconds
       const isBounce = isUpdate ? (!hasInteracted && durationSec < 10) : true;
 
       const payload = JSON.stringify({
@@ -90,7 +84,6 @@ export default function Analytics() {
         if (success) return;
       }
 
-      // Fallback for init hits or if sendBeacon is unsupported/fails
       fetch(METRICS_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -103,7 +96,7 @@ export default function Analytics() {
       hasInteracted = true;
     };
 
-    // Adaptive Heartbeat scheduler: 10s during initial minute, then 20s
+    // Adaptive Heartbeat scheduler
     const scheduleHeartbeat = () => {
       if (document.visibilityState === 'hidden') return;
 
@@ -118,11 +111,11 @@ export default function Analytics() {
       }, nextIntervalMs);
     };
 
-    // Initialize session tracking only when tab becomes active and visible
+    // Initialize session tracking
     const initializeTracking = () => {
       if (isInitialized) return;
 
-      // Dynamic Hardware & WebGL anomaly detection (Evaluated only when tab is active/visible)
+      // Hardware & WebGL anomaly detection
       const hasZeroDimensions = window.outerWidth === 0 && window.outerHeight === 0;
       const hasInvalidScreen = screen.width === 0 || screen.height === 0;
       const hasNoHardwareConcurrency = !navigator.hardwareConcurrency || navigator.hardwareConcurrency < 1;
@@ -143,9 +136,10 @@ export default function Analytics() {
 
       const isDatacenterBot = hasZeroDimensions || hasInvalidScreen || hasNoHardwareConcurrency || isSoftwareWebGL();
       
-      // Abort execution if hardware anomalies indicate a datacenter bot
       if (isDatacenterBot) return;
 
+      // Mark path as tracked ONLY when tracking is actually initialized
+      lastTrackedPath.current = activePath;
       isInitialized = true;
       startTime = Date.now();
 
@@ -165,7 +159,7 @@ export default function Analytics() {
       initializeTracking();
     }
 
-    // Visibility change handler for initial activation and background updates
+    // Visibility change handler
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         if (!isInitialized) {
@@ -194,7 +188,6 @@ export default function Analytics() {
       window.removeEventListener('scroll', handleInteraction);
       window.removeEventListener('click', handleInteraction);
       
-      // Send final duration update on SPA route navigation unmount if active
       if (isInitialized) {
         sendPayload(true);
       }
