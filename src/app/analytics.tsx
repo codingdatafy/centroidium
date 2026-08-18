@@ -86,22 +86,27 @@ export default function Analytics() {
       
       const isBounce = isUpdate ? (!hasInteracted && durationSec < 10) : true;
 
-      const payload = JSON.stringify({
+      const params = new URLSearchParams({
         p: cleanPathname,
         r: document.referrer || '',
-        d: durationSec,
-        b: isBounce,
+        d: durationSec.toString(),
+        b: isBounce.toString(),
         type: isUpdate ? 'ping' : 'init'
       });
 
-      if (isUpdate && navigator.sendBeacon) {
-        if (navigator.sendBeacon(METRICS_ENDPOINT, payload)) return;
+      const payloadStr = params.toString();
+
+      // Send via sendBeacon first (unaffected by background tab throttling)
+      if (navigator.sendBeacon) {
+        const blob = new Blob([payloadStr], { type: 'text/plain;charset=UTF-8' });
+        if (navigator.sendBeacon(METRICS_ENDPOINT, blob)) return;
       }
 
+      // Standard simple fetch fallback
       fetch(METRICS_ENDPOINT, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: payload,
+        headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+        body: payloadStr,
         keepalive: true,
       }).catch(() => {});
     };
@@ -129,7 +134,6 @@ export default function Analytics() {
       isInitialized = true;
       startTime = Date.now();
 
-      // Send initial pageview hit
       sendPayload(false);
 
       window.addEventListener('scroll', handleInteraction, { once: true, passive: true });
@@ -140,12 +144,11 @@ export default function Analytics() {
       scheduleHeartbeat();
     };
 
-    // If active and focused right now, run immediately
-    if (document.visibilityState === 'visible' && document.hasFocus()) {
+    // Trigger on immediate visibility or when tab becomes focused
+    if (document.visibilityState === 'visible') {
       runInit();
     }
 
-    // Handle tab focus / activation when coming from background state
     const handleActivation = () => {
       if (document.visibilityState === 'visible') {
         runInit();
@@ -155,18 +158,8 @@ export default function Analytics() {
       }
     };
 
-    // Global events attached directly to window and document
     window.addEventListener('focus', handleActivation);
     document.addEventListener('visibilitychange', handleActivation);
-
-    // Fallback: Immediate execution on first user interaction if focus event was missed
-    const handleFirstTouchOrMove = () => {
-      if (!isInitialized && document.visibilityState === 'visible') {
-        runInit();
-      }
-    };
-    window.addEventListener('mousemove', handleFirstTouchOrMove, { once: true, passive: true });
-    window.addEventListener('touchstart', handleFirstTouchOrMove, { once: true, passive: true });
 
     const handlePageHide = () => {
       if (isInitialized) sendPayload(true);
@@ -178,8 +171,6 @@ export default function Analytics() {
       if (heartbeatId) clearTimeout(heartbeatId);
       window.removeEventListener('focus', handleActivation);
       document.removeEventListener('visibilitychange', handleActivation);
-      window.removeEventListener('mousemove', handleFirstTouchOrMove);
-      window.removeEventListener('touchstart', handleFirstTouchOrMove);
       window.removeEventListener('pagehide', handlePageHide);
       window.removeEventListener('scroll', handleInteraction);
       window.removeEventListener('click', handleInteraction);
