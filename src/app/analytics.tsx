@@ -14,19 +14,24 @@ const METRICS_ENDPOINT = '/lib';
 
 export default function Analytics() {
   const rawPathname = usePathname();
+  const lastTrackedPath = useRef<string | null>(null);
 
-  const activePathRef = useRef<string | null>(null);
-  const isInitializedRef = useRef<boolean>(false);
+  // Use refs to retain state accurately across async browser events
+  const isInitializedRef = useRef(false);
   const startTimeRef = useRef<number>(0);
-  const hasInteractedRef = useRef<boolean>(false);
+  const hasInteractedRef = useRef(false);
   const heartbeatTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
+    // Normalize path: strip query parameters and remove trailing slashes
     const cleanPathname = (rawPathname?.split('?')[0] || '/').replace(/\/+$/, '') || '/';
 
-    // Admin override trigger
+    // Prevent duplicate execution for the same clean path
+    if (lastTrackedPath.current === cleanPathname) return;
+
+    // Admin override trigger to disable analytics for testing/maintenance
     const queryParams = new URLSearchParams(window.location.search);
     if (queryParams.get('admin') === 'true') {
       localStorage.setItem('analytics-disable', 'true');
@@ -35,24 +40,27 @@ export default function Analytics() {
       alert('CodingDatafy: Analytics tracking is now disabled for this browser.');
     }
 
-    // Security & Domain validation
+    // Domain validation check
     const hostname = window.location.hostname;
     const isOfficialDomain = hostname === 'www.codingdatafy.com' || hostname === 'codingdatafy.com';
 
-    // Bot detection
+    // Bot agent pattern matching
     const ua = navigator.userAgent.toLowerCase();
-    const isBotAgent = /bot|googlebot|crawler|spider|robot|crawling|lighthouse|chrome-lighthouse|google-inspectiontool|ahrefs|semrush|gptbot|chatgpt|claudebot|claude-user|coherebot|headlesschrome|python|node-fetch|axios|bytespider|ccbot|facebookbot|amazonbot|petalbot|scrapy|diffbot|dotbot|rogerbot|blexbot|dataforseo|mj12bot|serpstatbot|perplexity|applebot|yandex|bingbot|baidu/i.test(ua);
+    const isBotAgent = /bot|googlebot|crawler|spider|robot|crawling|lighthouse|chrome-lighthouse|google-inspectiontool|ahrefs|semrush|gptbot|chatgpt|claudebot|claude-user|coherebot|headlesschrome|python|node-fetch|axios|bytespider|ccbot|facebookbot|meta-external|amazonbot|petalbot|scrapy|diffbot|dotbot|rogerbot|blexbot|dataforseo|mj12bot|serpstatbot|perplexity|applebot|yandex|bingbot|baidu/i.test(ua);
 
+    // Automation and headless browser detection
     const isWebDriver = navigator.webdriver === true;
     const isPhantom = 'callPhantom' in window || '_phantom' in window;
     const isHeadlessWindow = 'Buffer' in window || 'emit' in window;
     const hasNoLanguages = !navigator.languages || navigator.languages.length === 0;
     const isAutomatedBot = isWebDriver || isPhantom || isHeadlessWindow || hasNoLanguages;
 
+    // Hardware anomaly detection
     const hasZeroDimensions = window.outerWidth === 0 && window.outerHeight === 0;
     const hasInvalidScreen = screen.width === 0 || screen.height === 0;
     const hasNoHardwareConcurrency = !navigator.hardwareConcurrency || navigator.hardwareConcurrency < 1;
 
+    // Software WebGL renderer detection for virtualized/datacenter environments
     const isSoftwareWebGL = () => {
       try {
         const canvas = document.createElement('canvas');
@@ -70,31 +78,32 @@ export default function Analytics() {
     const isDatacenterBot = hasZeroDimensions || hasInvalidScreen || hasNoHardwareConcurrency || isSoftwareWebGL();
     const isExplicitlyDisabled = localStorage.getItem('analytics-disable') === 'true';
 
+    // Verify all security, bot, and domain constraints
     const isValidVisitor = isOfficialDomain && !isBotAgent && !isAutomatedBot && !isDatacenterBot && !isExplicitlyDisabled;
 
     if (!isValidVisitor) return;
 
-    // Reset state for SPA route navigation
-    if (activePathRef.current !== cleanPathname) {
-      activePathRef.current = cleanPathname;
-      isInitializedRef.current = false;
-      hasInteractedRef.current = false;
-      if (heartbeatTimeoutRef.current) clearTimeout(heartbeatTimeoutRef.current);
-    }
+    // Reset tracking flags for new route transition
+    isInitializedRef.current = false;
+    hasInteractedRef.current = false;
+    startTimeRef.current = 0;
+    if (heartbeatTimeoutRef.current) clearTimeout(heartbeatTimeoutRef.current);
 
+    const activePath = cleanPathname;
     const referrer = document.referrer || '';
 
+    // Dispatch analytics payload (initial hit, interval heartbeat, or exit ping)
     const sendPayload = (isUpdate = false) => {
       if (isUpdate && document.visibilityState === 'hidden') return;
 
       const durationSec = isUpdate && startTimeRef.current > 0 
         ? Math.max(0, Math.round((Date.now() - startTimeRef.current) / 1000)) 
         : 0;
-
+      
       const isBounce = isUpdate ? (!hasInteractedRef.current && durationSec < 10) : true;
 
       const payload = JSON.stringify({
-        p: activePathRef.current,
+        p: activePath,
         r: referrer,
         d: durationSec,
         b: isBounce,
@@ -102,7 +111,8 @@ export default function Analytics() {
       });
 
       if (isUpdate && navigator.sendBeacon) {
-        if (navigator.sendBeacon(METRICS_ENDPOINT, payload)) return;
+        const success = navigator.sendBeacon(METRICS_ENDPOINT, payload);
+        if (success) return;
       }
 
       fetch(METRICS_ENDPOINT, {
@@ -131,63 +141,64 @@ export default function Analytics() {
       }, nextIntervalMs);
     };
 
-    // Main initialization function
-    const tryInitialize = () => {
+    // Initialize session tracking only when tab becomes active and visible
+    const initializeTracking = () => {
       if (isInitializedRef.current) return;
-      if (document.visibilityState === 'hidden' && !document.hasFocus()) return;
-
+      
       isInitializedRef.current = true;
       startTimeRef.current = Date.now();
+      lastTrackedPath.current = activePath;
 
-      // Record Pageview
+      // Send initial pageview hit
       sendPayload(false);
 
-      // Interaction listeners
+      // Start interaction listeners
       window.addEventListener('scroll', handleInteraction, { once: true, passive: true });
       window.addEventListener('click', handleInteraction, { once: true, passive: true });
-      window.addEventListener('mousemove', handleInteraction, { once: true, passive: true });
 
-      // Start Heartbeat
+      // Start Adaptive Heartbeat
       scheduleHeartbeat();
     };
 
-    // Event Listeners for background tab activation
-    const onActivate = () => {
-      tryInitialize();
-    };
-
-    const onVisibilityChange = () => {
+    const handleVisibilityOrFocus = () => {
       if (document.visibilityState === 'visible') {
-        tryInitialize();
-      } else if (document.visibilityState === 'hidden' && isInitializedRef.current) {
-        sendPayload(true);
-        if (heartbeatTimeoutRef.current) clearTimeout(heartbeatTimeoutRef.current);
+        if (!isInitializedRef.current) {
+          initializeTracking();
+        }
+      } else if (document.visibilityState === 'hidden') {
+        if (isInitializedRef.current) {
+          sendPayload(true);
+          if (heartbeatTimeoutRef.current) clearTimeout(heartbeatTimeoutRef.current);
+        }
       }
     };
 
-    const onPageHide = () => {
+    // Check immediate visibility state on mount
+    if (document.visibilityState === 'visible') {
+      initializeTracking();
+    }
+
+    // Attach comprehensive window active triggers for tabs opened in background
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+    window.addEventListener('focus', handleVisibilityOrFocus);
+    window.addEventListener('pageshow', handleVisibilityOrFocus);
+
+    const handlePageHide = () => {
       if (isInitializedRef.current) sendPayload(true);
     };
 
-    // Attach listeners
-    document.addEventListener('visibilitychange', onVisibilityChange);
-    window.addEventListener('focus', onActivate);
-    window.addEventListener('pageshow', onActivate);
-    window.addEventListener('pagehide', onPageHide);
-
-    // Initial attempt (Runs immediately if opened in active foreground tab)
-    tryInitialize();
+    window.addEventListener('pagehide', handlePageHide);
 
     return () => {
       if (heartbeatTimeoutRef.current) clearTimeout(heartbeatTimeoutRef.current);
-      document.removeEventListener('visibilitychange', onVisibilityChange);
-      window.removeEventListener('focus', onActivate);
-      window.removeEventListener('pageshow', onActivate);
-      window.removeEventListener('pagehide', onPageHide);
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      window.removeEventListener('pageshow', handleVisibilityOrFocus);
+      window.removeEventListener('pagehide', handlePageHide);
       window.removeEventListener('scroll', handleInteraction);
       window.removeEventListener('click', handleInteraction);
-      window.removeEventListener('mousemove', handleInteraction);
-
+      
+      // Send final duration update on SPA route navigation unmount if active
       if (isInitializedRef.current) {
         sendPayload(true);
       }
