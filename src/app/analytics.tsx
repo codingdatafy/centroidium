@@ -11,6 +11,7 @@ import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 
 const METRICS_ENDPOINT = '/lib';
+const HEARTBEAT_INTERVAL_MS = 10000; // Dispatch a duration heartbeat ping every 10 seconds
 
 export default function Analytics() {
   const rawPathname = usePathname();
@@ -84,39 +85,34 @@ export default function Analytics() {
     const activePath = cleanPathname;
     const startTime = Date.now();
     let hasInteracted = false;
-    let sentFinal = false;
     const referrer = document.referrer || '';
 
     lastTrackedPath.current = activePath;
 
-    // Dispatch analytics payload (initial hit or exit ping)
-    const sendPayload = (isFinal = false) => {
-      if (isFinal && sentFinal) return; // Prevent duplicate payload for same cycle
-      
-      const durationSec = isFinal ? Math.max(0, Math.round((Date.now() - startTime) / 1000)) : 0;
+    // Dispatch analytics payload (initial hit, interval heartbeat, or exit ping)
+    const sendPayload = (isUpdate = false) => {
+      // Do not send updates when the document is hidden in the background
+      if (isUpdate && document.visibilityState === 'hidden') return;
+
+      const durationSec = isUpdate ? Math.max(0, Math.round((Date.now() - startTime) / 1000)) : 0;
       
       // Global Standard Bounce Definition: Interacted OR stayed for 10+ seconds
-      const isBounce = isFinal ? (!hasInteracted && durationSec < 10) : true;
+      const isBounce = isUpdate ? (!hasInteracted && durationSec < 10) : true;
 
       const payload = JSON.stringify({
         p: activePath,
         r: referrer,
         d: durationSec,
         b: isBounce,
-        type: isFinal ? 'ping' : 'init'
+        type: isUpdate ? 'ping' : 'init'
       });
 
-      if (isFinal) {
-        sentFinal = true;
-        
-        // Native string payload for beacon
-        if (navigator.sendBeacon) {
-          const success = navigator.sendBeacon(METRICS_ENDPOINT, payload);
-          if (success) return;
-        }
+      if (isUpdate && navigator.sendBeacon) {
+        const success = navigator.sendBeacon(METRICS_ENDPOINT, payload);
+        if (success) return;
       }
 
-      // Fallback for init hits or if sendBeacon fails
+      // Fallback for init hits or if sendBeacon is unsupported/fails
       fetch(METRICS_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -125,7 +121,7 @@ export default function Analytics() {
       }).catch(() => {});
     };
 
-    // Immediate initial hit dispatch to guarantee pageview recording
+    // 1. Immediate initial hit dispatch to guarantee pageview recording
     sendPayload(false);
 
     const handleInteraction = () => {
@@ -135,27 +131,31 @@ export default function Analytics() {
     window.addEventListener('scroll', handleInteraction, { once: true, passive: true });
     window.addEventListener('click', handleInteraction, { once: true, passive: true });
 
+    // 2. Periodic heartbeat ping to continually persist active duration before abrupt browser exit
+    const heartbeatInterval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        sendPayload(true);
+      }
+    }, HEARTBEAT_INTERVAL_MS);
+
+    // 3. Document lifecycle listeners for tab switching, visibility shifts, and page exit
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
         sendPayload(true);
-      } else if (document.visibilityState === 'visible') {
-        // Unlock sentFinal so duration updates if user continues reading and leaves again
-        sentFinal = false;
       }
     };
 
-    // Lifecycle event listeners for page exit
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('pagehide', () => sendPayload(true));
 
     return () => {
+      clearInterval(heartbeatInterval);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('pagehide', () => sendPayload(true));
       window.removeEventListener('scroll', handleInteraction);
       window.removeEventListener('click', handleInteraction);
       
-      // Force reset lock on unmount to guarantee SPA route navigation duration is recorded
-      sentFinal = false;
+      // Send final duration update on SPA route navigation unmount
       sendPayload(true);
     };
 
