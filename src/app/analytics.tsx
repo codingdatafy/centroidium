@@ -34,48 +34,48 @@ export default function Analytics() {
       alert('CodingDatafy: Analytics tracking is now disabled for this browser.');
     }
 
-    // Domain validation check
-    const hostname = window.location.hostname;
-    const isOfficialDomain = hostname === 'www.codingdatafy.com' || hostname === 'codingdatafy.com';
+    // Dynamic verification helper: Executed ONLY when the tab is fully active/visible
+    const verifyValidVisitor = () => {
+      // Domain validation check
+      const hostname = window.location.hostname;
+      const isOfficialDomain = hostname === 'www.codingdatafy.com' || hostname === 'codingdatafy.com';
 
-    // Bot agent pattern matching
-    const ua = navigator.userAgent.toLowerCase();
-    const isBotAgent = /bot|googlebot|crawler|spider|robot|crawling|lighthouse|chrome-lighthouse|google-inspectiontool|ahrefs|semrush|gptbot|chatgpt|claudebot|claude-user|coherebot|headlesschrome|python|node-fetch|axios|bytespider|ccbot|facebookbot|meta-external|amazonbot|petalbot|scrapy|diffbot|dotbot|rogerbot|blexbot|dataforseo|mj12bot|serpstatbot|perplexity|applebot|yandex|bingbot|baidu/i.test(ua);
+      // Bot agent pattern matching
+      const ua = navigator.userAgent.toLowerCase();
+      const isBotAgent = /bot|googlebot|crawler|spider|robot|crawling|lighthouse|chrome-lighthouse|google-inspectiontool|ahrefs|semrush|gptbot|chatgpt|claudebot|claude-user|coherebot|headlesschrome|python|node-fetch|axios|bytespider|ccbot|facebookbot|meta-external|amazonbot|petalbot|scrapy|diffbot|dotbot|rogerbot|blexbot|dataforseo|mj12bot|serpstatbot|perplexity|applebot|yandex|bingbot|baidu/i.test(ua);
 
-    // Automation and headless browser detection
-    const isWebDriver = navigator.webdriver === true;
-    const isPhantom = 'callPhantom' in window || '_phantom' in window;
-    const isHeadlessWindow = 'Buffer' in window || 'emit' in window;
-    const hasNoLanguages = !navigator.languages || navigator.languages.length === 0;
-    const isAutomatedBot = isWebDriver || isPhantom || isHeadlessWindow || hasNoLanguages;
+      // Automation and headless browser detection
+      const isWebDriver = navigator.webdriver === true;
+      const isPhantom = 'callPhantom' in window || '_phantom' in window;
+      const isHeadlessWindow = 'Buffer' in window || 'emit' in window;
+      const hasNoLanguages = !navigator.languages || navigator.languages.length === 0;
+      const isAutomatedBot = isWebDriver || isPhantom || isHeadlessWindow || hasNoLanguages;
 
-    // Hardware anomaly detection
-    const hasZeroDimensions = window.outerWidth === 0 && window.outerHeight === 0;
-    const hasInvalidScreen = screen.width === 0 || screen.height === 0;
-    const hasNoHardwareConcurrency = !navigator.hardwareConcurrency || navigator.hardwareConcurrency < 1;
+      // Hardware anomaly detection
+      const hasZeroDimensions = window.outerWidth === 0 && window.outerHeight === 0;
+      const hasInvalidScreen = screen.width === 0 || screen.height === 0;
+      const hasNoHardwareConcurrency = !navigator.hardwareConcurrency || navigator.hardwareConcurrency < 1;
 
-    // Software WebGL renderer detection for virtualized/datacenter environments
-    const isSoftwareWebGL = () => {
-      try {
-        const canvas = document.createElement('canvas');
-        const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-        if (!gl) return false;
-        const debugInfo = (gl as WebGLRenderingContext).getExtension('WEBGL_debug_renderer_info');
-        if (!debugInfo) return false;
-        const renderer = (gl as WebGLRenderingContext).getParameter(debugInfo.UNMASKED_RENDERER_WEBGL).toLowerCase();
-        return renderer.includes('swiftshader') || renderer.includes('llvmpipe') || renderer.includes('mesa');
-      } catch {
-        return false;
-      }
+      // Software WebGL renderer detection for virtualized/datacenter environments
+      const isSoftwareWebGL = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+          if (!gl) return false;
+          const debugInfo = (gl as WebGLRenderingContext).getExtension('WEBGL_debug_renderer_info');
+          if (!debugInfo) return false;
+          const renderer = (gl as WebGLRenderingContext).getParameter(debugInfo.UNMASKED_RENDERER_WEBGL).toLowerCase();
+          return renderer.includes('swiftshader') || renderer.includes('llvmpipe') || renderer.includes('mesa');
+        } catch {
+          return false;
+        }
+      };
+
+      const isDatacenterBot = hasZeroDimensions || hasInvalidScreen || hasNoHardwareConcurrency || isSoftwareWebGL();
+      const isExplicitlyDisabled = localStorage.getItem('analytics-disable') === 'true';
+
+      return isOfficialDomain && !isBotAgent && !isAutomatedBot && !isDatacenterBot && !isExplicitlyDisabled;
     };
-
-    const isDatacenterBot = hasZeroDimensions || hasInvalidScreen || hasNoHardwareConcurrency || isSoftwareWebGL();
-    const isExplicitlyDisabled = localStorage.getItem('analytics-disable') === 'true';
-
-    // Verify all security, bot, and domain constraints
-    const isValidVisitor = isOfficialDomain && !isBotAgent && !isAutomatedBot && !isDatacenterBot && !isExplicitlyDisabled;
-
-    if (!isValidVisitor) return;
 
     // Track active path locally for clean exit/transition logging
     const activePath = cleanPathname;
@@ -137,11 +137,14 @@ export default function Analytics() {
       }, nextIntervalMs);
     };
 
-    // Initialize session tracking only when tab becomes active and visible
+    // Initialize session tracking only when tab becomes active, visible, AND valid
     const initializeTracking = () => {
       if (isInitialized) return;
+
+      // Perform validation check ONLY now, when GPU and rendering engines are fully active
+      if (!verifyValidVisitor()) return;
       
-      // Mark path as tracked ONLY when initialization actually occurs
+      // Mark path as tracked ONLY when initialization actually succeeds
       lastTrackedPath.current = activePath;
       
       isInitialized = true;
