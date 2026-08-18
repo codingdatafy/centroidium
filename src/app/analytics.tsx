@@ -15,7 +15,6 @@ const METRICS_ENDPOINT = '/lib';
 export default function Analytics() {
   const rawPathname = usePathname();
 
-  // Refs to maintain state independent of React render cycles
   const activePathRef = useRef<string | null>(null);
   const isInitializedRef = useRef<boolean>(false);
   const startTimeRef = useRef<number>(0);
@@ -25,7 +24,6 @@ export default function Analytics() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    // Clean and normalize path
     const cleanPathname = (rawPathname?.split('?')[0] || '/').replace(/\/+$/, '') || '/';
 
     // Admin override trigger
@@ -76,7 +74,7 @@ export default function Analytics() {
 
     if (!isValidVisitor) return;
 
-    // Reset state for new routes (SPA Navigation)
+    // Reset state for SPA route navigation
     if (activePathRef.current !== cleanPathname) {
       activePathRef.current = cleanPathname;
       isInitializedRef.current = false;
@@ -133,26 +131,31 @@ export default function Analytics() {
       }, nextIntervalMs);
     };
 
-    // The Core Fix: Function that runs when the page actually becomes visible
+    // Main initialization function
     const tryInitialize = () => {
       if (isInitializedRef.current) return;
-      if (document.visibilityState !== 'visible') return;
+      if (document.visibilityState === 'hidden' && !document.hasFocus()) return;
 
       isInitializedRef.current = true;
       startTimeRef.current = Date.now();
 
-      // 1. Record Pageview
+      // Record Pageview
       sendPayload(false);
 
-      // 2. Bind interaction listeners
+      // Interaction listeners
       window.addEventListener('scroll', handleInteraction, { once: true, passive: true });
       window.addEventListener('click', handleInteraction, { once: true, passive: true });
+      window.addEventListener('mousemove', handleInteraction, { once: true, passive: true });
 
-      // 3. Start Heartbeat
+      // Start Heartbeat
       scheduleHeartbeat();
     };
 
-    // Event handler for visibility state changes
+    // Event Listeners for background tab activation
+    const onActivate = () => {
+      tryInitialize();
+    };
+
     const onVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         tryInitialize();
@@ -166,19 +169,24 @@ export default function Analytics() {
       if (isInitializedRef.current) sendPayload(true);
     };
 
-    // Attach global listeners
+    // Attach listeners
     document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('focus', onActivate);
+    window.addEventListener('pageshow', onActivate);
     window.addEventListener('pagehide', onPageHide);
 
-    // Initial check: if already active tab, initialize immediately
+    // Initial attempt (Runs immediately if opened in active foreground tab)
     tryInitialize();
 
     return () => {
       if (heartbeatTimeoutRef.current) clearTimeout(heartbeatTimeoutRef.current);
       document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('focus', onActivate);
+      window.removeEventListener('pageshow', onActivate);
       window.removeEventListener('pagehide', onPageHide);
       window.removeEventListener('scroll', handleInteraction);
       window.removeEventListener('click', handleInteraction);
+      window.removeEventListener('mousemove', handleInteraction);
 
       if (isInitializedRef.current) {
         sendPayload(true);
