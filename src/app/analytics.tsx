@@ -19,8 +19,10 @@ export default function Analytics() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    // Normalize path: strip query parameters and remove trailing slashes
-    const cleanPathname = (rawPathname?.split('?')[0] || '/').replace(/\/+$/, '') || '/';
+    // Read directly from window.location.pathname to handle background tabs (Ctrl + Click) 
+    // without relying solely on Next.js Router state updates.
+    const actualPath = window.location.pathname || rawPathname || '/';
+    const cleanPathname = (actualPath.split('?')[0] || '/').replace(/\/+$/, '') || '/';
 
     // Prevent duplicate execution for the same clean path
     if (lastTrackedPath.current === cleanPathname) return;
@@ -139,7 +141,7 @@ export default function Analytics() {
       }, nextIntervalMs);
     };
 
-    // Initialize session tracking regardless of tab visibility on mount
+    // Initialize session tracking
     const initializeTracking = () => {
       if (isInitialized) return;
       
@@ -153,7 +155,7 @@ export default function Analytics() {
       window.addEventListener('scroll', handleInteraction, { once: true, passive: true });
       window.addEventListener('click', handleInteraction, { once: true, passive: true });
 
-      // Start Adaptive Heartbeat if the tab is visible
+      // Start Adaptive Heartbeat if tab is currently visible
       if (document.visibilityState === 'visible') {
         scheduleHeartbeat();
       }
@@ -162,7 +164,7 @@ export default function Analytics() {
     // Execute tracking setup immediately
     initializeTracking();
 
-    // Visibility change handler for heartbeat scheduling and exit/background updates
+    // Visibility change handler for heartbeat scheduling and background updates
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         if (isInitialized && !heartbeatTimeoutId) {
