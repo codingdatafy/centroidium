@@ -166,6 +166,24 @@ export default function Analytics() {
       hasInteracted = true;
     };
 
+    // Global listener for automatic outbound link tracking
+    const handleOutboundClick = (event: MouseEvent) => {
+      const targetAnchor = (event.target as HTMLElement).closest('a');
+      if (!targetAnchor) return;
+
+      const href = targetAnchor.getAttribute('href');
+      if (!href) return;
+
+      // Check if the link points to an external site
+      const isExternal = href.startsWith('http') && 
+                         !href.includes('codingdatafy.com') && 
+                         !href.includes(window.location.hostname);
+
+      if (isExternal) {
+        trackEvent('outbound_click', href);
+      }
+    };
+
     // Adaptive Heartbeat scheduler
     const scheduleHeartbeat = () => {
       if (document.visibilityState === 'hidden') return;
@@ -192,9 +210,10 @@ export default function Analytics() {
       // 1. Send the initial pageview hit ONLY when tab becomes visible
       sendPayload(false);
 
-      // 2. Start interaction listeners
+      // 2. Start interaction and outbound click listeners
       window.addEventListener('scroll', handleInteraction, { once: true, passive: true });
       window.addEventListener('click', handleInteraction, { once: true, passive: true });
+      window.addEventListener('click', handleOutboundClick, { capture: true, passive: true });
 
       // 3. Start heartbeat
       scheduleHeartbeat();
@@ -236,6 +255,7 @@ export default function Analytics() {
       window.removeEventListener('pagehide', handlePageHide);
       window.removeEventListener('scroll', handleInteraction);
       window.removeEventListener('click', handleInteraction);
+      window.removeEventListener('click', handleOutboundClick, { capture: true });
 
       if (isInitialized) {
         sendPayload(true);
