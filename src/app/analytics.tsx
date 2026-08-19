@@ -15,6 +15,7 @@ const METRICS_ENDPOINT = '/lib';
 export default function Analytics() {
   const rawPathname = usePathname();
   const lastTrackedPath = useRef<string | null>(null);
+  const pageviewId = useRef<number | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -24,6 +25,9 @@ export default function Analytics() {
 
     // Prevent duplicate execution for the same clean path
     if (lastTrackedPath.current === cleanPathname) return;
+
+    // Reset pageview ID on path change
+    pageviewId.current = null;
 
     // Admin override trigger to disable analytics for testing/maintenance
     const queryParams = new URLSearchParams(window.location.search);
@@ -87,9 +91,7 @@ export default function Analytics() {
     let isInitialized = false;
 
     // Dispatch analytics payload
-    const sendPayload = (isUpdate = false) => {
-      if (isUpdate && document.visibilityState === 'hidden') return;
-
+    const sendPayload = async (isUpdate = false) => {
       const durationSec = isUpdate && startTime > 0 ? Math.max(0, Math.round((Date.now() - startTime) / 1000)) : 0;
       const isBounce = isUpdate ? (!hasInteracted && durationSec < 10) : true;
 
@@ -98,20 +100,32 @@ export default function Analytics() {
         r: referrer,
         d: durationSec,
         b: isBounce,
-        type: isUpdate ? 'ping' : 'init'
+        type: isUpdate ? 'ping' : 'init',
+        id: isUpdate ? pageviewId.current : null
       });
 
+      // Prefer sendBeacon for page unload / visibility changes
       if (isUpdate && navigator.sendBeacon) {
         const success = navigator.sendBeacon(METRICS_ENDPOINT, payload);
         if (success) return;
       }
 
-      fetch(METRICS_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: payload,
-        keepalive: true,
-      }).catch(() => {});
+      try {
+        const res = await fetch(METRICS_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: payload,
+          keepalive: true,
+        });
+
+        // Store the returned pageview ID for subsequent ping updates
+        if (!isUpdate && res.ok) {
+          const data = await res.json();
+          if (data?.id) {
+            pageviewId.current = data.id;
+          }
+        }
+      } catch {}
     };
 
     const handleInteraction = () => {
