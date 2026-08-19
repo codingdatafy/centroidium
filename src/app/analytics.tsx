@@ -12,6 +12,40 @@ import { usePathname } from "next/navigation";
 
 const METRICS_ENDPOINT = '/lib';
 
+/**
+ * Event tracking utility for interactive elements
+ * Supports: 'copy_code', 'search', 'outbound_click'
+ */
+export const trackEvent = (
+  eventType: 'copy_code' | 'search' | 'outbound_click',
+  targetValue?: string,
+  hasResults?: boolean
+) => {
+  if (typeof window === 'undefined') return;
+
+  const pathname = window.location.pathname;
+  const cleanPath = (pathname.split('?')[0] || '/').replace(/\/+$/, '') || '/';
+
+  const payload = JSON.stringify({
+    type: 'event',
+    event_type: eventType,
+    p: cleanPath,
+    target: targetValue || null,
+    has_results: typeof hasResults === 'boolean' ? hasResults : null
+  });
+
+  if (navigator.sendBeacon) {
+    navigator.sendBeacon(METRICS_ENDPOINT, payload);
+  } else {
+    fetch(METRICS_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: payload,
+      keepalive: true,
+    }).catch(() => {});
+  }
+};
+
 export default function Analytics() {
   const rawPathname = usePathname();
   const lastTrackedPath = useRef<string | null>(null);
