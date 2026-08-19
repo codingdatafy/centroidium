@@ -76,16 +76,17 @@ export default function Analytics() {
     const hostname = window.location.hostname;
     const isOfficialDomain = hostname === 'www.codingdatafy.com' || hostname === 'codingdatafy.com';
 
-    // Bot agent pattern matching
+    // Comprehensive bot agent pattern matching including AI search fetchers
     const ua = navigator.userAgent.toLowerCase();
-    const isBotAgent = /bot|googlebot|crawler|spider|robot|crawling|lighthouse|chrome-lighthouse|google-inspectiontool|ahrefs|semrush|gptbot|chatgpt|claudebot|claude-user|coherebot|headlesschrome|python|node-fetch|axios|bytespider|ccbot|facebookbot|meta-external|amazonbot|petalbot|scrapy|diffbot|dotbot|rogerbot|blexbot|dataforseo|mj12bot|serpstatbot|perplexity|applebot|yandex|bingbot|baidu/i.test(ua);
+    const isBotAgent = /bot|googlebot|crawler|spider|robot|crawling|lighthouse|chrome-lighthouse|google-inspectiontool|ahrefs|semrush|gptbot|chatgpt|chatgpt-user|oai-searchbot|claudebot|claude-user|claude-searchbot|coherebot|headlesschrome|python|node-fetch|axios|bytespider|ccbot|facebookbot|meta-external|amazonbot|petalbot|scrapy|diffbot|dotbot|rogerbot|blexbot|dataforseo|mj12bot|serpstatbot|perplexity|perplexity-user|perplexitybot|applebot|yandex|bingbot|baidu/i.test(ua);
 
     // Automation and headless browser detection
     const isWebDriver = navigator.webdriver === true;
     const isPhantom = 'callPhantom' in window || '_phantom' in window;
     const isHeadlessWindow = 'Buffer' in window || 'emit' in window;
     const hasNoLanguages = !navigator.languages || navigator.languages.length === 0;
-    const isAutomatedBot = isWebDriver || isPhantom || isHeadlessWindow || hasNoLanguages;
+    const isHeadlessChrome = /headlesschrome/i.test(ua);
+    const isAutomatedBot = isWebDriver || isPhantom || isHeadlessWindow || hasNoLanguages || isHeadlessChrome;
 
     const isExplicitlyDisabled = localStorage.getItem('analytics-disable') === 'true';
 
