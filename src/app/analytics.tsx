@@ -51,8 +51,7 @@ export default function Analytics() {
 
     const isExplicitlyDisabled = localStorage.getItem('analytics-disable') === 'true';
 
-    // Hardware & WebGL anomaly detection (ONLY evaluated if tab is already visible)
-    // Background tabs (Ctrl+Click) naturally have zero dimensions, so we bypass this check for hidden tabs
+    // Hardware & WebGL anomaly detection
     const isDatacenterBot = () => {
       if (document.visibilityState === 'hidden') return false;
 
@@ -74,20 +73,18 @@ export default function Analytics() {
       }
     };
 
-    // Verify all security, bot, and domain constraints
+    // Verify security and bot constraints
     const isValidVisitor = isOfficialDomain && !isBotAgent && !isAutomatedBot && !isExplicitlyDisabled && !isDatacenterBot();
 
     if (!isValidVisitor) return;
 
-    // Mark current path as tracked
-    lastTrackedPath.current = cleanPathname;
-
     const activePath = cleanPathname;
     const referrer = document.referrer || '';
 
-    let startTime = Date.now();
+    let startTime = 0;
     let hasInteracted = false;
     let heartbeatTimeoutId: NodeJS.Timeout | null = null;
+    let isInitialized = false;
 
     // Dispatch analytics payload
     const sendPayload = (isUpdate = false) => {
@@ -109,7 +106,6 @@ export default function Analytics() {
         if (success) return;
       }
 
-      // Use keepalive: true so requests sent from background tabs are guaranteed to complete
       fetch(METRICS_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -122,7 +118,7 @@ export default function Analytics() {
       hasInteracted = true;
     };
 
-    // Adaptive Heartbeat scheduler: active only when tab is visible
+    // Adaptive Heartbeat scheduler
     const scheduleHeartbeat = () => {
       if (document.visibilityState === 'hidden') return;
 
@@ -137,32 +133,51 @@ export default function Analytics() {
       }, nextIntervalMs);
     };
 
-    // 1. ALWAYS send the initial pageview hit immediately (even in background tabs)
-    sendPayload(false);
+    // Function to start tracking ONLY when page is visible to user
+    const startTrackingIfVisible = () => {
+      if (isInitialized) return;
+      
+      isInitialized = true;
+      lastTrackedPath.current = cleanPathname;
+      startTime = Date.now();
 
-    // 2. Start interaction listeners
-    window.addEventListener('scroll', handleInteraction, { once: true, passive: true });
-    window.addEventListener('click', handleInteraction, { once: true, passive: true });
+      // 1. Send the initial pageview hit ONLY when tab becomes visible
+      sendPayload(false);
 
-    // 3. Start heartbeat if currently visible
-    if (document.visibilityState === 'visible') {
+      // 2. Start interaction listeners
+      window.addEventListener('scroll', handleInteraction, { once: true, passive: true });
+      window.addEventListener('click', handleInteraction, { once: true, passive: true });
+
+      // 3. Start heartbeat
       scheduleHeartbeat();
+    };
+
+    // Deferred Execution Logic
+    if (document.visibilityState === 'visible') {
+      startTrackingIfVisible();
     }
 
-    // Visibility change handler to control heartbeat when tab focus shifts
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        scheduleHeartbeat();
+        if (!isInitialized) {
+          startTrackingIfVisible();
+        } else {
+          scheduleHeartbeat();
+        }
       } else if (document.visibilityState === 'hidden') {
-        sendPayload(true);
-        if (heartbeatTimeoutId) clearTimeout(heartbeatTimeoutId);
+        if (isInitialized) {
+          sendPayload(true);
+          if (heartbeatTimeoutId) clearTimeout(heartbeatTimeoutId);
+        }
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     const handlePageHide = () => {
-      sendPayload(true);
+      if (isInitialized) {
+        sendPayload(true);
+      }
     };
 
     window.addEventListener('pagehide', handlePageHide);
@@ -174,7 +189,9 @@ export default function Analytics() {
       window.removeEventListener('scroll', handleInteraction);
       window.removeEventListener('click', handleInteraction);
 
-      sendPayload(true);
+      if (isInitialized) {
+        sendPayload(true);
+      }
     };
 
   }, [rawPathname]);
