@@ -61,6 +61,11 @@ export const trackEvent = async (
   }
 };
 
+// Expose trackEvent to window object for standalone client scripts
+if (typeof window !== 'undefined') {
+  (window as any).trackEvent = trackEvent;
+}
+
 interface AnalyticsProps {
   isNotFound?: boolean;
 }

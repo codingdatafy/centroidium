@@ -690,3 +690,33 @@ table.sortable th.sort-desc::after {
 	background-color: rgb(50 205 50);
 }
 /* --------------------------------------------------------------------- */
+/* Copy Code Snippet Button Styling */
+pre {
+  position: relative;
+}
+
+.copy-code-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background-color: rgba(255, 255, 255, 0.1);
+  color: #f3f4f6;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+  z-index: 10;
+}
+
+.copy-code-btn:hover {
+  background-color: rgba(255, 255, 255, 0.25);
+}
+
+.copy-code-btn.copied {
+  background-color: #10b981;
+  color: #ffffff;
+  border-color: #10b981;
+}
