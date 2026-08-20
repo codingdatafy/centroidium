@@ -13,10 +13,21 @@ import { usePathname } from "next/navigation";
 const METRICS_ENDPOINT = '/lib';
 
 /**
+ * Generates a SHA-256 cryptographic signature tied to the path and timestamp
+ */
+const generateClientToken = async (path: string, timestamp: number): Promise<string> => {
+  const data = `${path}-${timestamp}-CodingDatafyToken`;
+  const msgBuffer = new TextEncoder().encode(data);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('').substring(0, 24);
+};
+
+/**
  * Event tracking utility for interactive elements
  * Supports: 'copy_code', 'search', 'outbound_click'
  */
-export const trackEvent = (
+export const trackEvent = async (
   eventType: 'copy_code' | 'search' | 'outbound_click',
   targetValue?: string,
   hasResults?: boolean
@@ -25,13 +36,18 @@ export const trackEvent = (
 
   const pathname = window.location.pathname;
   const cleanPath = (pathname.split('?')[0] || '/').replace(/\/+$/, '') || '/';
+  
+  const timestamp = Date.now();
+  const clientToken = await generateClientToken(cleanPath, timestamp);
 
   const payload = JSON.stringify({
     type: 'event',
     event_type: eventType,
     p: cleanPath,
     target: targetValue || null,
-    has_results: typeof hasResults === 'boolean' ? hasResults : null
+    has_results: typeof hasResults === 'boolean' ? hasResults : null,
+    ts: timestamp,
+    token: clientToken
   });
 
   if (navigator.sendBeacon) {
@@ -130,13 +146,18 @@ export default function Analytics() {
       const durationSec = isUpdate && startTime > 0 ? Math.max(0, Math.round((Date.now() - startTime) / 1000)) : 0;
       const isBounce = isUpdate ? (!hasInteracted && durationSec < 10) : true;
 
+      const timestamp = Date.now();
+      const clientToken = await generateClientToken(activePath, timestamp);
+
       const payload = JSON.stringify({
         p: activePath,
         r: referrer,
         d: durationSec,
         b: isBounce,
         type: isUpdate ? 'ping' : 'init',
-        id: isUpdate ? pageviewId.current : null
+        id: isUpdate ? pageviewId.current : null,
+        ts: timestamp,
+        token: clientToken
       });
 
       // Prefer sendBeacon for page unload / visibility changes
