@@ -74,9 +74,8 @@
           button.querySelector('.btn-text').innerText = 'Copied!';
           button.classList.add('copied');
 
-          // Trigger analytics event for copied code snippets
           if (typeof window.trackEvent === 'function') {
-            window.trackEvent('copy_code', textToCopy.substring(0, 100));
+            window.trackEvent('copy_code', languageName.toLowerCase());
           }
 
           setTimeout(() => {
@@ -107,5 +106,4 @@
 
   observer.observe(document.body, { childList: true, subtree: true });
 })();
-
 /////////////////////////////  Footer  /////////////////////////////
