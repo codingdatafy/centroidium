@@ -1,7 +1,7 @@
 /* ********************************************************
 * Description : Javascript Framework For CodingDatafy Website
 * URL         : www.codingdatafy.com/centroidium.js
-* Version     : 1.0
+* Version     : 1.1
 * Licence     : Copyright © 2026 CodingDatafy
 * This file contains the following sections:
 	- Root
@@ -30,31 +30,48 @@
 /////////////////////////////  Sidebar /////////////////////////////
 
 /////////////////////////////  Main    /////////////////////////////
-// Copy Code Snippets & Analytics Tracking
+// Code Header: Language Badge & Copy Button + Analytics Tracking
 (function () {
   'use strict';
 
-  function initCopyCodeButtons() {
+  function initCodeHeaders() {
     const codeBlocks = document.querySelectorAll('pre');
 
     codeBlocks.forEach((pre) => {
-      if (pre.querySelector('.copy-code-btn')) return;
+      if (pre.querySelector('.code-header')) return;
 
-      pre.style.position = 'relative';
+      const codeElement = pre.querySelector('code');
+      let languageName = 'Code';
+
+      if (codeElement) {
+        const classList = Array.from(codeElement.classList);
+        const langClass = classList.find((c) => c.startsWith('language-') || c.startsWith('lang-'));
+        if (langClass) {
+          languageName = langClass.replace(/^(language-|lang-)/, '').toUpperCase();
+        }
+      }
+      const headerDiv = document.createElement('div');
+      headerDiv.className = 'code-header';
+
+      const langSpan = document.createElement('span');
+      langSpan.className = 'code-language-label';
+      langSpan.innerText = languageName;
 
       const button = document.createElement('button');
       button.className = 'copy-code-btn';
       button.type = 'button';
-      button.innerText = 'Copy';
       button.setAttribute('aria-label', 'Copy code snippet');
+      button.innerHTML = `
+        <svg class="copy-icon" viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+        <span class="btn-text">Copy</span>
+      `;
 
       button.addEventListener('click', async () => {
-        const codeElement = pre.querySelector('code');
         const textToCopy = codeElement ? codeElement.innerText : pre.innerText;
 
         try {
           await navigator.clipboard.writeText(textToCopy);
-          button.innerText = 'Copied!';
+          button.querySelector('.btn-text').innerText = 'Copied!';
           button.classList.add('copied');
 
           if (typeof window.trackEvent === 'function') {
@@ -62,7 +79,7 @@
           }
 
           setTimeout(() => {
-            button.innerText = 'Copy';
+            button.querySelector('.btn-text').innerText = 'Copy';
             button.classList.remove('copied');
           }, 2000);
         } catch (err) {
@@ -70,19 +87,21 @@
         }
       });
 
-      pre.appendChild(button);
+      headerDiv.appendChild(langSpan);
+      headerDiv.appendChild(button);
+
+      pre.prepend(headerDiv);
     });
   }
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initCopyCodeButtons);
+    document.addEventListener('DOMContentLoaded', initCodeHeaders);
   } else {
-    initCopyCodeButtons();
+    initCodeHeaders();
   }
 
-  // Handle dynamic DOM content updates for Next.js routing
   const observer = new MutationObserver(() => {
-    initCopyCodeButtons();
+    initCodeHeaders();
   });
 
   observer.observe(document.body, { childList: true, subtree: true });

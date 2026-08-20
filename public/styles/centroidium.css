@@ -690,33 +690,67 @@ table.sortable th.sort-desc::after {
 	background-color: rgb(50 205 50);
 }
 /* --------------------------------------------------------------------- */
-/* Copy Code Snippet Button Styling */
+/* Code Block Header & Copy Button Styling */
 pre {
   position: relative;
+  padding-top: 0 !important;
+  overflow: hidden;
+  border-radius: 8px;
+  background-color: #0d1117;
+  border: 1px solid #30363d;
+}
+
+pre code {
+  display: block;
+  padding: 1rem;
+  overflow-x: auto;
+}
+
+.code-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: #161b22;
+  border-bottom: 1px solid #30363d;
+  padding: 6px 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.code-language-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #8b949e;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
 }
 
 .copy-code-btn {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  background-color: rgba(255, 255, 255, 0.1);
-  color: #f3f4f6;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 4px;
-  padding: 4px 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background-color: #21262d;
+  color: #c9d1d9;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  padding: 3px 8px;
   font-size: 12px;
   font-family: inherit;
   cursor: pointer;
-  transition: background-color 0.2s ease, border-color 0.2s ease;
-  z-index: 10;
+  transition: all 0.2s ease;
 }
 
 .copy-code-btn:hover {
-  background-color: rgba(255, 255, 255, 0.25);
+  background-color: #30363d;
+  color: #f0f6fc;
+  border-color: #8b949e;
 }
 
 .copy-code-btn.copied {
-  background-color: #10b981;
+  background-color: #238636;
   color: #ffffff;
-  border-color: #10b981;
+  border-color: #2ea043;
+}
+
+.copy-code-btn svg {
+  stroke: currentColor;
 }
