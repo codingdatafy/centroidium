@@ -84,6 +84,7 @@ export default function Analytics({ isNotFound = false }: AnalyticsProps) {
 
     pageviewId.current = null;
 
+    // Admin toggle for disabling tracking locally
     const queryParams = new URLSearchParams(window.location.search);
     if (queryParams.get('admin') === 'true') {
       localStorage.setItem('analytics-disable', 'true');
@@ -95,6 +96,7 @@ export default function Analytics({ isNotFound = false }: AnalyticsProps) {
     const hostname = window.location.hostname;
     const isOfficialDomain = hostname === 'www.codingdatafy.com' || hostname === 'codingdatafy.com';
 
+    // Anti-bot client-side validation
     const ua = navigator.userAgent.toLowerCase();
     const isBotAgent = /bot|googlebot|crawler|spider|robot|crawling|lighthouse|chrome-lighthouse|google-inspectiontool|ahrefs|semrush|gptbot|chatgpt|chatgpt-user|oai-searchbot|claudebot|claude-user|claude-searchbot|coherebot|headlesschrome|python|node-fetch|axios|bytespider|ccbot|facebookbot|meta-external|amazonbot|petalbot|scrapy|diffbot|dotbot|rogerbot|blexbot|dataforseo|mj12bot|serpstatbot|perplexity|perplexity-user|perplexitybot|applebot|yandex|bingbot|baidu/i.test(ua);
 
@@ -107,6 +109,7 @@ export default function Analytics({ isNotFound = false }: AnalyticsProps) {
 
     const isExplicitlyDisabled = localStorage.getItem('analytics-disable') === 'true';
 
+    // Detect headless datacenter browsers
     const isDatacenterBot = () => {
       if (document.visibilityState === 'hidden') return false;
 
@@ -140,6 +143,7 @@ export default function Analytics({ isNotFound = false }: AnalyticsProps) {
     let heartbeatTimeoutId: NodeJS.Timeout | null = null;
     let isInitialized = false;
 
+    // Function to transmit analytics payload
     const sendPayload = async (isUpdate = false) => {
       const durationSec = isUpdate && startTime > 0 ? Math.max(0, Math.round((Date.now() - startTime) / 1000)) : 0;
       const isBounce = isUpdate ? (!hasInteracted && durationSec < 10) : true;
@@ -202,6 +206,7 @@ export default function Analytics({ isNotFound = false }: AnalyticsProps) {
       }
     };
 
+    // Heartbeat scheduler for duration tracking
     const scheduleHeartbeat = () => {
       if (document.visibilityState === 'hidden') return;
 

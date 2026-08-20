@@ -1,21 +1,21 @@
 /* ********************************************************
-* Description : Javascript Framework For CodingDatafy Website
+* Description : JavaScript Framework For CodingDatafy Website
 * URL         : www.codingdatafy.com/centroidium.js
 * Version     : 1.1
-* Licence     : Copyright © 2026 CodingDatafy
+* License     : Copyright © 2026 CodingDatafy
 * This file contains the following sections:
-	- Root
-	- Header
-	- Sidebar
-	- Main
-	- Footer
+*   - Root
+*   - Header
+*   - Sidebar
+*   - Main
+*   - Footer
 ******************************************************** */
 
 /////////////////////////////  Root    /////////////////////////////
-// TargetBlank
+// Handle target="_blank" for external links
 (function () {
     var internal = location.host.replace("www.", "");
-        internal = new RegExp(internal, "i");    
+    internal = new RegExp(internal, "i");    
     var a = document.getElementsByTagName('a');
     for (var i = 0; i < a.length; i++) {
         var href = a[i].host;
@@ -74,6 +74,7 @@
           button.querySelector('.btn-text').innerText = 'Copied!';
           button.classList.add('copied');
 
+          // Trigger analytics event for copied code snippets
           if (typeof window.trackEvent === 'function') {
             window.trackEvent('copy_code', textToCopy.substring(0, 100));
           }
