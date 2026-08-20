@@ -696,8 +696,10 @@ pre {
   padding-top: 0 !important;
   overflow: hidden;
   border-radius: 8px;
-  background-color: #0d1117;
+  background-color: #f5fbf5;
   border: 1px solid #30363d;
+  width: 70%;
+  margin: 1em auto;
 }
 
 pre code {
@@ -719,7 +721,7 @@ pre code {
 .code-language-label {
   font-size: 11px;
   font-weight: 700;
-  color: #8b949e;
+  color: rgb(255 255 255);
   letter-spacing: 0.5px;
   text-transform: uppercase;
 }
@@ -729,7 +731,7 @@ pre code {
   align-items: center;
   gap: 6px;
   background-color: #21262d;
-  color: #c9d1d9;
+  color: rgb(255 255 255);
   border: 1px solid #30363d;
   border-radius: 6px;
   padding: 3px 8px;
