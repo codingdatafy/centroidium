@@ -25,12 +25,11 @@ const generateClientToken = async (path: string, timestamp: number): Promise<str
 
 /**
  * Event tracking utility for interactive elements
- * Supports: 'copy_code', 'search', 'outbound_click'
+ * Supports: 'copy_code', 'outbound_click'
  */
 export const trackEvent = async (
-  eventType: 'copy_code' | 'search' | 'outbound_click',
-  targetValue?: string,
-  hasResults?: boolean
+  eventType: 'copy_code' | 'outbound_click',
+  targetValue?: string
 ) => {
   if (typeof window === 'undefined') return;
 
@@ -45,7 +44,6 @@ export const trackEvent = async (
     event_type: eventType,
     p: cleanPath,
     target: targetValue || null,
-    has_results: typeof hasResults === 'boolean' ? hasResults : null,
     ts: timestamp,
     token: clientToken
   });
@@ -62,7 +60,11 @@ export const trackEvent = async (
   }
 };
 
-export default function Analytics() {
+interface AnalyticsProps {
+  isNotFound?: boolean;
+}
+
+export default function Analytics({ isNotFound = false }: AnalyticsProps) {
   const rawPathname = usePathname();
   const lastTrackedPath = useRef<string | null>(null);
   const pageviewId = useRef<number | null>(null);
@@ -70,16 +72,12 @@ export default function Analytics() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    // Normalize path: strip query parameters and remove trailing slashes
     const cleanPathname = (rawPathname?.split('?')[0] || '/').replace(/\/+$/, '') || '/';
 
-    // Prevent duplicate execution for the same clean path
     if (lastTrackedPath.current === cleanPathname) return;
 
-    // Reset pageview ID on path change
     pageviewId.current = null;
 
-    // Admin override trigger to disable analytics for testing/maintenance
     const queryParams = new URLSearchParams(window.location.search);
     if (queryParams.get('admin') === 'true') {
       localStorage.setItem('analytics-disable', 'true');
@@ -88,15 +86,12 @@ export default function Analytics() {
       alert('CodingDatafy: Analytics tracking is now disabled for this browser.');
     }
 
-    // Domain validation check
     const hostname = window.location.hostname;
     const isOfficialDomain = hostname === 'www.codingdatafy.com' || hostname === 'codingdatafy.com';
 
-    // Comprehensive bot agent pattern matching including AI search fetchers
     const ua = navigator.userAgent.toLowerCase();
     const isBotAgent = /bot|googlebot|crawler|spider|robot|crawling|lighthouse|chrome-lighthouse|google-inspectiontool|ahrefs|semrush|gptbot|chatgpt|chatgpt-user|oai-searchbot|claudebot|claude-user|claude-searchbot|coherebot|headlesschrome|python|node-fetch|axios|bytespider|ccbot|facebookbot|meta-external|amazonbot|petalbot|scrapy|diffbot|dotbot|rogerbot|blexbot|dataforseo|mj12bot|serpstatbot|perplexity|perplexity-user|perplexitybot|applebot|yandex|bingbot|baidu/i.test(ua);
 
-    // Automation and headless browser detection
     const isWebDriver = navigator.webdriver === true;
     const isPhantom = 'callPhantom' in window || '_phantom' in window;
     const isHeadlessWindow = 'Buffer' in window || 'emit' in window;
@@ -106,7 +101,6 @@ export default function Analytics() {
 
     const isExplicitlyDisabled = localStorage.getItem('analytics-disable') === 'true';
 
-    // Hardware & WebGL anomaly detection
     const isDatacenterBot = () => {
       if (document.visibilityState === 'hidden') return false;
 
@@ -128,7 +122,6 @@ export default function Analytics() {
       }
     };
 
-    // Verify security and bot constraints
     const isValidVisitor = isOfficialDomain && !isBotAgent && !isAutomatedBot && !isExplicitlyDisabled && !isDatacenterBot();
 
     if (!isValidVisitor) return;
@@ -141,7 +134,6 @@ export default function Analytics() {
     let heartbeatTimeoutId: NodeJS.Timeout | null = null;
     let isInitialized = false;
 
-    // Dispatch analytics payload
     const sendPayload = async (isUpdate = false) => {
       const durationSec = isUpdate && startTime > 0 ? Math.max(0, Math.round((Date.now() - startTime) / 1000)) : 0;
       const isBounce = isUpdate ? (!hasInteracted && durationSec < 10) : true;
@@ -154,13 +146,13 @@ export default function Analytics() {
         r: referrer,
         d: durationSec,
         b: isBounce,
+        is_404: isNotFound,
         type: isUpdate ? 'ping' : 'init',
         id: isUpdate ? pageviewId.current : null,
         ts: timestamp,
         token: clientToken
       });
 
-      // Prefer sendBeacon for page unload / visibility changes
       if (isUpdate && navigator.sendBeacon) {
         const success = navigator.sendBeacon(METRICS_ENDPOINT, payload);
         if (success) return;
@@ -174,7 +166,6 @@ export default function Analytics() {
           keepalive: true,
         });
 
-        // Store the returned pageview ID for subsequent ping updates
         if (!isUpdate && res.ok) {
           const data = await res.json();
           if (data?.id) {
@@ -188,7 +179,6 @@ export default function Analytics() {
       hasInteracted = true;
     };
 
-    // Global listener for automatic outbound link tracking
     const handleOutboundClick = (event: MouseEvent) => {
       const targetAnchor = (event.target as HTMLElement).closest('a');
       if (!targetAnchor) return;
@@ -196,7 +186,6 @@ export default function Analytics() {
       const href = targetAnchor.getAttribute('href');
       if (!href) return;
 
-      // Check if the link points to an external site
       const isExternal = href.startsWith('http') && 
                          !href.includes('codingdatafy.com') && 
                          !href.includes(window.location.hostname);
@@ -206,7 +195,6 @@ export default function Analytics() {
       }
     };
 
-    // Adaptive Heartbeat scheduler
     const scheduleHeartbeat = () => {
       if (document.visibilityState === 'hidden') return;
 
@@ -221,7 +209,6 @@ export default function Analytics() {
       }, nextIntervalMs);
     };
 
-    // Function to start tracking ONLY when page is visible to user
     const startTrackingIfVisible = () => {
       if (isInitialized) return;
       
@@ -229,19 +216,15 @@ export default function Analytics() {
       lastTrackedPath.current = cleanPathname;
       startTime = Date.now();
 
-      // 1. Send the initial pageview hit ONLY when tab becomes visible
       sendPayload(false);
 
-      // 2. Start interaction and outbound click listeners
       window.addEventListener('scroll', handleInteraction, { once: true, passive: true });
       window.addEventListener('click', handleInteraction, { once: true, passive: true });
       window.addEventListener('click', handleOutboundClick, { capture: true, passive: true });
 
-      // 3. Start heartbeat
       scheduleHeartbeat();
     };
 
-    // Deferred Execution Logic
     if (document.visibilityState === 'visible') {
       startTrackingIfVisible();
     }
@@ -284,7 +267,7 @@ export default function Analytics() {
       }
     };
 
-  }, [rawPathname]);
+  }, [rawPathname, isNotFound]);
 
   return null;
 }
