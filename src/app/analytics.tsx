@@ -49,7 +49,8 @@ export const trackEvent = async (
   });
 
   if (navigator.sendBeacon) {
-    navigator.sendBeacon(METRICS_ENDPOINT, payload);
+    const blob = new Blob([payload], { type: 'application/json' });
+    navigator.sendBeacon(METRICS_ENDPOINT, blob);
   } else {
     fetch(METRICS_ENDPOINT, {
       method: 'POST',
@@ -148,13 +149,14 @@ export default function Analytics({ isNotFound = false }: AnalyticsProps) {
         b: isBounce,
         is_404: isNotFound,
         type: isUpdate ? 'ping' : 'init',
-        id: isUpdate ? pageviewId.current : null,
+        id: pageviewId.current,
         ts: timestamp,
         token: clientToken
       });
 
       if (isUpdate && navigator.sendBeacon) {
-        const success = navigator.sendBeacon(METRICS_ENDPOINT, payload);
+        const blob = new Blob([payload], { type: 'application/json' });
+        const success = navigator.sendBeacon(METRICS_ENDPOINT, blob);
         if (success) return;
       }
 
