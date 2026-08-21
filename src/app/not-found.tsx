@@ -12,7 +12,7 @@ import Link from 'next/link';
  */
 export default function NotFound() {
   return (
-    <main className="main-not-found">
+    <main className="main-not-found" data-is-404="true">
       <article className="article-not-found">
         <header className="header-not-found">
           <h1 className="title-not-found">404</h1>

@@ -58,11 +58,7 @@ if (typeof window !== 'undefined') {
   (window as any).trackEvent = trackEvent;
 }
 
-interface AnalyticsProps {
-  isNotFound?: boolean;
-}
-
-export default function Analytics({ isNotFound = false }: AnalyticsProps) {
+export default function Analytics() {
   const rawPathname = usePathname();
   const lastTrackedPath = useRef<string | null>(null);
   const pageviewId = useRef<number | null>(null);
@@ -126,6 +122,16 @@ export default function Analytics({ isNotFound = false }: AnalyticsProps) {
 
     const activePath = cleanPathname;
 
+    const checkIs404Page = (): boolean => {
+      const has404Meta = !!document.querySelector('meta[name="next-error"]');
+      const isNotFoundTitle = document.title.toLowerCase().includes('404') || document.title.toLowerCase().includes('not found');
+      const has404Element = !!document.querySelector('[data-is-404="true"]');
+
+      return has404Meta || isNotFoundTitle || has404Element;
+    };
+
+    const is404Detected = checkIs404Page();
+
     let referrer = document.referrer || '';
     const sessionKey = 'cd_has_navigated';
     
@@ -152,7 +158,7 @@ export default function Analytics({ isNotFound = false }: AnalyticsProps) {
         r: referrer,
         d: durationSec,
         b: isBounce,
-        is_404: isNotFound,
+        is_404: is404Detected,
         type: isUpdate ? 'ping' : 'init',
         id: pageviewId.current,
         ts: timestamp,
@@ -274,7 +280,7 @@ export default function Analytics({ isNotFound = false }: AnalyticsProps) {
       }
     };
 
-  }, [rawPathname, isNotFound]);
+  }, [rawPathname]);
 
   return null;
 }
