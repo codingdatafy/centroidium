@@ -11,6 +11,7 @@ import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 
 const METRICS_ENDPOINT = '/lib';
+const TURNSTILE_SITE_KEY = '0x4AAAAAAEX6YBTF8eJnX9IG';
 
 const generateClientToken = async (path: string, timestamp: number): Promise<string> => {
   const data = `${path}-${timestamp}-CodingDatafyToken`;
@@ -18,6 +19,66 @@ const generateClientToken = async (path: string, timestamp: number): Promise<str
   const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('').substring(0, 24);
+};
+
+// Helper: load Turnstile script asynchronously if not yet present
+const loadTurnstileScript = (): Promise<void> => {
+  return new Promise((resolve) => {
+    if (typeof window === 'undefined') return resolve();
+    if ((window as any).turnstile) return resolve();
+
+    const existingScript = document.getElementById('cf-turnstile-script');
+    if (existingScript) {
+      existingScript.addEventListener('load', () => resolve());
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.id = 'cf-turnstile-script';
+    script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+    script.async = true;
+    script.defer = true;
+    script.onload = () => resolve();
+    document.head.appendChild(script);
+  });
+};
+
+// Helper: execute invisible Turnstile challenge to obtain token
+const getTurnstileToken = async (): Promise<string> => {
+  if (typeof window === 'undefined') return '';
+  await loadTurnstileScript();
+
+  return new Promise((resolve) => {
+    try {
+      if (!(window as any).turnstile) return resolve('');
+
+      const container = document.createElement('div');
+      container.style.display = 'none';
+      document.body.appendChild(container);
+
+      const widgetId = (window as any).turnstile.render(container, {
+        sitekey: TURNSTILE_SITE_KEY,
+        callback: (token: string) => {
+          (window as any).turnstile.remove(widgetId);
+          container.remove();
+          resolve(token);
+        },
+        'error-callback': () => {
+          container.remove();
+          resolve('');
+        },
+        'expired-callback': () => {
+          container.remove();
+          resolve('');
+        },
+        execution: 'execute'
+      });
+
+      (window as any).turnstile.execute(container, { sitekey: TURNSTILE_SITE_KEY });
+    } catch {
+      resolve('');
+    }
+  });
 };
 
 export const trackEvent = async (
@@ -31,6 +92,7 @@ export const trackEvent = async (
   
   const timestamp = Date.now();
   const clientToken = await generateClientToken(cleanPath, timestamp);
+  const turnstileToken = await getTurnstileToken();
 
   const payload = JSON.stringify({
     type: 'event',
@@ -38,7 +100,8 @@ export const trackEvent = async (
     p: cleanPath,
     target: targetValue || null,
     ts: timestamp,
-    token: clientToken
+    token: clientToken,
+    cf_turnstile_token: turnstileToken
   });
 
   if (navigator.sendBeacon) {
@@ -152,6 +215,7 @@ export default function Analytics() {
 
       const timestamp = Date.now();
       const clientToken = await generateClientToken(activePath, timestamp);
+      const turnstileToken = await getTurnstileToken();
 
       const payload = JSON.stringify({
         p: activePath,
@@ -162,7 +226,8 @@ export default function Analytics() {
         type: isUpdate ? 'ping' : 'init',
         id: pageviewId.current,
         ts: timestamp,
-        token: clientToken
+        token: clientToken,
+        cf_turnstile_token: turnstileToken
       });
 
       if (isUpdate && navigator.sendBeacon) {
