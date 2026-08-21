@@ -72,6 +72,7 @@ export default function Analytics() {
 
     pageviewId.current = null;
 
+    // Admin bypass toggle via URL parameter
     const queryParams = new URLSearchParams(window.location.search);
     if (queryParams.get('admin') === 'true') {
       localStorage.setItem('analytics-disable', 'true');
@@ -80,12 +81,15 @@ export default function Analytics() {
       alert('CodingDatafy: Analytics tracking is now disabled for this browser.');
     }
 
+    // Domain validation
     const hostname = window.location.hostname;
     const isOfficialDomain = hostname === 'www.codingdatafy.com' || hostname === 'codingdatafy.com';
 
+    // User-Agent bot filtering
     const ua = navigator.userAgent.toLowerCase();
     const isBotAgent = /bot|googlebot|crawler|spider|robot|crawling|lighthouse|chrome-lighthouse|google-inspectiontool|ahrefs|semrush|gptbot|chatgpt|chatgpt-user|oai-searchbot|claudebot|claude-user|claude-searchbot|coherebot|headlesschrome|python|node-fetch|axios|bytespider|ccbot|facebookbot|meta-external|amazonbot|petalbot|scrapy|diffbot|dotbot|rogerbot|blexbot|dataforseo|mj12bot|serpstatbot|perplexity|perplexity-user|perplexitybot|applebot|yandex|bingbot|baidu/i.test(ua);
 
+    // Standard headless automation checks
     const isWebDriver = navigator.webdriver === true;
     const isPhantom = 'callPhantom' in window || '_phantom' in window;
     const isHeadlessWindow = 'Buffer' in window || 'emit' in window;
@@ -95,6 +99,7 @@ export default function Analytics() {
 
     const isExplicitlyDisabled = localStorage.getItem('analytics-disable') === 'true';
 
+    // Detect headless cloud datacenters via WebGL software rendering and display anomalies
     const isDatacenterBot = () => {
       if (document.visibilityState === 'hidden') return false;
 
@@ -116,47 +121,31 @@ export default function Analytics() {
       }
     };
 
-    const isGenericAutomatedBot = (): boolean => {
+    // Safe detection for injected automation framework global keys (Selenium, Puppeteer, Playwright)
+    const hasAutomationKeys = (): boolean => {
       try {
-        const nav = navigator as any;
-
-        const hasAutomationKeys = Object.keys(window).some((key) =>
-          /^(_phantom|callPhantom|__puppeteer|__playwright|__driver|cdc_|__selenium|__last_watcher)/i.test(key)
-        );
-
-        const isChrome = /chrome/i.test(nav.userAgent) && !/edg|opr|brave/i.test(nav.userAgent);
-        const missingPlugins = isChrome && (!nav.plugins || nav.plugins.length === 0);
-
-        const isTouchMismatch = nav.maxTouchPoints === 0 && /Macintosh/i.test(nav.userAgent) && 'ontouchstart' in window;
-
-        const isNotificationInconsistent =
-          'permissions' in nav &&
-          (nav.permissions as any)?.query &&
-          nav.permissions.query({ name: 'notifications' }).then === undefined;
-
-        return (
-          hasAutomationKeys ||
-          missingPlugins ||
-          isTouchMismatch ||
-          isNotificationInconsistent
+        return Object.keys(window).some((key) =>
+          /^(_phantom|callPhantom|__puppeteer|__playwright|__driver|cdc_|__selenium)/i.test(key)
         );
       } catch {
         return false;
       }
     };
 
+    // Combine all verification filters
     const isValidVisitor = 
       isOfficialDomain && 
       !isBotAgent && 
       !isAutomatedBot && 
       !isExplicitlyDisabled && 
-      !isDatacenterBot() &&
-      !isGenericAutomatedBot();
+      !hasAutomationKeys() && 
+      !isDatacenterBot();
 
     if (!isValidVisitor) return;
 
     const activePath = cleanPathname;
 
+    // Detect 404 error page state
     const checkIs404Page = (): boolean => {
       const has404Meta = !!document.querySelector('meta[name="next-error"]');
       const isNotFoundTitle = document.title.toLowerCase().includes('404') || document.title.toLowerCase().includes('not found');
@@ -167,6 +156,7 @@ export default function Analytics() {
 
     const is404Detected = checkIs404Page();
 
+    // Session-based referrer tracking
     let referrer = document.referrer || '';
     const sessionKey = 'cd_has_navigated';
     
@@ -181,6 +171,7 @@ export default function Analytics() {
     let heartbeatTimeoutId: NodeJS.Timeout | null = null;
     let isInitialized = false;
 
+    // Send payload function for pageview initialization and updates
     const sendPayload = async (isUpdate = false) => {
       const durationSec = isUpdate && startTime > 0 ? Math.max(0, Math.round((Date.now() - startTime) / 1000)) : 0;
       const isBounce = isUpdate ? (!hasInteracted && durationSec < 10) : true;
@@ -227,6 +218,7 @@ export default function Analytics() {
       hasInteracted = true;
     };
 
+    // Track outbound external link clicks
     const handleOutboundClick = (event: MouseEvent) => {
       const targetAnchor = (event.target as HTMLElement).closest('a');
       if (!targetAnchor) return;
@@ -243,6 +235,7 @@ export default function Analytics() {
       }
     };
 
+    // Schedule periodic heartbeat ping
     const scheduleHeartbeat = () => {
       if (document.visibilityState === 'hidden') return;
 
@@ -257,6 +250,7 @@ export default function Analytics() {
       }, nextIntervalMs);
     };
 
+    // Initialize metrics tracking when page is visible
     const startTrackingIfVisible = () => {
       if (isInitialized) return;
       
@@ -277,6 +271,7 @@ export default function Analytics() {
       startTrackingIfVisible();
     }
 
+    // Handle visibility changes
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         if (!isInitialized) {
@@ -294,6 +289,7 @@ export default function Analytics() {
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
+    // Handle page unload state
     const handlePageHide = () => {
       if (isInitialized) {
         sendPayload(true);
@@ -302,6 +298,7 @@ export default function Analytics() {
 
     window.addEventListener('pagehide', handlePageHide);
 
+    // Cleanup event listeners and timers on unmount or route change
     return () => {
       if (heartbeatTimeoutId) clearTimeout(heartbeatTimeoutId);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
