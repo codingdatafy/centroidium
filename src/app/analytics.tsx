@@ -72,7 +72,6 @@ export default function Analytics() {
 
     pageviewId.current = null;
 
-    // Admin bypass toggle via URL parameter
     const queryParams = new URLSearchParams(window.location.search);
     if (queryParams.get('admin') === 'true') {
       localStorage.setItem('analytics-disable', 'true');
@@ -81,15 +80,12 @@ export default function Analytics() {
       alert('CodingDatafy: Analytics tracking is now disabled for this browser.');
     }
 
-    // Domain validation
     const hostname = window.location.hostname;
     const isOfficialDomain = hostname === 'www.codingdatafy.com' || hostname === 'codingdatafy.com';
 
-    // User-Agent bot filtering
     const ua = navigator.userAgent.toLowerCase();
     const isBotAgent = /bot|googlebot|crawler|spider|robot|crawling|lighthouse|chrome-lighthouse|google-inspectiontool|ahrefs|semrush|gptbot|chatgpt|chatgpt-user|oai-searchbot|claudebot|claude-user|claude-searchbot|coherebot|headlesschrome|python|node-fetch|axios|bytespider|ccbot|facebookbot|meta-external|amazonbot|petalbot|scrapy|diffbot|dotbot|rogerbot|blexbot|dataforseo|mj12bot|serpstatbot|perplexity|perplexity-user|perplexitybot|applebot|yandex|bingbot|baidu/i.test(ua);
 
-    // Standard headless automation checks
     const isWebDriver = navigator.webdriver === true;
     const isPhantom = 'callPhantom' in window || '_phantom' in window;
     const isHeadlessWindow = 'Buffer' in window || 'emit' in window;
@@ -99,7 +95,36 @@ export default function Analytics() {
 
     const isExplicitlyDisabled = localStorage.getItem('analytics-disable') === 'true';
 
-    // Detect headless cloud datacenters via WebGL software rendering and display anomalies
+    // Advanced JS Guard & Browser Anti-Stealth Detection
+    const isAdvancedBotGuard = (): boolean => {
+      try {
+        // 1. Screen / Window anomalies (Playwright/Puppeteer default overrides)
+        const isScreenMismatch = window.outerWidth > window.screen.availWidth || window.outerHeight > window.screen.availHeight;
+        
+        // 2. Network connection anomalies in headless automated instances
+        const navConn = (navigator as any).connection;
+        const hasFakeConnection = navConn && (navConn.rtt === 0 || navConn.downlink === 10);
+
+        // 3. Fake Chrome Object Check (Stealth Plugin Artifacts)
+        const isChrome = /chrome/i.test(ua);
+        const hasFakeChromeObj = isChrome && (!(window as any).chrome || !(window as any).chrome.runtime);
+
+        // 4. Permissions API Spoof Check (Common automation signature)
+        let isFakePermissionState = false;
+        if (navigator.permissions && navigator.permissions.query) {
+          navigator.permissions.query({ name: 'notifications' as any }).then(status => {
+            if (Notification.permission === 'denied' && status.state === 'prompt') {
+              isFakePermissionState = true;
+            }
+          }).catch(() => {});
+        }
+
+        return isScreenMismatch || hasFakeConnection || hasFakeChromeObj || isFakePermissionState;
+      } catch {
+        return false;
+      }
+    };
+
     const isDatacenterBot = () => {
       if (document.visibilityState === 'hidden') return false;
 
@@ -115,37 +140,33 @@ export default function Analytics() {
         if (!debugInfo) return hasZeroDimensions || hasInvalidScreen || hasNoHardwareConcurrency;
         const renderer = (gl as WebGLRenderingContext).getParameter(debugInfo.UNMASKED_RENDERER_WEBGL).toLowerCase();
         const isSoftware = renderer.includes('swiftshader') || renderer.includes('llvmpipe') || renderer.includes('mesa');
-        return hasZeroDimensions || hasInvalidScreen || hasNoHardwareConcurrency || isSoftware;
+        
+        
+        canvas.width = 16;
+        canvas.height = 16;
+        const ctx2d = canvas.getContext('2d');
+        if (ctx2d) {
+          ctx2d.textBaseline = "top";
+          ctx2d.font = "14px 'Arial'";
+          ctx2d.fillStyle = "#f60";
+          ctx2d.fillRect(2, 2, 6, 6);
+          ctx2d.fillStyle = "#069";
+          ctx2d.fillText("CD", 1, 1);
+        }
+        const isBadCanvas = canvas.toDataURL().length < 50;
+
+        return hasZeroDimensions || hasInvalidScreen || hasNoHardwareConcurrency || isSoftware || isBadCanvas;
       } catch {
         return false;
       }
     };
 
-    // Safe detection for injected automation framework global keys (Selenium, Puppeteer, Playwright)
-    const hasAutomationKeys = (): boolean => {
-      try {
-        return Object.keys(window).some((key) =>
-          /^(_phantom|callPhantom|__puppeteer|__playwright|__driver|cdc_|__selenium)/i.test(key)
-        );
-      } catch {
-        return false;
-      }
-    };
-
-    // Combine all verification filters
-    const isValidVisitor = 
-      isOfficialDomain && 
-      !isBotAgent && 
-      !isAutomatedBot && 
-      !isExplicitlyDisabled && 
-      !hasAutomationKeys() && 
-      !isDatacenterBot();
+    const isValidVisitor = isOfficialDomain && !isBotAgent && !isAutomatedBot && !isExplicitlyDisabled && !isDatacenterBot() && !isAdvancedBotGuard();
 
     if (!isValidVisitor) return;
 
     const activePath = cleanPathname;
 
-    // Detect 404 error page state
     const checkIs404Page = (): boolean => {
       const has404Meta = !!document.querySelector('meta[name="next-error"]');
       const isNotFoundTitle = document.title.toLowerCase().includes('404') || document.title.toLowerCase().includes('not found');
@@ -156,7 +177,6 @@ export default function Analytics() {
 
     const is404Detected = checkIs404Page();
 
-    // Session-based referrer tracking
     let referrer = document.referrer || '';
     const sessionKey = 'cd_has_navigated';
     
@@ -171,7 +191,6 @@ export default function Analytics() {
     let heartbeatTimeoutId: NodeJS.Timeout | null = null;
     let isInitialized = false;
 
-    // Send payload function for pageview initialization and updates
     const sendPayload = async (isUpdate = false) => {
       const durationSec = isUpdate && startTime > 0 ? Math.max(0, Math.round((Date.now() - startTime) / 1000)) : 0;
       const isBounce = isUpdate ? (!hasInteracted && durationSec < 10) : true;
@@ -218,7 +237,6 @@ export default function Analytics() {
       hasInteracted = true;
     };
 
-    // Track outbound external link clicks
     const handleOutboundClick = (event: MouseEvent) => {
       const targetAnchor = (event.target as HTMLElement).closest('a');
       if (!targetAnchor) return;
@@ -235,7 +253,6 @@ export default function Analytics() {
       }
     };
 
-    // Schedule periodic heartbeat ping
     const scheduleHeartbeat = () => {
       if (document.visibilityState === 'hidden') return;
 
@@ -250,7 +267,6 @@ export default function Analytics() {
       }, nextIntervalMs);
     };
 
-    // Initialize metrics tracking when page is visible
     const startTrackingIfVisible = () => {
       if (isInitialized) return;
       
@@ -271,7 +287,6 @@ export default function Analytics() {
       startTrackingIfVisible();
     }
 
-    // Handle visibility changes
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         if (!isInitialized) {
@@ -289,7 +304,6 @@ export default function Analytics() {
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    // Handle page unload state
     const handlePageHide = () => {
       if (isInitialized) {
         sendPayload(true);
@@ -298,7 +312,6 @@ export default function Analytics() {
 
     window.addEventListener('pagehide', handlePageHide);
 
-    // Cleanup event listeners and timers on unmount or route change
     return () => {
       if (heartbeatTimeoutId) clearTimeout(heartbeatTimeoutId);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
