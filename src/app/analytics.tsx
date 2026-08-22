@@ -117,32 +117,22 @@ export default function Analytics() {
 
       const hasZeroDimensions = window.outerWidth === 0 && window.outerHeight === 0;
       const hasInvalidScreen = screen.width === 0 || screen.height === 0;
-      const hasNoHardwareConcurrency = !navigator.hardwareConcurrency || navigator.hardwareConcurrency < 1;
+
+ 
+      if (hasZeroDimensions || hasInvalidScreen) return true;
 
       try {
         const canvas = document.createElement('canvas');
         const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-        if (!gl) return hasZeroDimensions || hasInvalidScreen || hasNoHardwareConcurrency;
-        const debugInfo = (gl as WebGLRenderingContext).getExtension('WEBGL_debug_renderer_info');
-        if (!debugInfo) return hasZeroDimensions || hasInvalidScreen || hasNoHardwareConcurrency;
-        const renderer = (gl as WebGLRenderingContext).getParameter(debugInfo.UNMASKED_RENDERER_WEBGL).toLowerCase();
-        const isSoftware = renderer.includes('swiftshader') || renderer.includes('llvmpipe') || renderer.includes('mesa');
-        
-        // Dynamic Canvas Check
-        canvas.width = 16;
-        canvas.height = 16;
-        const ctx2d = canvas.getContext('2d');
-        if (ctx2d) {
-          ctx2d.textBaseline = "top";
-          ctx2d.font = "14px 'Arial'";
-          ctx2d.fillStyle = "#f60";
-          ctx2d.fillRect(2, 2, 6, 6);
-          ctx2d.fillStyle = "#069";
-          ctx2d.fillText("CD", 1, 1);
-        }
-        const isBadCanvas = canvas.toDataURL().length < 30;
+        if (!gl) return false; 
 
-        return hasZeroDimensions || hasInvalidScreen || hasNoHardwareConcurrency || isSoftware || isBadCanvas;
+        const debugInfo = (gl as WebGLRenderingContext).getExtension('WEBGL_debug_renderer_info');
+        if (!debugInfo) return false;
+
+        const renderer = (gl as WebGLRenderingContext).getParameter(debugInfo.UNMASKED_RENDERER_WEBGL).toLowerCase();
+   
+        const isSoftware = renderer.includes('swiftshader') || renderer.includes('llvmpipe') || renderer.includes('mesa');
+        return isSoftware;
       } catch {
         return false;
       }
@@ -167,9 +157,9 @@ export default function Analytics() {
     let referrer = document.referrer || '';
     const sessionKey = 'cd_has_navigated';
     
-    if (sessionStorage.getItem(sessionKey)) {
+    if (sessionStorage.setItem && sessionStorage.getItem(sessionKey)) {
       referrer = window.location.origin;
-    } else {
+    } else if (sessionStorage.setItem) {
       sessionStorage.setItem(sessionKey, 'true');
     }
 
