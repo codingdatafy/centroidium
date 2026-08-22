@@ -106,7 +106,16 @@ export default function Analytics() {
         const navConn = (navigator as any).connection;
         const hasZeroRttConnection = navConn && navConn.rtt === 0 && navConn.downlink === 0;
 
-        return isScreenMismatch || hasZeroRttConnection;
+        // 3. Detect Mac Chrome Headless Anomaly (Mac Intel OS X with default single screen depth & ratio)
+        const isMacChromeBot = /Macintosh/i.test(ua) && 
+          window.devicePixelRatio === 1 && 
+          screen.colorDepth < 24;
+
+        // 4. Detect Puppeteer/Playwright Permissions API spoofing
+        const isPermissionsSpoofed = 'permissions' in navigator && 
+          navigator.permissions.query.toString().includes('native code') === false;
+
+        return isScreenMismatch || hasZeroRttConnection || isMacChromeBot || isPermissionsSpoofed;
       } catch {
         return false;
       }
