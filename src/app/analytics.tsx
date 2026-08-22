@@ -118,19 +118,20 @@ export default function Analytics() {
       const hasZeroDimensions = window.outerWidth === 0 && window.outerHeight === 0;
       const hasInvalidScreen = screen.width === 0 || screen.height === 0;
 
- 
+  
       if (hasZeroDimensions || hasInvalidScreen) return true;
 
       try {
         const canvas = document.createElement('canvas');
         const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-        if (!gl) return false; 
+        if (!gl) return false;
 
         const debugInfo = (gl as WebGLRenderingContext).getExtension('WEBGL_debug_renderer_info');
         if (!debugInfo) return false;
 
         const renderer = (gl as WebGLRenderingContext).getParameter(debugInfo.UNMASKED_RENDERER_WEBGL).toLowerCase();
-   
+        
+        
         const isSoftware = renderer.includes('swiftshader') || renderer.includes('llvmpipe') || renderer.includes('mesa');
         return isSoftware;
       } catch {
@@ -157,11 +158,13 @@ export default function Analytics() {
     let referrer = document.referrer || '';
     const sessionKey = 'cd_has_navigated';
     
-    if (sessionStorage.setItem && sessionStorage.getItem(sessionKey)) {
-      referrer = window.location.origin;
-    } else if (sessionStorage.setItem) {
-      sessionStorage.setItem(sessionKey, 'true');
-    }
+    try {
+      if (window.sessionStorage && sessionStorage.getItem(sessionKey)) {
+        referrer = window.location.origin;
+      } else if (window.sessionStorage) {
+        sessionStorage.setItem(sessionKey, 'true');
+      }
+    } catch {}
 
     let startTime = 0;
     let hasInteracted = false;
