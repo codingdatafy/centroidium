@@ -95,31 +95,18 @@ export default function Analytics() {
 
     const isExplicitlyDisabled = localStorage.getItem('analytics-disable') === 'true';
 
-    // Advanced JS Guard & Browser Anti-Stealth Detection
+    // Reliable JS Guard (No False Positives for Real Browsers)
     const isAdvancedBotGuard = (): boolean => {
       try {
-        // 1. Screen / Window anomalies (Playwright/Puppeteer default overrides)
-        const isScreenMismatch = window.outerWidth > window.screen.availWidth || window.outerHeight > window.screen.availHeight;
+        // 1. Detect Outer/Screen Dimensions anomalies (Playwright/Puppeteer default overrides)
+        const isScreenMismatch = screen.width > 0 && screen.height > 0 && 
+          (window.outerWidth > screen.availWidth + 100 || window.outerHeight > screen.availHeight + 100);
         
-        // 2. Network connection anomalies in headless automated instances
+        // 2. Check Connection RTT/Downlink zero anomaly
         const navConn = (navigator as any).connection;
-        const hasFakeConnection = navConn && (navConn.rtt === 0 || navConn.downlink === 10);
+        const hasZeroRttConnection = navConn && navConn.rtt === 0 && navConn.downlink === 0;
 
-        // 3. Fake Chrome Object Check (Stealth Plugin Artifacts)
-        const isChrome = /chrome/i.test(ua);
-        const hasFakeChromeObj = isChrome && (!(window as any).chrome || !(window as any).chrome.runtime);
-
-        // 4. Permissions API Spoof Check (Common automation signature)
-        let isFakePermissionState = false;
-        if (navigator.permissions && navigator.permissions.query) {
-          navigator.permissions.query({ name: 'notifications' as any }).then(status => {
-            if (Notification.permission === 'denied' && status.state === 'prompt') {
-              isFakePermissionState = true;
-            }
-          }).catch(() => {});
-        }
-
-        return isScreenMismatch || hasFakeConnection || hasFakeChromeObj || isFakePermissionState;
+        return isScreenMismatch || hasZeroRttConnection;
       } catch {
         return false;
       }
@@ -141,7 +128,7 @@ export default function Analytics() {
         const renderer = (gl as WebGLRenderingContext).getParameter(debugInfo.UNMASKED_RENDERER_WEBGL).toLowerCase();
         const isSoftware = renderer.includes('swiftshader') || renderer.includes('llvmpipe') || renderer.includes('mesa');
         
-        
+        // Dynamic Canvas Check
         canvas.width = 16;
         canvas.height = 16;
         const ctx2d = canvas.getContext('2d');
@@ -153,7 +140,7 @@ export default function Analytics() {
           ctx2d.fillStyle = "#069";
           ctx2d.fillText("CD", 1, 1);
         }
-        const isBadCanvas = canvas.toDataURL().length < 50;
+        const isBadCanvas = canvas.toDataURL().length < 30;
 
         return hasZeroDimensions || hasInvalidScreen || hasNoHardwareConcurrency || isSoftware || isBadCanvas;
       } catch {
