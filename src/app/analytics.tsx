@@ -12,6 +12,9 @@ import { usePathname } from "next/navigation";
 
 const METRICS_ENDPOINT = '/lib';
 
+/**
+ * Generates a timed cryptographic SHA-256 client token for API verification
+ */
 const generateClientToken = async (path: string, timestamp: number): Promise<string> => {
   const data = `${path}-${timestamp}-CodingDatafyToken`;
   const msgBuffer = new TextEncoder().encode(data);
@@ -20,6 +23,9 @@ const generateClientToken = async (path: string, timestamp: number): Promise<str
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('').substring(0, 24);
 };
 
+/**
+ * Custom event tracking method (copy_code, outbound_click)
+ */
 export const trackEvent = async (
   eventType: 'copy_code' | 'outbound_click',
   targetValue?: string
@@ -95,7 +101,7 @@ export default function Analytics() {
 
     const isExplicitlyDisabled = localStorage.getItem('analytics-disable') === 'true';
 
-    // Reliable JS Guard (No False Positives for Real Browsers)
+    // Reliable JS Guard for Detecting Automated Headless Browsers
     const isAdvancedBotGuard = (): boolean => {
       try {
         // 1. Detect Outer/Screen Dimensions anomalies (Playwright/Puppeteer default overrides)
@@ -106,7 +112,7 @@ export default function Analytics() {
         const navConn = (navigator as any).connection;
         const hasZeroRttConnection = navConn && navConn.rtt === 0 && navConn.downlink === 0;
 
-        // 3. Detect Mac Chrome Headless Anomaly (Mac Intel OS X with default single screen depth & ratio)
+        // 3. Detect Mac Chrome Headless Anomaly
         const isMacChromeBot = /Macintosh/i.test(ua) && 
           window.devicePixelRatio === 1 && 
           screen.colorDepth < 24;
@@ -186,8 +192,11 @@ export default function Analytics() {
     let hasInteracted = false;
     let heartbeatTimeoutId: NodeJS.Timeout | null = null;
     let isInitialized = false;
+    let isPurgedBot = false; // Flag to stop execution if worker purges bot
 
     const sendPayload = async (isUpdate = false) => {
+      if (isPurgedBot) return;
+
       const durationSec = isUpdate && startTime > 0 ? Math.max(0, Math.round((Date.now() - startTime) / 1000)) : 0;
       const isBounce = isUpdate ? (!hasInteracted && durationSec < 10) : true;
 
@@ -206,12 +215,7 @@ export default function Analytics() {
         token: clientToken
       });
 
-      if (isUpdate && navigator.sendBeacon) {
-        const blob = new Blob([payload], { type: 'application/json' });
-        const success = navigator.sendBeacon(METRICS_ENDPOINT, blob);
-        if (success) return;
-      }
-
+      // Use fetch instead of sendBeacon when available to read response status from Worker
       try {
         const res = await fetch(METRICS_ENDPOINT, {
           method: 'POST',
@@ -220,9 +224,14 @@ export default function Analytics() {
           keepalive: true,
         });
 
-        if (!isUpdate && res.ok) {
+        if (res.ok) {
           const data = await res.json();
-          if (data?.id) {
+          if (data?.status === 'bot_ping_purged') {
+            isPurgedBot = true;
+            if (heartbeatTimeoutId) clearTimeout(heartbeatTimeoutId);
+            return;
+          }
+          if (!isUpdate && data?.id) {
             pageviewId.current = data.id;
           }
         }
@@ -250,16 +259,16 @@ export default function Analytics() {
     };
 
     const scheduleHeartbeat = () => {
-      if (document.visibilityState === 'hidden') return;
+      if (document.visibilityState === 'hidden' || isPurgedBot) return;
 
       const elapsedSec = startTime > 0 ? Math.round((Date.now() - startTime) / 1000) : 0;
       const nextIntervalMs = elapsedSec > 60 ? 20000 : 10000;
 
       heartbeatTimeoutId = setTimeout(() => {
-        if (document.visibilityState === 'visible') {
+        if (document.visibilityState === 'visible' && !isPurgedBot) {
           sendPayload(true);
+          scheduleHeartbeat();
         }
-        scheduleHeartbeat();
       }, nextIntervalMs);
     };
 
@@ -284,6 +293,8 @@ export default function Analytics() {
     }
 
     const handleVisibilityChange = () => {
+      if (isPurgedBot) return;
+
       if (document.visibilityState === 'visible') {
         if (!isInitialized) {
           startTrackingIfVisible();
@@ -301,7 +312,7 @@ export default function Analytics() {
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     const handlePageHide = () => {
-      if (isInitialized) {
+      if (isInitialized && !isPurgedBot) {
         sendPayload(true);
       }
     };
@@ -316,7 +327,7 @@ export default function Analytics() {
       window.removeEventListener('click', handleInteraction);
       window.removeEventListener('click', handleOutboundClick, { capture: true });
 
-      if (isInitialized) {
+      if (isInitialized && !isPurgedBot) {
         sendPayload(true);
       }
     };
