@@ -12,12 +12,27 @@ import { usePathname } from "next/navigation";
 
 const METRICS_ENDPOINT = '/lib';
 
+// Single reusable TextEncoder instance across requests
+const encoder = new TextEncoder();
+
+/**
+ * Fast Buffer to Hex string converter
+ */
+const bufferToHex = (buffer: ArrayBuffer, length = 24): string => {
+  const bytes = new Uint8Array(buffer);
+  let hex = '';
+  const len = Math.min(bytes.length, Math.ceil(length / 2));
+  for (let i = 0; i < len; i++) {
+    hex += bytes[i].toString(16).padStart(2, '0');
+  }
+  return hex.substring(0, length);
+};
+
 const generateClientToken = async (path: string, timestamp: number): Promise<string> => {
   const data = `${path}-${timestamp}-CodingDatafyToken`;
-  const msgBuffer = new TextEncoder().encode(data);
+  const msgBuffer = encoder.encode(data);
   const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('').substring(0, 24);
+  return bufferToHex(hashBuffer, 24);
 };
 
 export const trackEvent = async (
@@ -98,7 +113,7 @@ export default function Analytics() {
     // Reliable JS Guard (No False Positives for Real Browsers)
     const isAdvancedBotGuard = (): boolean => {
       try {
-        // 1. Detect Outer
+        // 1. Detect Outer Screen Mismatch
         const isScreenMismatch = 
           window.outerWidth > 0 && 
           window.outerHeight > 0 && 
@@ -108,12 +123,12 @@ export default function Analytics() {
         const navConn = (navigator as any).connection;
         const hasZeroRttConnection = navConn && navConn.rtt === 0 && navConn.downlink === 0;
 
-        // 3. Detect Mac Chrome Headless Anomaly (Mac Intel OS X with default single screen depth & ratio)
+        // 3. Detect Mac Chrome Headless Anomaly
         const isMacChromeBot = /Macintosh/i.test(ua) && 
           window.devicePixelRatio === 1 && 
           screen.colorDepth < 24;
 
-        // 4. Detect Puppeteer/Playwright Permissions API spoofing
+        // 4. Detect Permissions API spoofing
         const isPermissionsSpoofed = 'permissions' in navigator && 
           navigator.permissions.query.toString().includes('native code') === false;
 
@@ -137,14 +152,12 @@ export default function Analytics() {
 
         let isSoftware = false;
 
-        // Standard WEBGL RENDERER check
         const standardRenderer = (gl as WebGLRenderingContext).getParameter((gl as WebGLRenderingContext).RENDERER) || '';
         if (typeof standardRenderer === 'string') {
           const rendererLower = standardRenderer.toLowerCase();
           isSoftware = rendererLower.includes('swiftshader') || rendererLower.includes('llvmpipe') || rendererLower.includes('mesa');
         }
 
-        // Dynamic Canvas Check
         canvas.width = 16;
         canvas.height = 16;
         const ctx2d = canvas.getContext('2d');
