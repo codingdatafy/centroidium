@@ -6,6 +6,9 @@
 name: Deploy Content Update to Cloudflare Pages
 
 on:
+  push:
+    branches:
+      - main
   repository_dispatch:
     types: [content_updated]
   workflow_dispatch:
