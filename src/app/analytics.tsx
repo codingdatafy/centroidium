@@ -204,10 +204,12 @@ export default function Analytics() {
 
     let startTime = 0;
     let hasInteracted = false;
-    let heartbeatTimeoutId: NodeJS.Timeout | null = null;
     let isInitialized = false;
 
     const sendPayload = async (isUpdate = false) => {
+      // تجنب إرسال التحديث النهائيات في حال عدم الحصول على id بعد
+      if (isUpdate && !pageviewId.current) return;
+
       const durationSec = isUpdate && startTime > 0 ? Math.max(0, Math.round((Date.now() - startTime) / 1000)) : 0;
       const isBounce = isUpdate ? (!hasInteracted && durationSec < 10) : true;
 
@@ -269,20 +271,6 @@ export default function Analytics() {
       }
     };
 
-    const scheduleHeartbeat = () => {
-      if (document.visibilityState === 'hidden') return;
-
-      const elapsedSec = startTime > 0 ? Math.round((Date.now() - startTime) / 1000) : 0;
-      const nextIntervalMs = elapsedSec > 60 ? 20000 : 10000;
-
-      heartbeatTimeoutId = setTimeout(() => {
-        if (document.visibilityState === 'visible') {
-          sendPayload(true);
-        }
-        scheduleHeartbeat();
-      }, nextIntervalMs);
-    };
-
     const startTrackingIfVisible = () => {
       if (isInitialized) return;
       
@@ -295,8 +283,6 @@ export default function Analytics() {
       window.addEventListener('scroll', handleInteraction, { once: true, passive: true });
       window.addEventListener('click', handleInteraction, { once: true, passive: true });
       window.addEventListener('click', handleOutboundClick, { capture: true, passive: true });
-
-      scheduleHeartbeat();
     };
 
     if (document.visibilityState === 'visible') {
@@ -307,13 +293,10 @@ export default function Analytics() {
       if (document.visibilityState === 'visible') {
         if (!isInitialized) {
           startTrackingIfVisible();
-        } else {
-          scheduleHeartbeat();
         }
       } else if (document.visibilityState === 'hidden') {
         if (isInitialized) {
           sendPayload(true);
-          if (heartbeatTimeoutId) clearTimeout(heartbeatTimeoutId);
         }
       }
     };
@@ -329,7 +312,6 @@ export default function Analytics() {
     window.addEventListener('pagehide', handlePageHide);
 
     return () => {
-      if (heartbeatTimeoutId) clearTimeout(heartbeatTimeoutId);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('pagehide', handlePageHide);
       window.removeEventListener('scroll', handleInteraction);
