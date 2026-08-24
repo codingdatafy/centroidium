@@ -77,6 +77,7 @@ export default function Analytics() {
   const rawPathname = usePathname();
   const lastTrackedPath = useRef<string | null>(null);
   const pageviewId = useRef<number | null>(null);
+  const pendingPingPayload = useRef<{ durationSec: number; isBounce: boolean } | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -86,6 +87,7 @@ export default function Analytics() {
     if (lastTrackedPath.current === cleanPathname) return;
 
     pageviewId.current = null;
+    pendingPingPayload.current = null;
 
     const queryParams = new URLSearchParams(window.location.search);
     if (queryParams.get('admin') === 'true') {
@@ -110,25 +112,21 @@ export default function Analytics() {
 
     const isExplicitlyDisabled = localStorage.getItem('analytics-disable') === 'true';
 
-    // Reliable JS Guard (No False Positives for Real Browsers)
+    // Reliable JS Guard
     const isAdvancedBotGuard = (): boolean => {
       try {
-        // 1. Detect Outer Screen Mismatch
         const isScreenMismatch = 
           window.outerWidth > 0 && 
           window.outerHeight > 0 && 
           (window.outerWidth > window.screen.width + 100 || window.outerHeight > window.screen.height + 100);
         
-        // 2. Check Connection RTT
         const navConn = (navigator as any).connection;
         const hasZeroRttConnection = navConn && navConn.rtt === 0 && navConn.downlink === 0;
 
-        // 3. Detect Mac Chrome Headless Anomaly
         const isMacChromeBot = /Macintosh/i.test(ua) && 
           window.devicePixelRatio === 1 && 
           screen.colorDepth < 24;
 
-        // 4. Detect Permissions API spoofing
         const isPermissionsSpoofed = 'permissions' in navigator && 
           navigator.permissions.query.toString().includes('native code') === false;
 
@@ -206,13 +204,7 @@ export default function Analytics() {
     let hasInteracted = false;
     let isInitialized = false;
 
-    const sendPayload = async (isUpdate = false) => {
-      // تجنب إرسال التحديث النهائيات في حال عدم الحصول على id بعد
-      if (isUpdate && !pageviewId.current) return;
-
-      const durationSec = isUpdate && startTime > 0 ? Math.max(0, Math.round((Date.now() - startTime) / 1000)) : 0;
-      const isBounce = isUpdate ? (!hasInteracted && durationSec < 10) : true;
-
+    const dispatchPing = async (id: number, durationSec: number, isBounce: boolean) => {
       const timestamp = Date.now();
       const clientToken = await generateClientToken(activePath, timestamp);
 
@@ -222,17 +214,52 @@ export default function Analytics() {
         d: durationSec,
         b: isBounce,
         is_404: is404Detected,
-        type: isUpdate ? 'ping' : 'init',
-        id: pageviewId.current,
+        type: 'ping',
+        id: id,
         ts: timestamp,
         token: clientToken
       });
 
-      if (isUpdate && navigator.sendBeacon) {
+      if (navigator.sendBeacon) {
         const blob = new Blob([payload], { type: 'application/json' });
-        const success = navigator.sendBeacon(METRICS_ENDPOINT, blob);
-        if (success) return;
+        if (navigator.sendBeacon(METRICS_ENDPOINT, blob)) return;
       }
+
+      fetch(METRICS_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: payload,
+        keepalive: true,
+      }).catch(() => {});
+    };
+
+    const sendPayload = async (isUpdate = false) => {
+      const durationSec = isUpdate && startTime > 0 ? Math.max(0, Math.round((Date.now() - startTime) / 1000)) : 0;
+      const isBounce = isUpdate ? (!hasInteracted && durationSec < 10) : true;
+
+      if (isUpdate) {
+        if (pageviewId.current) {
+          await dispatchPing(pageviewId.current, durationSec, isBounce);
+        } else {
+          pendingPingPayload.current = { durationSec, isBounce };
+        }
+        return;
+      }
+
+      const timestamp = Date.now();
+      const clientToken = await generateClientToken(activePath, timestamp);
+
+      const payload = JSON.stringify({
+        p: activePath,
+        r: referrer,
+        d: 0,
+        b: true,
+        is_404: is404Detected,
+        type: 'init',
+        id: null,
+        ts: timestamp,
+        token: clientToken
+      });
 
       try {
         const res = await fetch(METRICS_ENDPOINT, {
@@ -242,10 +269,15 @@ export default function Analytics() {
           keepalive: true,
         });
 
-        if (!isUpdate && res.ok) {
+        if (res.ok) {
           const data = await res.json();
           if (data?.id) {
             pageviewId.current = data.id;
+            if (pendingPingPayload.current) {
+              const { durationSec: pDuration, isBounce: pBounce } = pendingPingPayload.current;
+              pendingPingPayload.current = null;
+              await dispatchPing(data.id, pDuration, pBounce);
+            }
           }
         }
       } catch {}
