@@ -200,9 +200,49 @@ export default function Analytics() {
       sessionStorage.setItem(sessionKey, 'true');
     }
 
-    let startTime = 0;
+    let accumulatedMs = 0;
+    let lastActiveTimestamp = 0;
+    let idleTimer: ReturnType<typeof setTimeout> | null = null;
+    const IDLE_TIMEOUT_MS = 60000;
+
     let hasInteracted = false;
     let isInitialized = false;
+
+    const startTimer = () => {
+      if (document.visibilityState === 'visible' && lastActiveTimestamp === 0) {
+        lastActiveTimestamp = Date.now();
+      }
+    };
+
+    const pauseTimer = () => {
+      if (lastActiveTimestamp > 0) {
+        accumulatedMs += Date.now() - lastActiveTimestamp;
+        lastActiveTimestamp = 0;
+      }
+    };
+
+    const getActiveDurationSeconds = (): number => {
+      let total = accumulatedMs;
+      if (document.visibilityState === 'visible' && lastActiveTimestamp > 0) {
+        total += Date.now() - lastActiveTimestamp;
+      }
+      return Math.max(0, Math.round(total / 1000));
+    };
+
+    const resetIdleTimer = () => {
+      if (document.visibilityState !== 'visible') return;
+
+      
+      if (lastActiveTimestamp === 0) {
+        lastActiveTimestamp = Date.now();
+      }
+
+      if (idleTimer) clearTimeout(idleTimer);
+
+      idleTimer = setTimeout(() => {
+        pauseTimer();
+      }, IDLE_TIMEOUT_MS);
+    };
 
     const dispatchPing = async (id: number, durationSec: number, isBounce: boolean) => {
       const timestamp = Date.now();
@@ -234,10 +274,11 @@ export default function Analytics() {
     };
 
     const sendPayload = async (isUpdate = false) => {
-      const durationSec = isUpdate && startTime > 0 ? Math.max(0, Math.round((Date.now() - startTime) / 1000)) : 0;
+      const durationSec = isUpdate ? getActiveDurationSeconds() : 0;
       const isBounce = isUpdate ? (!hasInteracted && durationSec < 10) : true;
 
       if (isUpdate) {
+        pauseTimer();
         if (pageviewId.current) {
           await dispatchPing(pageviewId.current, durationSec, isBounce);
         } else {
@@ -285,6 +326,7 @@ export default function Analytics() {
 
     const handleInteraction = () => {
       hasInteracted = true;
+      resetIdleTimer();
     };
 
     const handleOutboundClick = (event: MouseEvent) => {
@@ -308,12 +350,16 @@ export default function Analytics() {
       
       isInitialized = true;
       lastTrackedPath.current = cleanPathname;
-      startTime = Date.now();
+      startTimer();
+      resetIdleTimer();
 
       sendPayload(false);
 
-      window.addEventListener('scroll', handleInteraction, { once: true, passive: true });
-      window.addEventListener('click', handleInteraction, { once: true, passive: true });
+      const activityEvents = ['mousemove', 'keydown', 'scroll', 'click', 'touchstart'];
+      activityEvents.forEach((evt) => {
+        window.addEventListener(evt, handleInteraction, { passive: true });
+      });
+
       window.addEventListener('click', handleOutboundClick, { capture: true, passive: true });
     };
 
@@ -325,9 +371,14 @@ export default function Analytics() {
       if (document.visibilityState === 'visible') {
         if (!isInitialized) {
           startTrackingIfVisible();
+        } else {
+          startTimer();
+          resetIdleTimer();
         }
       } else if (document.visibilityState === 'hidden') {
         if (isInitialized) {
+          pauseTimer();
+          if (idleTimer) clearTimeout(idleTimer);
           sendPayload(true);
         }
       }
@@ -337,6 +388,8 @@ export default function Analytics() {
 
     const handlePageHide = () => {
       if (isInitialized) {
+        pauseTimer();
+        if (idleTimer) clearTimeout(idleTimer);
         sendPayload(true);
       }
     };
@@ -346,9 +399,14 @@ export default function Analytics() {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('pagehide', handlePageHide);
-      window.removeEventListener('scroll', handleInteraction);
-      window.removeEventListener('click', handleInteraction);
+      
+      const activityEvents = ['mousemove', 'keydown', 'scroll', 'click', 'touchstart'];
+      activityEvents.forEach((evt) => {
+        window.removeEventListener(evt, handleInteraction);
+      });
       window.removeEventListener('click', handleOutboundClick, { capture: true });
+
+      if (idleTimer) clearTimeout(idleTimer);
 
       if (isInitialized) {
         sendPayload(true);
