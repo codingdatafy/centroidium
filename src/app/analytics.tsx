@@ -11,8 +11,13 @@ import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 
 const METRICS_ENDPOINT = '/lib';
+
+// Single reusable TextEncoder instance across requests
 const encoder = new TextEncoder();
 
+/**
+ * Fast Buffer to Hex string converter
+ */
 const bufferToHex = (buffer: ArrayBuffer, length = 24): string => {
   const bytes = new Uint8Array(buffer);
   let hex = '';
@@ -28,21 +33,6 @@ const generateClientToken = async (path: string, timestamp: number): Promise<str
   const msgBuffer = encoder.encode(data);
   const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
   return bufferToHex(hashBuffer, 24);
-};
-
-const generateClientTokenSync = (path: string, timestamp: number): string => {
-  const str = `${path}-${timestamp}-CodingDatafyToken`;
-  let h1 = 0x811c9dc5;
-  let h2 = 0x01000193;
-  for (let i = 0; i < str.length; i++) {
-    const code = str.charCodeAt(i);
-    h1 = Math.imul(h1 ^ code, 0x01000193);
-    h2 = Math.imul(h2 ^ code, 0x811c9dc5);
-  }
-  const hex1 = (h1 >>> 0).toString(16).padStart(8, '0');
-  const hex2 = (h2 >>> 0).toString(16).padStart(8, '0');
-  const hex3 = ((h1 ^ h2) >>> 0).toString(16).padStart(8, '0');
-  return (hex1 + hex2 + hex3).substring(0, 24);
 };
 
 export const trackEvent = async (
@@ -87,23 +77,24 @@ export default function Analytics() {
   const rawPathname = usePathname();
   const lastTrackedPath = useRef<string | null>(null);
   const pageviewId = useRef<number | null>(null);
-  const pendingExitSend = useRef<boolean>(false);
+  const pendingPingPayload = useRef<{ durationSec: number; isBounce: boolean } | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
     const cleanPathname = (rawPathname?.split('?')[0] || '/').replace(/\/+$/, '') || '/';
+
     if (lastTrackedPath.current === cleanPathname) return;
 
     pageviewId.current = null;
-    pendingExitSend.current = false;
+    pendingPingPayload.current = null;
 
-    // Admin Opt-out
     const queryParams = new URLSearchParams(window.location.search);
     if (queryParams.get('admin') === 'true') {
       localStorage.setItem('analytics-disable', 'true');
-      window.history.replaceState({}, '', window.location.pathname); 
-      alert('CodingDatafy: Analytics tracking is now disabled.');
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, '', newUrl); 
+      alert('CodingDatafy: Analytics tracking is now disabled for this browser.');
     }
 
     const hostname = window.location.hostname;
@@ -121,6 +112,7 @@ export default function Analytics() {
 
     const isExplicitlyDisabled = localStorage.getItem('analytics-disable') === 'true';
 
+    // Reliable JS Guard
     const isAdvancedBotGuard = (): boolean => {
       try {
         const isScreenMismatch = 
@@ -157,6 +149,7 @@ export default function Analytics() {
         if (!gl) return hasZeroDimensions || hasInvalidScreen || hasNoHardwareConcurrency;
 
         let isSoftware = false;
+
         const standardRenderer = (gl as WebGLRenderingContext).getParameter((gl as WebGLRenderingContext).RENDERER) || '';
         if (typeof standardRenderer === 'string') {
           const rendererLower = standardRenderer.toLowerCase();
@@ -192,6 +185,7 @@ export default function Analytics() {
       const has404Meta = !!document.querySelector('meta[name="next-error"]');
       const isNotFoundTitle = document.title.toLowerCase().includes('404') || document.title.toLowerCase().includes('not found');
       const has404Element = !!document.querySelector('[data-is-404="true"]');
+
       return has404Meta || isNotFoundTitle || has404Element;
     };
 
@@ -199,64 +193,59 @@ export default function Analytics() {
 
     let referrer = document.referrer || '';
     const sessionKey = 'cd_has_navigated';
+    
     if (sessionStorage.getItem(sessionKey)) {
       referrer = window.location.origin;
     } else {
       sessionStorage.setItem(sessionKey, 'true');
     }
 
-    // Direct Time Tracking without overhead
-    const pageLoadTimestamp = Date.now();
-    let totalIdleMs = 0;
-    let idleStartTimestamp = 0;
-    let idleTimeoutTimer: ReturnType<typeof setTimeout> | null = null;
+    let accumulatedMs = 0;
+    let lastActiveTimestamp = 0;
+    let idleTimer: ReturnType<typeof setTimeout> | null = null;
+    const IDLE_TIMEOUT_MS = 60000;
+
     let hasInteracted = false;
-    let isAlreadySent = false;
+    let isInitialized = false;
 
-    const IDLE_THRESHOLD_MS = 45000; // Consider user idle after 45s without mouse/keyboard activity
+    const startTimer = () => {
+      if (document.visibilityState === 'visible' && lastActiveTimestamp === 0) {
+        lastActiveTimestamp = Date.now();
+      }
+    };
 
-    const calculateActiveDuration = (): number => {
-      const now = Date.now();
-      let currentSessionTime = now - pageLoadTimestamp;
+    const pauseTimer = () => {
+      if (lastActiveTimestamp > 0) {
+        accumulatedMs += Date.now() - lastActiveTimestamp;
+        lastActiveTimestamp = 0;
+      }
+    };
 
-      // Deduct active idle period if user is currently idling
-      let extraIdle = 0;
-      if (idleStartTimestamp > 0) {
-        extraIdle = now - idleStartTimestamp;
+    const getActiveDurationSeconds = (): number => {
+      let total = accumulatedMs;
+      if (document.visibilityState === 'visible' && lastActiveTimestamp > 0) {
+        total += Date.now() - lastActiveTimestamp;
+      }
+      return Math.max(0, Math.round(total / 1000));
+    };
+
+    const resetIdleTimer = () => {
+      if (document.visibilityState !== 'visible') return;
+
+      if (lastActiveTimestamp === 0) {
+        lastActiveTimestamp = Date.now();
       }
 
-      const totalActiveMs = currentSessionTime - totalIdleMs - extraIdle;
-      return Math.max(0, Math.round(totalActiveMs / 1000));
+      if (idleTimer) clearTimeout(idleTimer);
+
+      idleTimer = setTimeout(() => {
+        pauseTimer();
+      }, IDLE_TIMEOUT_MS);
     };
 
-    const resetIdleState = () => {
-      // If user was previously idle, stop counting idle time and add to total
-      if (idleStartTimestamp > 0) {
-        totalIdleMs += Date.now() - idleStartTimestamp;
-        idleStartTimestamp = 0;
-      }
-
-      if (idleTimeoutTimer) clearTimeout(idleTimeoutTimer);
-
-      // Set new timer to trigger idle state after 45s
-      idleTimeoutTimer = setTimeout(() => {
-        idleStartTimestamp = Date.now();
-      }, IDLE_THRESHOLD_MS);
-    };
-
-    const handleInteraction = () => {
-      hasInteracted = true;
-      resetIdleState();
-    };
-
-    const dispatchPingSync = (id: number) => {
-      if (isAlreadySent) return;
-      isAlreadySent = true;
-
-      const durationSec = calculateActiveDuration();
-      const isBounce = !hasInteracted && durationSec < 10;
+    const dispatchPing = async (id: number, durationSec: number, isBounce: boolean) => {
       const timestamp = Date.now();
-      const clientToken = generateClientTokenSync(activePath, timestamp);
+      const clientToken = await generateClientToken(activePath, timestamp);
 
       const payload = JSON.stringify({
         p: activePath,
@@ -283,9 +272,19 @@ export default function Analytics() {
       }).catch(() => {});
     };
 
-    const sendInitPayload = async () => {
-      lastTrackedPath.current = cleanPathname;
-      resetIdleState();
+    const sendPayload = async (isUpdate = false) => {
+      const durationSec = isUpdate ? getActiveDurationSeconds() : 0;
+      const isBounce = isUpdate ? (!hasInteracted && durationSec < 10) : true;
+
+      if (isUpdate) {
+        pauseTimer();
+        if (pageviewId.current) {
+          await dispatchPing(pageviewId.current, durationSec, isBounce);
+        } else {
+          pendingPingPayload.current = { durationSec, isBounce };
+        }
+        return;
+      }
 
       const timestamp = Date.now();
       const clientToken = await generateClientToken(activePath, timestamp);
@@ -314,17 +313,20 @@ export default function Analytics() {
           const data = await res.json();
           if (data?.id) {
             pageviewId.current = data.id;
-            
-            // If user exited before init finished, send exit ping immediately with stored ID
-            if (pendingExitSend.current) {
-              dispatchPingSync(data.id);
+            if (pendingPingPayload.current) {
+              const { durationSec: pDuration, isBounce: pBounce } = pendingPingPayload.current;
+              pendingPingPayload.current = null;
+              await dispatchPing(data.id, pDuration, pBounce);
             }
           }
         }
       } catch {}
     };
 
-    sendInitPayload();
+    const handleInteraction = () => {
+      hasInteracted = true;
+      resetIdleTimer();
+    };
 
     const handleOutboundClick = (event: MouseEvent) => {
       const targetAnchor = (event.target as HTMLElement).closest('a');
@@ -342,37 +344,53 @@ export default function Analytics() {
       }
     };
 
-    const activityEvents = ['mousemove', 'keydown', 'scroll', 'click', 'touchstart'];
-    activityEvents.forEach((evt) => {
-      window.addEventListener(evt, handleInteraction, { passive: true });
-    });
+    const startTrackingIfVisible = () => {
+      if (isInitialized) return;
+      
+      isInitialized = true;
+      lastTrackedPath.current = cleanPathname;
+      startTimer();
+      resetIdleTimer();
 
-    window.addEventListener('click', handleOutboundClick, { capture: true, passive: true });
+      sendPayload(false);
 
-    const triggerExit = () => {
-      if (idleTimeoutTimer) clearTimeout(idleTimeoutTimer);
+      const activityEvents = ['mousemove', 'keydown', 'scroll', 'click', 'touchstart'];
+      activityEvents.forEach((evt) => {
+        window.addEventListener(evt, handleInteraction, { passive: true });
+      });
 
-      if (pageviewId.current) {
-        dispatchPingSync(pageviewId.current);
-      } else {
-        pendingExitSend.current = true;
-      }
+      window.addEventListener('click', handleOutboundClick, { capture: true, passive: true });
     };
 
+    if (document.visibilityState === 'visible') {
+      startTrackingIfVisible();
+    }
+
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') {
-        triggerExit();
-      } else if (document.visibilityState === 'visible') {
-        // Resume tracking if user returns without page reload
-        isAlreadySent = false;
-        resetIdleState();
+      if (document.visibilityState === 'visible') {
+        if (!isInitialized) {
+          startTrackingIfVisible();
+        } else {
+          startTimer();
+          resetIdleTimer();
+        }
+      } else if (document.visibilityState === 'hidden') {
+        if (isInitialized) {
+          pauseTimer();
+          if (idleTimer) clearTimeout(idleTimer);
+          sendPayload(true);
+        }
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     const handlePageHide = () => {
-      triggerExit();
+      if (isInitialized) {
+        pauseTimer();
+        if (idleTimer) clearTimeout(idleTimer);
+        sendPayload(true);
+      }
     };
 
     window.addEventListener('pagehide', handlePageHide);
@@ -380,15 +398,18 @@ export default function Analytics() {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('pagehide', handlePageHide);
-
+      
+      const activityEvents = ['mousemove', 'keydown', 'scroll', 'click', 'touchstart'];
       activityEvents.forEach((evt) => {
         window.removeEventListener(evt, handleInteraction);
       });
       window.removeEventListener('click', handleOutboundClick, { capture: true });
 
-      if (idleTimeoutTimer) clearTimeout(idleTimeoutTimer);
+      if (idleTimer) clearTimeout(idleTimer);
 
-      triggerExit();
+      if (isInitialized) {
+        sendPayload(true);
+      }
     };
 
   }, [rawPathname]);
