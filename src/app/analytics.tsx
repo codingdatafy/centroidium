@@ -208,6 +208,14 @@ export default function Analytics() {
     let hasInteracted = false;
     let isInitialized = false;
 
+    const updateAccumulatedTime = () => {
+      if (document.visibilityState === 'visible' && lastActiveTimestamp > 0) {
+        const now = Date.now();
+        accumulatedMs += (now - lastActiveTimestamp);
+        lastActiveTimestamp = now;
+      }
+    };
+
     const startTimer = () => {
       if (document.visibilityState === 'visible' && lastActiveTimestamp === 0) {
         lastActiveTimestamp = Date.now();
@@ -215,27 +223,19 @@ export default function Analytics() {
     };
 
     const pauseTimer = () => {
-      if (lastActiveTimestamp > 0) {
-        accumulatedMs += Date.now() - lastActiveTimestamp;
-        lastActiveTimestamp = 0;
-      }
+      updateAccumulatedTime();
+      lastActiveTimestamp = 0;
     };
 
     const getActiveDurationSeconds = (): number => {
-      let total = accumulatedMs;
-      if (document.visibilityState === 'visible' && lastActiveTimestamp > 0) {
-        total += Date.now() - lastActiveTimestamp;
-      }
-      return Math.max(0, Math.round(total / 1000));
+      updateAccumulatedTime();
+      return Math.max(0, Math.round(accumulatedMs / 1000));
     };
 
     const resetIdleTimer = () => {
       if (document.visibilityState !== 'visible') return;
 
-      
-      if (lastActiveTimestamp === 0) {
-        lastActiveTimestamp = Date.now();
-      }
+      updateAccumulatedTime();
 
       if (idleTimer) clearTimeout(idleTimer);
 
