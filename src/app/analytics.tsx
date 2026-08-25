@@ -35,6 +35,25 @@ const generateClientToken = async (path: string, timestamp: number): Promise<str
   return bufferToHex(hashBuffer, 24);
 };
 
+/**
+ * Sync Token Generator using FNV-1a Hashing algorithm
+ * Guaranteed execution during synchronous exit events in Incognito mode
+ */
+const generateClientTokenSync = (path: string, timestamp: number): string => {
+  const str = `${path}-${timestamp}-CodingDatafyToken`;
+  let h1 = 0x811c9dc5;
+  let h2 = 0x01000193;
+  for (let i = 0; i < str.length; i++) {
+    const code = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ code, 0x01000193);
+    h2 = Math.imul(h2 ^ code, 0x811c9dc5);
+  }
+  const hex1 = (h1 >>> 0).toString(16).padStart(8, '0');
+  const hex2 = (h2 >>> 0).toString(16).padStart(8, '0');
+  const hex3 = ((h1 ^ h2) >>> 0).toString(16).padStart(8, '0');
+  return (hex1 + hex2 + hex3).substring(0, 24);
+};
+
 export const trackEvent = async (
   eventType: 'copy_code' | 'outbound_click',
   targetValue?: string
@@ -244,6 +263,38 @@ export default function Analytics() {
       }, IDLE_TIMEOUT_MS);
     };
 
+    /**
+     * Synchronous ping execution optimized for Incognito exit lifecycle
+     */
+    const dispatchPingSync = (id: number, durationSec: number, isBounce: boolean) => {
+      const timestamp = Date.now();
+      const clientToken = generateClientTokenSync(activePath, timestamp);
+
+      const payload = JSON.stringify({
+        p: activePath,
+        r: referrer,
+        d: durationSec,
+        b: isBounce,
+        is_404: is404Detected,
+        type: 'ping',
+        id: id,
+        ts: timestamp,
+        token: clientToken
+      });
+
+      if (navigator.sendBeacon) {
+        const blob = new Blob([payload], { type: 'application/json' });
+        if (navigator.sendBeacon(METRICS_ENDPOINT, blob)) return;
+      }
+
+      fetch(METRICS_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: payload,
+        keepalive: true,
+      }).catch(() => {});
+    };
+
     const dispatchPing = async (id: number, durationSec: number, isBounce: boolean) => {
       const timestamp = Date.now();
       const clientToken = await generateClientToken(activePath, timestamp);
@@ -271,6 +322,22 @@ export default function Analytics() {
         body: payload,
         keepalive: true,
       }).catch(() => {});
+    };
+
+    const sendPayloadSync = () => {
+      if (!isInitialized) return;
+
+      pauseTimer();
+      if (idleTimer) clearTimeout(idleTimer);
+
+      const durationSec = getActiveDurationSeconds();
+      const isBounce = !hasInteracted && durationSec < 10;
+
+      if (pageviewId.current) {
+        dispatchPingSync(pageviewId.current, durationSec, isBounce);
+      } else {
+        pendingPingPayload.current = { durationSec, isBounce };
+      }
     };
 
     const sendPayload = async (isUpdate = false) => {
@@ -317,7 +384,7 @@ export default function Analytics() {
             if (pendingPingPayload.current) {
               const { durationSec: pDuration, isBounce: pBounce } = pendingPingPayload.current;
               pendingPingPayload.current = null;
-              await dispatchPing(data.id, pDuration, pBounce);
+              dispatchPingSync(data.id, pDuration, pBounce);
             }
           }
         }
@@ -376,29 +443,27 @@ export default function Analytics() {
           resetIdleTimer();
         }
       } else if (document.visibilityState === 'hidden') {
-        if (isInitialized) {
-          pauseTimer();
-          if (idleTimer) clearTimeout(idleTimer);
-          sendPayload(true);
-        }
+        sendPayloadSync();
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     const handlePageHide = () => {
-      if (isInitialized) {
-        pauseTimer();
-        if (idleTimer) clearTimeout(idleTimer);
-        sendPayload(true);
-      }
+      sendPayloadSync();
+    };
+
+    const handleBeforeUnload = () => {
+      sendPayloadSync();
     };
 
     window.addEventListener('pagehide', handlePageHide);
+    window.addEventListener('beforeunload', handleBeforeUnload);
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('pagehide', handlePageHide);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
       
       const activityEvents = ['mousemove', 'keydown', 'scroll', 'click', 'touchstart'];
       activityEvents.forEach((evt) => {
@@ -408,9 +473,7 @@ export default function Analytics() {
 
       if (idleTimer) clearTimeout(idleTimer);
 
-      if (isInitialized) {
-        sendPayload(true);
-      }
+      sendPayloadSync();
     };
 
   }, [rawPathname]);
