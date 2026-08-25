@@ -228,10 +228,11 @@ export default function Analytics() {
     let isInitialized = false;
 
     const updateAccumulatedTime = () => {
-      if (document.visibilityState === 'visible' && lastActiveTimestamp > 0) {
+      if (lastActiveTimestamp > 0) {
         const now = Date.now();
-        accumulatedMs += (now - lastActiveTimestamp);
-        lastActiveTimestamp = now;
+        accumulatedMs += Math.max(0, now - lastActiveTimestamp);
+        // Reset lastActiveTimestamp if page is still visible, otherwise set to 0
+        lastActiveTimestamp = document.visibilityState === 'visible' ? now : 0;
       }
     };
 
@@ -295,43 +296,13 @@ export default function Analytics() {
       }).catch(() => {});
     };
 
-    const dispatchPing = async (id: number, durationSec: number, isBounce: boolean) => {
-      const timestamp = Date.now();
-      const clientToken = await generateClientToken(activePath, timestamp);
-
-      const payload = JSON.stringify({
-        p: activePath,
-        r: referrer,
-        d: durationSec,
-        b: isBounce,
-        is_404: is404Detected,
-        type: 'ping',
-        id: id,
-        ts: timestamp,
-        token: clientToken
-      });
-
-      if (navigator.sendBeacon) {
-        const blob = new Blob([payload], { type: 'application/json' });
-        if (navigator.sendBeacon(METRICS_ENDPOINT, blob)) return;
-      }
-
-      fetch(METRICS_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: payload,
-        keepalive: true,
-      }).catch(() => {});
-    };
-
     const sendPayloadSync = () => {
       if (!isInitialized) return;
 
-      pauseTimer();
-      if (idleTimer) clearTimeout(idleTimer);
-
       const durationSec = getActiveDurationSeconds();
       const isBounce = !hasInteracted && durationSec < 10;
+
+      if (idleTimer) clearTimeout(idleTimer);
 
       if (pageviewId.current) {
         dispatchPingSync(pageviewId.current, durationSec, isBounce);
@@ -340,20 +311,7 @@ export default function Analytics() {
       }
     };
 
-    const sendPayload = async (isUpdate = false) => {
-      const durationSec = isUpdate ? getActiveDurationSeconds() : 0;
-      const isBounce = isUpdate ? (!hasInteracted && durationSec < 10) : true;
-
-      if (isUpdate) {
-        pauseTimer();
-        if (pageviewId.current) {
-          await dispatchPing(pageviewId.current, durationSec, isBounce);
-        } else {
-          pendingPingPayload.current = { durationSec, isBounce };
-        }
-        return;
-      }
-
+    const sendPayload = async () => {
       const timestamp = Date.now();
       const clientToken = await generateClientToken(activePath, timestamp);
 
@@ -420,7 +378,7 @@ export default function Analytics() {
       startTimer();
       resetIdleTimer();
 
-      sendPayload(false);
+      sendPayload();
 
       const activityEvents = ['mousemove', 'keydown', 'scroll', 'click', 'touchstart'];
       activityEvents.forEach((evt) => {
@@ -453,17 +411,11 @@ export default function Analytics() {
       sendPayloadSync();
     };
 
-    const handleBeforeUnload = () => {
-      sendPayloadSync();
-    };
-
     window.addEventListener('pagehide', handlePageHide);
-    window.addEventListener('beforeunload', handleBeforeUnload);
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('pagehide', handlePageHide);
-      window.removeEventListener('beforeunload', handleBeforeUnload);
       
       const activityEvents = ['mousemove', 'keydown', 'scroll', 'click', 'touchstart'];
       activityEvents.forEach((evt) => {
