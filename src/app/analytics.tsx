@@ -71,23 +71,22 @@ export const trackEvent = async (
   const timestamp = Date.now();
   const clientToken = await generateClientToken(cleanPath, timestamp);
 
-  const payload = JSON.stringify({
+  const params = new URLSearchParams({
     type: 'event',
     event_type: eventType,
     p: cleanPath,
-    target: targetValue || null,
-    ts: timestamp,
+    target: targetValue || '',
+    ts: timestamp.toString(),
     token: clientToken
   });
 
   if (navigator.sendBeacon) {
-    const blob = new Blob([payload], { type: 'application/json' });
-    navigator.sendBeacon(METRICS_ENDPOINT, blob);
+    navigator.sendBeacon(METRICS_ENDPOINT, params);
   } else {
     fetch(METRICS_ENDPOINT, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: payload,
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString(),
       keepalive: true,
     }).catch(() => {});
   }
@@ -303,38 +302,39 @@ export default function Analytics() {
 
     /**
      * Sends duration and bounce update ping payload to edge collector.
+     * Guaranteed Firefox compatibility via URLSearchParams.
      * 
      * @param {number|null} id - Primary Key ID returned from initial pageview initialization.
      * @param {number} durationSec - Calculated active duration in seconds.
      * @param {boolean} isBounce - Bounce determination indicator.
      */
-    const dispatchPing = async (id: number | null, durationSec: number, isBounce: boolean) => {
+    const dispatchPing = (id: number | null, durationSec: number, isBounce: boolean) => {
       const timestamp = Date.now();
-      const clientToken = await generateClientToken(activePath, timestamp);
+      
+      generateClientToken(activePath, timestamp).then((clientToken) => {
+        const params = new URLSearchParams({
+          p: activePath,
+          r: referrer,
+          d: durationSec.toString(),
+          b: isBounce ? 'true' : 'false',
+          is_404: is404Detected ? 'true' : 'false',
+          type: 'ping',
+          id: id ? id.toString() : '',
+          ts: timestamp.toString(),
+          token: clientToken
+        });
 
-      const payload = JSON.stringify({
-        p: activePath,
-        r: referrer,
-        d: durationSec,
-        b: isBounce,
-        is_404: is404Detected,
-        type: 'ping',
-        id: id,
-        ts: timestamp,
-        token: clientToken
+        if (navigator.sendBeacon) {
+          if (navigator.sendBeacon(METRICS_ENDPOINT, params)) return;
+        }
+
+        fetch(METRICS_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: params.toString(),
+          keepalive: true,
+        }).catch(() => {});
       });
-
-      if (navigator.sendBeacon) {
-        const blob = new Blob([payload], { type: 'application/json' });
-        if (navigator.sendBeacon(METRICS_ENDPOINT, blob)) return;
-      }
-
-      fetch(METRICS_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: payload,
-        keepalive: true,
-      }).catch(() => {});
     };
 
     /**
@@ -354,10 +354,10 @@ export default function Analytics() {
         const currentId = pageviewId.current;
 
         if (currentId) {
-          await dispatchPing(currentId, durationSec, isBounce);
+          dispatchPing(currentId, durationSec, isBounce);
         } else {
           pendingPingPayload.current = { durationSec, isBounce };
-          await dispatchPing(null, durationSec, isBounce);
+          dispatchPing(null, durationSec, isBounce);
         }
         return;
       }
@@ -365,23 +365,23 @@ export default function Analytics() {
       const timestamp = Date.now();
       const clientToken = await generateClientToken(activePath, timestamp);
 
-      const payload = JSON.stringify({
+      const params = new URLSearchParams({
         p: activePath,
         r: referrer,
-        d: 0,
-        b: true,
-        is_404: is404Detected,
+        d: '0',
+        b: 'true',
+        is_404: is404Detected ? 'true' : 'false',
         type: 'init',
-        id: null,
-        ts: timestamp,
+        id: '',
+        ts: timestamp.toString(),
         token: clientToken
       });
 
       try {
         const res = await fetch(METRICS_ENDPOINT, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: payload,
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: params.toString(),
           keepalive: true,
         });
 
@@ -393,7 +393,7 @@ export default function Analytics() {
             if (pendingPingPayload.current) {
               const { durationSec: pDuration, isBounce: pBounce } = pendingPingPayload.current;
               pendingPingPayload.current = null;
-              await dispatchPing(data.id, pDuration, pBounce);
+              dispatchPing(data.id, pDuration, pBounce);
             }
           }
         }
