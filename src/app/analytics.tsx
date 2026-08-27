@@ -340,15 +340,14 @@ export default function Analytics() {
      * @param {boolean} [isUpdate=false] - True if dispatching a heartbeat update rather than initialization.
      */
     const sendPayload = async (isUpdate = false) => {
-      const durationSec = isUpdate ? getActiveDurationSeconds() : 0;
-
-      if (isUpdate && durationSec === 0) return;
-
-      const isBounce = isUpdate ? (!hasInteracted && durationSec < 10) : true;
-
       if (isUpdate) {
         pauseTimer();
+
+        const durationSec = getActiveDurationSeconds();
+
+        const isBounce = !hasInteracted && durationSec < 10;
         const currentId = pageviewId.current;
+
         if (currentId) {
           await dispatchPing(currentId, durationSec, isBounce);
         } else {
@@ -469,7 +468,6 @@ export default function Analytics() {
         }
       } else if (document.visibilityState === 'hidden') {
         if (isInitialized) {
-          pauseTimer();
           if (idleTimer) clearTimeout(idleTimer);
           sendPayload(true);
         }
@@ -480,7 +478,6 @@ export default function Analytics() {
 
     const handlePageHide = () => {
       if (isInitialized) {
-        pauseTimer();
         if (idleTimer) clearTimeout(idleTimer);
         sendPayload(true);
       }
