@@ -71,22 +71,23 @@ export const trackEvent = async (
   const timestamp = Date.now();
   const clientToken = await generateClientToken(cleanPath, timestamp);
 
-  const params = new URLSearchParams({
+  const payload = JSON.stringify({
     type: 'event',
     event_type: eventType,
     p: cleanPath,
-    target: targetValue || '',
-    ts: timestamp.toString(),
+    target: targetValue || null,
+    ts: timestamp,
     token: clientToken
   });
 
   if (navigator.sendBeacon) {
-    navigator.sendBeacon(METRICS_ENDPOINT, params);
+    const blob = new Blob([payload], { type: 'application/json' });
+    navigator.sendBeacon(METRICS_ENDPOINT, blob);
   } else {
     fetch(METRICS_ENDPOINT, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: params.toString(),
+      headers: { 'Content-Type': 'application/json' },
+      body: payload,
       keepalive: true,
     }).catch(() => {});
   }
@@ -108,21 +109,23 @@ export default function Analytics() {
   const accumulatedMs = useRef<number>(0);
   const lastActiveTimestamp = useRef<number>(0);
   
-  const hasSentPing = useRef<boolean>(false);
+  const isPingInFlight = useRef<boolean>(false);
+  const lastDispatchedDuration = useRef<number>(-1);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
     const cleanPathname = (rawPathname?.split('?')[0] || '/').replace(/\/+$/, '') || '/';
 
-    // Prevent duplicate tracking triggers on identical path evaluations only if active session is ongoing
-    if (lastTrackedPath.current === cleanPathname && !hasSentPing.current) return;
+    // Prevent duplicate tracking triggers on identical path evaluations
+    if (lastTrackedPath.current === cleanPathname) return;
 
     const sessionKeyId = `cd_pv_id_${cleanPathname}`;
     const cachedId = sessionStorage.getItem(sessionKeyId);
     pageviewId.current = cachedId ? parseInt(cachedId, 10) : null;
     pendingPingPayload.current = null;
-    hasSentPing.current = false;
+    isPingInFlight.current = false;
+    lastDispatchedDuration.current = -1;
 
     // Admin opt-out flag via URL query param (?admin=true)
     const queryParams = new URLSearchParams(window.location.search);
@@ -307,33 +310,36 @@ export default function Analytics() {
      * @param {number} durationSec - Calculated active duration in seconds.
      * @param {boolean} isBounce - Bounce determination indicator.
      */
-    const dispatchPing = (id: number | null, durationSec: number, isBounce: boolean) => {
+    const dispatchPing = async (id: number | null, durationSec: number, isBounce: boolean) => {
+      if (durationSec === lastDispatchedDuration.current) return;
+      lastDispatchedDuration.current = durationSec;
+
       const timestamp = Date.now();
-      
-      generateClientToken(activePath, timestamp).then((clientToken) => {
-        const params = new URLSearchParams({
-          p: activePath,
-          r: referrer,
-          d: durationSec.toString(),
-          b: isBounce ? 'true' : 'false',
-          is_404: is404Detected ? 'true' : 'false',
-          type: 'ping',
-          id: id ? id.toString() : '',
-          ts: timestamp.toString(),
-          token: clientToken
-        });
+      const clientToken = await generateClientToken(activePath, timestamp);
 
-        if (navigator.sendBeacon) {
-          if (navigator.sendBeacon(METRICS_ENDPOINT, params)) return;
-        }
-
-        fetch(METRICS_ENDPOINT, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: params.toString(),
-          keepalive: true,
-        }).catch(() => {});
+      const payload = JSON.stringify({
+        p: activePath,
+        r: referrer,
+        d: durationSec,
+        b: isBounce,
+        is_404: is404Detected,
+        type: 'ping',
+        id: id,
+        ts: timestamp,
+        token: clientToken
       });
+
+      if (navigator.sendBeacon) {
+        const blob = new Blob([payload], { type: 'application/json' });
+        if (navigator.sendBeacon(METRICS_ENDPOINT, blob)) return;
+      }
+
+      fetch(METRICS_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: payload,
+        keepalive: true,
+      }).catch(() => {});
     };
 
     /**
@@ -343,9 +349,6 @@ export default function Analytics() {
      */
     const sendPayload = async (isUpdate = false) => {
       if (isUpdate) {
-        if (hasSentPing.current) return;
-        hasSentPing.current = true;
-
         pauseTimer();
 
         const durationSec = getActiveDurationSeconds();
@@ -353,10 +356,10 @@ export default function Analytics() {
         const currentId = pageviewId.current;
 
         if (currentId) {
-          dispatchPing(currentId, durationSec, isBounce);
+          await dispatchPing(currentId, durationSec, isBounce);
         } else {
           pendingPingPayload.current = { durationSec, isBounce };
-          dispatchPing(null, durationSec, isBounce);
+          await dispatchPing(null, durationSec, isBounce);
         }
         return;
       }
@@ -364,23 +367,23 @@ export default function Analytics() {
       const timestamp = Date.now();
       const clientToken = await generateClientToken(activePath, timestamp);
 
-      const params = new URLSearchParams({
+      const payload = JSON.stringify({
         p: activePath,
         r: referrer,
-        d: '0',
-        b: 'true',
-        is_404: is404Detected ? 'true' : 'false',
+        d: 0,
+        b: true,
+        is_404: is404Detected,
         type: 'init',
-        id: '',
-        ts: timestamp.toString(),
+        id: null,
+        ts: timestamp,
         token: clientToken
       });
 
       try {
         const res = await fetch(METRICS_ENDPOINT, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: params.toString(),
+          headers: { 'Content-Type': 'application/json' },
+          body: payload,
           keepalive: true,
         });
 
@@ -389,10 +392,11 @@ export default function Analytics() {
           if (data?.id) {
             pageviewId.current = data.id;
             sessionStorage.setItem(sessionKeyId, data.id.toString());
+            
             if (pendingPingPayload.current) {
               const { durationSec: pDuration, isBounce: pBounce } = pendingPingPayload.current;
               pendingPingPayload.current = null;
-              dispatchPing(data.id, pDuration, pBounce);
+              await dispatchPing(data.id, pDuration, pBounce);
             }
           }
         }
@@ -424,26 +428,16 @@ export default function Analytics() {
       }
     };
 
-    /**
-     * Resets tracking state fully when navigating via browser history or bfcache.
-     */
-    const resetTrackingState = () => {
+    const handlePopState = () => {
       lastTrackedPath.current = null;
       isInitialized = false;
-      hasSentPing.current = false;
-      accumulatedMs.current = 0;
-      lastActiveTimestamp.current = 0;
-      pendingPingPayload.current = null;
-    };
-
-    const handlePopState = () => {
-      resetTrackingState();
       startTrackingIfVisible();
     };
 
     const handlePageShow = (event: PageTransitionEvent) => {
       if (event.persisted) {
-        resetTrackingState();
+        lastTrackedPath.current = null;
+        isInitialized = false;
         startTrackingIfVisible();
       }
     };
@@ -452,7 +446,6 @@ export default function Analytics() {
       if (isInitialized) return;
       
       isInitialized = true;
-      hasSentPing.current = false;
       lastTrackedPath.current = cleanPathname;
       startTimer();
       resetIdleTimer();
@@ -478,7 +471,6 @@ export default function Analytics() {
         if (!isInitialized) {
           startTrackingIfVisible();
         } else {
-          hasSentPing.current = false;
           startTimer();
           resetIdleTimer();
         }
@@ -496,8 +488,6 @@ export default function Analytics() {
       if (isInitialized) {
         if (idleTimer) clearTimeout(idleTimer);
         sendPayload(true);
-        // Reset initialization so bfcache restores re-trigger cleanly
-        isInitialized = false;
       }
     };
 
