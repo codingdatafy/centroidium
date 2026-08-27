@@ -55,7 +55,7 @@ const generateClientToken = async (path: string, timestamp: number): Promise<str
 };
 
 /**
- * Dispatches interactive custom events.
+ * Dispatches interactive custom events .
  * 
  * @param {'copy_code' | 'outbound_click'} eventType - Category of custom interaction.
  * @param {string} [targetValue] - Metadata or destination URI associated with the event.
@@ -295,8 +295,12 @@ export default function Analytics() {
 
     /**
      * Sends duration and bounce update ping payload to edge collector.
+     * 
+     * @param {number} id - Primary Key ID returned from initial pageview initialization.
+     * @param {number} durationSec - Calculated active duration in seconds.
+     * @param {boolean} isBounce - Bounce determination indicator.
      */
-    const dispatchPing = async (id: number | null, durationSec: number, isBounce: boolean) => {
+    const dispatchPing = async (id: number, durationSec: number, isBounce: boolean) => {
       const timestamp = Date.now();
       const clientToken = await generateClientToken(activePath, timestamp);
 
@@ -327,6 +331,8 @@ export default function Analytics() {
 
     /**
      * Handles initial pageview record creation or subsequent ping updates.
+     * 
+     * @param {boolean} [isUpdate=false] - True if dispatching a heartbeat update rather than initialization.
      */
     const sendPayload = async (isUpdate = false) => {
       const durationSec = isUpdate ? getActiveDurationSeconds() : 0;
@@ -338,7 +344,26 @@ export default function Analytics() {
           await dispatchPing(pageviewId.current, durationSec, isBounce);
         } else {
           pendingPingPayload.current = { durationSec, isBounce };
-          await dispatchPing(null, durationSec, isBounce);
+
+          // الإرسال الفوري الاحتياطي في حال إغلاق المتصفح قبل استلام المعرّف
+          const timestamp = Date.now();
+          const clientToken = await generateClientToken(activePath, timestamp);
+          const fallbackPayload = JSON.stringify({
+            p: activePath,
+            r: referrer,
+            d: durationSec,
+            b: isBounce,
+            is_404: is404Detected,
+            type: 'ping',
+            id: null,
+            ts: timestamp,
+            token: clientToken
+          });
+
+          if (navigator.sendBeacon) {
+            const blob = new Blob([fallbackPayload], { type: 'application/json' });
+            navigator.sendBeacon(METRICS_ENDPOINT, blob);
+          }
         }
         return;
       }
@@ -387,6 +412,7 @@ export default function Analytics() {
 
     /**
      * Intercepts anchor element navigation to record external domain exit links.
+     * @param {MouseEvent} event - Click event object.
      */
     const handleOutboundClick = (event: MouseEvent) => {
       const targetAnchor = (event.target as HTMLElement).closest('a');
@@ -408,12 +434,6 @@ export default function Analytics() {
       lastTrackedPath.current = null;
     };
 
-    const handlePageShow = (event: PageTransitionEvent) => {
-      if (event.persisted) {
-        lastTrackedPath.current = null;
-      }
-    };
-
     const startTrackingIfVisible = () => {
       if (isInitialized) return;
       
@@ -431,7 +451,6 @@ export default function Analytics() {
 
       window.addEventListener('click', handleOutboundClick, { capture: true, passive: true });
       window.addEventListener('popstate', handlePopState);
-      window.addEventListener('pageshow', handlePageShow);
     };
 
     if (document.visibilityState === 'visible') {
@@ -471,7 +490,6 @@ export default function Analytics() {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('pagehide', handlePageHide);
       window.removeEventListener('popstate', handlePopState);
-      window.removeEventListener('pageshow', handlePageShow);
       
       const activityEvents = ['mousemove', 'keydown', 'scroll', 'click', 'touchstart'];
       activityEvents.forEach((evt) => {
