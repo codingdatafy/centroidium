@@ -115,8 +115,8 @@ export default function Analytics() {
 
     const cleanPathname = (rawPathname?.split('?')[0] || '/').replace(/\/+$/, '') || '/';
 
-    // Prevent duplicate tracking triggers on identical path evaluations
-    if (lastTrackedPath.current === cleanPathname) return;
+    // Prevent duplicate tracking triggers on identical path evaluations only if active session is ongoing
+    if (lastTrackedPath.current === cleanPathname && !hasSentPing.current) return;
 
     const sessionKeyId = `cd_pv_id_${cleanPathname}`;
     const cachedId = sessionStorage.getItem(sessionKeyId);
@@ -302,7 +302,6 @@ export default function Analytics() {
 
     /**
      * Sends duration and bounce update ping payload to edge collector.
-     * Guaranteed Firefox compatibility via URLSearchParams.
      * 
      * @param {number|null} id - Primary Key ID returned from initial pageview initialization.
      * @param {number} durationSec - Calculated active duration in seconds.
@@ -425,16 +424,26 @@ export default function Analytics() {
       }
     };
 
-    const handlePopState = () => {
+    /**
+     * Resets tracking state fully when navigating via browser history or bfcache.
+     */
+    const resetTrackingState = () => {
       lastTrackedPath.current = null;
       isInitialized = false;
+      hasSentPing.current = false;
+      accumulatedMs.current = 0;
+      lastActiveTimestamp.current = 0;
+      pendingPingPayload.current = null;
+    };
+
+    const handlePopState = () => {
+      resetTrackingState();
       startTrackingIfVisible();
     };
 
     const handlePageShow = (event: PageTransitionEvent) => {
       if (event.persisted) {
-        lastTrackedPath.current = null;
-        isInitialized = false;
+        resetTrackingState();
         startTrackingIfVisible();
       }
     };
@@ -487,6 +496,8 @@ export default function Analytics() {
       if (isInitialized) {
         if (idleTimer) clearTimeout(idleTimer);
         sendPayload(true);
+        // Reset initialization so bfcache restores re-trigger cleanly
+        isInitialized = false;
       }
     };
 
