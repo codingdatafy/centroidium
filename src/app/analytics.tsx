@@ -55,7 +55,7 @@ const generateClientToken = async (path: string, timestamp: number): Promise<str
 };
 
 /**
- * Dispatches interactive custom events.
+ * Dispatches interactive custom events .
  * 
  * @param {'copy_code' | 'outbound_click'} eventType - Category of custom interaction.
  * @param {string} [targetValue] - Metadata or destination URI associated with the event.
@@ -110,28 +110,10 @@ export default function Analytics() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    const handlePopState = () => {
-      lastTrackedPath.current = null;
-    };
-
-    const handlePageShow = (event: PageTransitionEvent) => {
-      if (event.persisted) {
-        lastTrackedPath.current = null;
-      }
-    };
-
-    window.addEventListener('popstate', handlePopState);
-    window.addEventListener('pageshow', handlePageShow);
-
     const cleanPathname = (rawPathname?.split('?')[0] || '/').replace(/\/+$/, '') || '/';
 
     // Prevent duplicate tracking triggers on identical path evaluations
-    if (lastTrackedPath.current === cleanPathname) {
-      return () => {
-        window.removeEventListener('popstate', handlePopState);
-        window.removeEventListener('pageshow', handlePageShow);
-      };
-    }
+    if (lastTrackedPath.current === cleanPathname) return;
 
     pageviewId.current = null;
     pendingPingPayload.current = null;
@@ -148,10 +130,11 @@ export default function Analytics() {
     const hostname = window.location.hostname;
     const isOfficialDomain = hostname === 'www.codingdatafy.com' || hostname === 'codingdatafy.com';
 
-    // Anti-bot detection filters
+    // 1. User-Agent Pattern Bot Filtering
     const ua = navigator.userAgent.toLowerCase();
     const isBotAgent = /bot|googlebot|crawler|spider|robot|crawling|lighthouse|chrome-lighthouse|google-inspectiontool|ahrefs|semrush|gptbot|chatgpt|chatgpt-user|oai-searchbot|claudebot|claude-user|claude-searchbot|coherebot|headlesschrome|python|node-fetch|axios|bytespider|ccbot|facebookbot|meta-external|amazonbot|petalbot|scrapy|diffbot|dotbot|rogerbot|blexbot|dataforseo|mj12bot|serpstatbot|perplexity|perplexity-user|perplexitybot|applebot|yandex|bingbot|baidu/i.test(ua);
 
+    // 2. Automated Webdriver & Headless Environment Detection
     const isWebDriver = navigator.webdriver === true;
     const isPhantom = 'callPhantom' in window || '_phantom' in window;
     const isHeadlessWindow = 'Buffer' in window || 'emit' in window;
@@ -161,6 +144,10 @@ export default function Analytics() {
 
     const isExplicitlyDisabled = localStorage.getItem('analytics-disable') === 'true';
 
+    /**
+     * Inspects browser capabilities for advanced spoofed bot anomalies.
+     * @returns {boolean} True if client exhibits bot traits.
+     */
     const isAdvancedBotGuard = (): boolean => {
       try {
         const isScreenMismatch = 
@@ -184,6 +171,10 @@ export default function Analytics() {
       }
     };
 
+    /**
+     * Inspects WebGL software rendering and hardware footprints to block cloud/datacenter instances.
+     * @returns {boolean} True if client is executing inside virtualized cloud environment.
+     */
     const isDatacenterBot = () => {
       if (document.visibilityState === 'hidden') return false;
 
@@ -225,15 +216,14 @@ export default function Analytics() {
 
     const isValidVisitor = isOfficialDomain && !isBotAgent && !isAutomatedBot && !isExplicitlyDisabled && !isDatacenterBot() && !isAdvancedBotGuard();
 
-    if (!isValidVisitor) {
-      return () => {
-        window.removeEventListener('popstate', handlePopState);
-        window.removeEventListener('pageshow', handlePageShow);
-      };
-    }
+    if (!isValidVisitor) return;
 
     const activePath = cleanPathname;
 
+    /**
+     * Checks document metadata to verify if the rendered path represents a 404 page.
+     * @returns {boolean} True if path is a 404 response.
+     */
     const checkIs404Page = (): boolean => {
       const has404Meta = !!document.querySelector('meta[name="next-error"]');
       const isNotFoundTitle = document.title.toLowerCase().includes('404') || document.title.toLowerCase().includes('not found');
@@ -274,6 +264,10 @@ export default function Analytics() {
       }
     };
 
+    /**
+     * Computes exact active reading time in seconds excluding background idle state.
+     * @returns {number} Active duration in seconds.
+     */
     const getActiveDurationSeconds = (): number => {
       let total = accumulatedMs;
       if (document.visibilityState === 'visible' && lastActiveTimestamp > 0) {
@@ -282,6 +276,9 @@ export default function Analytics() {
       return Math.max(0, Math.round(total / 1000));
     };
 
+    /**
+     * Resets active duration timer on user interaction and schedules idle cutoff timeout.
+     */
     const resetIdleTimer = () => {
       if (document.visibilityState !== 'visible') return;
 
@@ -296,6 +293,13 @@ export default function Analytics() {
       }, IDLE_TIMEOUT_MS);
     };
 
+    /**
+     * Sends duration and bounce update ping payload to edge collector.
+     * 
+     * @param {number} id - Primary Key ID returned from initial pageview initialization.
+     * @param {number} durationSec - Calculated active duration in seconds.
+     * @param {boolean} isBounce - Bounce determination indicator.
+     */
     const dispatchPing = async (id: number, durationSec: number, isBounce: boolean) => {
       const timestamp = Date.now();
       const clientToken = await generateClientToken(activePath, timestamp);
@@ -325,28 +329,11 @@ export default function Analytics() {
       }).catch(() => {});
     };
 
-    const sendFinalPingSync = (id: number, durationSec: number, isBounce: boolean) => {
-      const timestamp = Date.now();
-      generateClientToken(activePath, timestamp).then((clientToken) => {
-        const payload = JSON.stringify({
-          p: activePath,
-          r: referrer,
-          d: durationSec,
-          b: isBounce,
-          is_404: is404Detected,
-          type: 'ping',
-          id: id,
-          ts: timestamp,
-          token: clientToken
-        });
-
-        const blob = new Blob([payload], { type: 'application/json' });
-        if (navigator.sendBeacon) {
-          navigator.sendBeacon(METRICS_ENDPOINT, blob);
-        }
-      });
-    };
-
+    /**
+     * Handles initial pageview record creation or subsequent ping updates.
+     * 
+     * @param {boolean} [isUpdate=false] - True if dispatching a heartbeat update rather than initialization.
+     */
     const sendPayload = async (isUpdate = false) => {
       const durationSec = isUpdate ? getActiveDurationSeconds() : 0;
       const isBounce = isUpdate ? (!hasInteracted && durationSec < 10) : true;
@@ -357,6 +344,26 @@ export default function Analytics() {
           await dispatchPing(pageviewId.current, durationSec, isBounce);
         } else {
           pendingPingPayload.current = { durationSec, isBounce };
+
+          // الإرسال الفوري الاحتياطي في حال إغلاق المتصفح قبل استلام المعرّف
+          const timestamp = Date.now();
+          const clientToken = await generateClientToken(activePath, timestamp);
+          const fallbackPayload = JSON.stringify({
+            p: activePath,
+            r: referrer,
+            d: durationSec,
+            b: isBounce,
+            is_404: is404Detected,
+            type: 'ping',
+            id: null,
+            ts: timestamp,
+            token: clientToken
+          });
+
+          if (navigator.sendBeacon) {
+            const blob = new Blob([fallbackPayload], { type: 'application/json' });
+            navigator.sendBeacon(METRICS_ENDPOINT, blob);
+          }
         }
         return;
       }
@@ -403,6 +410,10 @@ export default function Analytics() {
       resetIdleTimer();
     };
 
+    /**
+     * Intercepts anchor element navigation to record external domain exit links.
+     * @param {MouseEvent} event - Click event object.
+     */
     const handleOutboundClick = (event: MouseEvent) => {
       const targetAnchor = (event.target as HTMLElement).closest('a');
       if (!targetAnchor) return;
@@ -417,6 +428,10 @@ export default function Analytics() {
       if (isExternal) {
         trackEvent('outbound_click', href);
       }
+    };
+
+    const handlePopState = () => {
+      lastTrackedPath.current = null;
     };
 
     const startTrackingIfVisible = () => {
@@ -435,6 +450,7 @@ export default function Analytics() {
       });
 
       window.addEventListener('click', handleOutboundClick, { capture: true, passive: true });
+      window.addEventListener('popstate', handlePopState);
     };
 
     if (document.visibilityState === 'visible') {
@@ -461,22 +477,19 @@ export default function Analytics() {
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     const handlePageHide = () => {
-      if (isInitialized && pageviewId.current) {
+      if (isInitialized) {
         pauseTimer();
         if (idleTimer) clearTimeout(idleTimer);
-        const finalDuration = getActiveDurationSeconds();
-        const finalBounce = !hasInteracted && finalDuration < 10;
-        sendFinalPingSync(pageviewId.current, finalDuration, finalBounce);
+        sendPayload(true);
       }
     };
 
     window.addEventListener('pagehide', handlePageHide);
 
     return () => {
-      window.removeEventListener('popstate', handlePopState);
-      window.removeEventListener('pageshow', handlePageShow);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('pagehide', handlePageHide);
+      window.removeEventListener('popstate', handlePopState);
       
       const activityEvents = ['mousemove', 'keydown', 'scroll', 'click', 'touchstart'];
       activityEvents.forEach((evt) => {
