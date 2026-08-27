@@ -1,5 +1,6 @@
 /**
  * @project CodingDatafy
+ * @fileoverview Client-side analytics engine for Next.js (App Router)
  * @license MIT
  * @copyright 2026 CodingDatafy Organization
  * @author CodingDatafy Team
@@ -54,7 +55,7 @@ const generateClientToken = async (path: string, timestamp: number): Promise<str
 };
 
 /**
- * Dispatches interactive custom events .
+ * Dispatches interactive custom events (e.g., code copy, outbound link clicks).
  * 
  * @param {'copy_code' | 'outbound_click'} eventType - Category of custom interaction.
  * @param {string} [targetValue] - Metadata or destination URI associated with the event.
@@ -71,23 +72,27 @@ export const trackEvent = async (
   const timestamp = Date.now();
   const clientToken = await generateClientToken(cleanPath, timestamp);
 
-  const payload = JSON.stringify({
+  const payloadData: Record<string, string> = {
     type: 'event',
     event_type: eventType,
     p: cleanPath,
-    target: targetValue || null,
-    ts: timestamp,
+    target: targetValue || '',
+    ts: timestamp.toString(),
     token: clientToken
-  });
+  };
 
   if (navigator.sendBeacon) {
-    const blob = new Blob([payload], { type: 'application/json' });
-    navigator.sendBeacon(METRICS_ENDPOINT, blob);
+    const bodyParams = new URLSearchParams(payloadData);
+    navigator.sendBeacon(METRICS_ENDPOINT, bodyParams);
   } else {
     fetch(METRICS_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: payload,
+      body: JSON.stringify({
+        ...payloadData,
+        target: targetValue || null,
+        ts: timestamp
+      }),
       keepalive: true,
     }).catch(() => {});
   }
@@ -303,27 +308,34 @@ export default function Analytics() {
       const timestamp = Date.now();
       const clientToken = await generateClientToken(activePath, timestamp);
 
-      const payload = JSON.stringify({
+      const payloadData: Record<string, string> = {
         p: activePath,
         r: referrer,
-        d: durationSec,
-        b: isBounce,
-        is_404: is404Detected,
+        d: durationSec.toString(),
+        b: isBounce ? 'true' : 'false',
+        is_404: is404Detected ? 'true' : 'false',
         type: 'ping',
-        id: id,
-        ts: timestamp,
+        id: id.toString(),
+        ts: timestamp.toString(),
         token: clientToken
-      });
+      };
 
       if (navigator.sendBeacon) {
-        const blob = new Blob([payload], { type: 'application/json' });
-        if (navigator.sendBeacon(METRICS_ENDPOINT, blob)) return;
+        const bodyParams = new URLSearchParams(payloadData);
+        if (navigator.sendBeacon(METRICS_ENDPOINT, bodyParams)) return;
       }
 
       fetch(METRICS_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: payload,
+        body: JSON.stringify({
+          ...payloadData,
+          d: durationSec,
+          b: isBounce,
+          is_404: is404Detected,
+          id: id,
+          ts: timestamp
+        }),
         keepalive: true,
       }).catch(() => {});
     };
