@@ -1,6 +1,6 @@
 /**
  * @project CodingDatafy
- * @fileoverview Client-side analytics engine for Next.js (App Router)
+ * @fileoverview Privacy-First Client-Side Analytics Tracker for Next.js
  * @license MIT
  * @copyright 2026 CodingDatafy Organization
  * @author CodingDatafy Team
@@ -55,7 +55,7 @@ const generateClientToken = async (path: string, timestamp: number): Promise<str
 };
 
 /**
- * Dispatches interactive custom events (e.g., code copy, outbound link clicks).
+ * Dispatches interactive custom events .
  * 
  * @param {'copy_code' | 'outbound_click'} eventType - Category of custom interaction.
  * @param {string} [targetValue] - Metadata or destination URI associated with the event.
@@ -72,27 +72,23 @@ export const trackEvent = async (
   const timestamp = Date.now();
   const clientToken = await generateClientToken(cleanPath, timestamp);
 
-  const payloadData: Record<string, string> = {
+  const payload = JSON.stringify({
     type: 'event',
     event_type: eventType,
     p: cleanPath,
-    target: targetValue || '',
-    ts: timestamp.toString(),
+    target: targetValue || null,
+    ts: timestamp,
     token: clientToken
-  };
+  });
 
   if (navigator.sendBeacon) {
-    const bodyParams = new URLSearchParams(payloadData);
-    navigator.sendBeacon(METRICS_ENDPOINT, bodyParams);
+    const blob = new Blob([payload], { type: 'application/json' });
+    navigator.sendBeacon(METRICS_ENDPOINT, blob);
   } else {
     fetch(METRICS_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...payloadData,
-        target: targetValue || null,
-        ts: timestamp
-      }),
+      body: payload,
       keepalive: true,
     }).catch(() => {});
   }
@@ -308,34 +304,27 @@ export default function Analytics() {
       const timestamp = Date.now();
       const clientToken = await generateClientToken(activePath, timestamp);
 
-      const payloadData: Record<string, string> = {
+      const payload = JSON.stringify({
         p: activePath,
         r: referrer,
-        d: durationSec.toString(),
-        b: isBounce ? 'true' : 'false',
-        is_404: is404Detected ? 'true' : 'false',
+        d: durationSec,
+        b: isBounce,
+        is_404: is404Detected,
         type: 'ping',
-        id: id.toString(),
-        ts: timestamp.toString(),
+        id: id,
+        ts: timestamp,
         token: clientToken
-      };
+      });
 
       if (navigator.sendBeacon) {
-        const bodyParams = new URLSearchParams(payloadData);
-        if (navigator.sendBeacon(METRICS_ENDPOINT, bodyParams)) return;
+        const blob = new Blob([payload], { type: 'application/json' });
+        if (navigator.sendBeacon(METRICS_ENDPOINT, blob)) return;
       }
 
       fetch(METRICS_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...payloadData,
-          d: durationSec,
-          b: isBounce,
-          is_404: is404Detected,
-          id: id,
-          ts: timestamp
-        }),
+        body: payload,
         keepalive: true,
       }).catch(() => {});
     };
@@ -472,30 +461,9 @@ export default function Analytics() {
 
     window.addEventListener('pagehide', handlePageHide);
 
-    /**
-     * Handles BFCache restorations (Firefox / Safari back button) & PopState history events.
-     */
-    const handlePageShow = (event: PageTransitionEvent) => {
-      if (event.persisted) {
-        lastTrackedPath.current = null;
-        if (!isInitialized) {
-          startTrackingIfVisible();
-        }
-      }
-    };
-
-    const handlePopState = () => {
-      lastTrackedPath.current = null;
-    };
-
-    window.addEventListener('pageshow', handlePageShow);
-    window.addEventListener('popstate', handlePopState);
-
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('pagehide', handlePageHide);
-      window.removeEventListener('pageshow', handlePageShow);
-      window.removeEventListener('popstate', handlePopState);
       
       const activityEvents = ['mousemove', 'keydown', 'scroll', 'click', 'touchstart'];
       activityEvents.forEach((evt) => {
