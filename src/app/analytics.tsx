@@ -1,6 +1,5 @@
 /**
  * @project CodingDatafy
- * @fileoverview Privacy-First Client-Side Analytics Tracker for Next.js
  * @license MIT
  * @copyright 2026 CodingDatafy Organization
  * @author CodingDatafy Team
@@ -461,9 +460,30 @@ export default function Analytics() {
 
     window.addEventListener('pagehide', handlePageHide);
 
+    /**
+     * Handles BFCache restorations (Firefox / Safari back button) & PopState history events.
+     */
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) {
+        lastTrackedPath.current = null;
+        if (!isInitialized) {
+          startTrackingIfVisible();
+        }
+      }
+    };
+
+    const handlePopState = () => {
+      lastTrackedPath.current = null;
+    };
+
+    window.addEventListener('pageshow', handlePageShow);
+    window.addEventListener('popstate', handlePopState);
+
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('pagehide', handlePageHide);
+      window.removeEventListener('pageshow', handlePageShow);
+      window.removeEventListener('popstate', handlePopState);
       
       const activityEvents = ['mousemove', 'keydown', 'scroll', 'click', 'touchstart'];
       activityEvents.forEach((evt) => {
