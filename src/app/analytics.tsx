@@ -1,6 +1,5 @@
 /**
  * @project CodingDatafy
- * @fileoverview Privacy-First Client-Side Analytics Tracker for Next.js
  * @license MIT
  * @copyright 2026 CodingDatafy Organization
  * @author CodingDatafy Team
@@ -115,6 +114,7 @@ export default function Analytics() {
     // Prevent duplicate tracking triggers on identical path evaluations
     if (lastTrackedPath.current === cleanPathname) return;
 
+    lastTrackedPath.current = cleanPathname;
     pageviewId.current = null;
     pendingPingPayload.current = null;
 
@@ -294,11 +294,30 @@ export default function Analytics() {
     };
 
     /**
+     * Synchronous ping dispatch designed specifically for browser page exit/unload events.
+     */
+    const syncDispatchPing = (id: number | null, durationSec: number, isBounce: boolean) => {
+      const timestamp = Date.now();
+      const payload = JSON.stringify({
+        p: activePath,
+        r: referrer,
+        d: durationSec,
+        b: isBounce,
+        is_404: is404Detected,
+        type: 'ping',
+        id: id,
+        ts: timestamp,
+        token: `sync-exit-${timestamp}`
+      });
+
+      if (navigator.sendBeacon) {
+        const blob = new Blob([payload], { type: 'application/json' });
+        navigator.sendBeacon(METRICS_ENDPOINT, blob);
+      }
+    };
+
+    /**
      * Sends duration and bounce update ping payload to edge collector.
-     * 
-     * @param {number} id - Primary Key ID returned from initial pageview initialization.
-     * @param {number} durationSec - Calculated active duration in seconds.
-     * @param {boolean} isBounce - Bounce determination indicator.
      */
     const dispatchPing = async (id: number, durationSec: number, isBounce: boolean) => {
       const timestamp = Date.now();
@@ -331,39 +350,24 @@ export default function Analytics() {
 
     /**
      * Handles initial pageview record creation or subsequent ping updates.
-     * 
-     * @param {boolean} [isUpdate=false] - True if dispatching a heartbeat update rather than initialization.
      */
-    const sendPayload = async (isUpdate = false) => {
+    const sendPayload = async (isUpdate = false, isUnloading = false) => {
       const durationSec = isUpdate ? getActiveDurationSeconds() : 0;
       const isBounce = isUpdate ? (!hasInteracted && durationSec < 10) : true;
 
       if (isUpdate) {
         pauseTimer();
+        
+        if (isUnloading) {
+          syncDispatchPing(pageviewId.current, durationSec, isBounce);
+          return;
+        }
+
         if (pageviewId.current) {
           await dispatchPing(pageviewId.current, durationSec, isBounce);
         } else {
           pendingPingPayload.current = { durationSec, isBounce };
-
-          // الإرسال الفوري الاحتياطي في حال إغلاق المتصفح قبل استلام المعرّف
-          const timestamp = Date.now();
-          const clientToken = await generateClientToken(activePath, timestamp);
-          const fallbackPayload = JSON.stringify({
-            p: activePath,
-            r: referrer,
-            d: durationSec,
-            b: isBounce,
-            is_404: is404Detected,
-            type: 'ping',
-            id: null,
-            ts: timestamp,
-            token: clientToken
-          });
-
-          if (navigator.sendBeacon) {
-            const blob = new Blob([fallbackPayload], { type: 'application/json' });
-            navigator.sendBeacon(METRICS_ENDPOINT, blob);
-          }
+          syncDispatchPing(null, durationSec, isBounce);
         }
         return;
       }
@@ -430,15 +434,10 @@ export default function Analytics() {
       }
     };
 
-    const handlePopState = () => {
-      lastTrackedPath.current = null;
-    };
-
     const startTrackingIfVisible = () => {
       if (isInitialized) return;
       
       isInitialized = true;
-      lastTrackedPath.current = cleanPathname;
       startTimer();
       resetIdleTimer();
 
@@ -450,7 +449,6 @@ export default function Analytics() {
       });
 
       window.addEventListener('click', handleOutboundClick, { capture: true, passive: true });
-      window.addEventListener('popstate', handlePopState);
     };
 
     if (document.visibilityState === 'visible') {
@@ -469,7 +467,7 @@ export default function Analytics() {
         if (isInitialized) {
           pauseTimer();
           if (idleTimer) clearTimeout(idleTimer);
-          sendPayload(true);
+          sendPayload(true, true);
         }
       }
     };
@@ -480,7 +478,7 @@ export default function Analytics() {
       if (isInitialized) {
         pauseTimer();
         if (idleTimer) clearTimeout(idleTimer);
-        sendPayload(true);
+        sendPayload(true, true);
       }
     };
 
@@ -489,7 +487,6 @@ export default function Analytics() {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('pagehide', handlePageHide);
-      window.removeEventListener('popstate', handlePopState);
       
       const activityEvents = ['mousemove', 'keydown', 'scroll', 'click', 'touchstart'];
       activityEvents.forEach((evt) => {
@@ -500,7 +497,7 @@ export default function Analytics() {
       if (idleTimer) clearTimeout(idleTimer);
 
       if (isInitialized) {
-        sendPayload(true);
+        sendPayload(true, true);
       }
     };
 
