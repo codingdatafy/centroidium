@@ -108,6 +108,8 @@ export default function Analytics() {
 
   const accumulatedMs = useRef<number>(0);
   const lastActiveTimestamp = useRef<number>(0);
+  
+  const hasSentPing = useRef<boolean>(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -121,6 +123,7 @@ export default function Analytics() {
     const cachedId = sessionStorage.getItem(sessionKeyId);
     pageviewId.current = cachedId ? parseInt(cachedId, 10) : null;
     pendingPingPayload.current = null;
+    hasSentPing.current = false;
 
     // Admin opt-out flag via URL query param (?admin=true)
     const queryParams = new URLSearchParams(window.location.search);
@@ -341,10 +344,12 @@ export default function Analytics() {
      */
     const sendPayload = async (isUpdate = false) => {
       if (isUpdate) {
+        if (hasSentPing.current) return;
+        hasSentPing.current = true;
+
         pauseTimer();
 
         const durationSec = getActiveDurationSeconds();
-
         const isBounce = !hasInteracted && durationSec < 10;
         const currentId = pageviewId.current;
 
@@ -438,6 +443,7 @@ export default function Analytics() {
       if (isInitialized) return;
       
       isInitialized = true;
+      hasSentPing.current = false;
       lastTrackedPath.current = cleanPathname;
       startTimer();
       resetIdleTimer();
@@ -463,6 +469,7 @@ export default function Analytics() {
         if (!isInitialized) {
           startTrackingIfVisible();
         } else {
+          hasSentPing.current = false;
           startTimer();
           resetIdleTimer();
         }
