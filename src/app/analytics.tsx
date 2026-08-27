@@ -14,8 +14,8 @@ const METRICS_ENDPOINT = '/lib';
 
 const encoder = new TextEncoder();
 
-const bufferToHex = (buffer: ArrayBuffer, length = 24): string => {
-  const bytes = new Uint8Array(buffer);
+const bufferToHex = (buffer: ArrayBuffer | Uint8Array, length = 24): string => {
+  const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
   let hex = '';
   const len = Math.min(bytes.length, Math.ceil(length / 2));
   for (let i = 0; i < len; i++) {
@@ -29,6 +29,20 @@ const generateClientToken = async (path: string, timestamp: number): Promise<str
   const msgBuffer = encoder.encode(data);
   const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
   return bufferToHex(hashBuffer, 24);
+};
+
+const generateClientTokenSync = (path: string, timestamp: number): string => {
+  const str = `${path}-${timestamp}-CodingDatafyToken`;
+  let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+  for (let i = 0, ch; i < str.length; i++) {
+    ch = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  const hashVal = 4294967296 * (2097151 & h2) + (h1 >>> 0);
+  return hashVal.toString(16).padStart(24, '0').substring(0, 24);
 };
 
 export const trackEvent = async (
@@ -78,7 +92,6 @@ export default function Analytics() {
   const accumulatedMs = useRef<number>(0);
   const lastActiveTimestamp = useRef<number>(0);
   
-  const isPingInFlight = useRef<boolean>(false);
   const lastDispatchedDuration = useRef<number>(-1);
 
   useEffect(() => {
@@ -92,7 +105,6 @@ export default function Analytics() {
     const cachedId = sessionStorage.getItem(sessionKeyId);
     pageviewId.current = cachedId ? parseInt(cachedId, 10) : null;
     pendingPingPayload.current = null;
-    isPingInFlight.current = false;
     lastDispatchedDuration.current = -1;
 
     const queryParams = new URLSearchParams(window.location.search);
@@ -249,44 +261,32 @@ export default function Analytics() {
       }, IDLE_TIMEOUT_MS);
     };
 
-    const dispatchPing = async (id: number | null, durationSec: number, isBounce: boolean) => {
+    const dispatchPingSync = (id: number | null, durationSec: number, isBounce: boolean) => {
       if (durationSec === lastDispatchedDuration.current) return;
       lastDispatchedDuration.current = durationSec;
 
       const timestamp = Date.now();
-      const clientToken = await generateClientToken(activePath, timestamp);
+      const clientToken = generateClientTokenSync(activePath, timestamp);
 
-      const params = new URLSearchParams({
-        p: activePath,
-        r: referrer,
-        d: durationSec.toString(),
-        b: isBounce ? 'true' : 'false',
-        is_404: is404Detected ? 'true' : 'false',
-        type: 'ping',
-        id: id ? id.toString() : '',
-        ts: timestamp.toString(),
-        token: clientToken
-      });
+      const params = new URLSearchParams();
+      params.append('p', activePath);
+      params.append('r', referrer);
+      params.append('d', durationSec.toString());
+      params.append('b', isBounce ? 'true' : 'false');
+      params.append('is_404', is404Detected ? 'true' : 'false');
+      params.append('type', 'ping');
+      if (id) params.append('id', id.toString());
+      params.append('ts', timestamp.toString());
+      params.append('token', clientToken);
 
       if (navigator.sendBeacon) {
-        const blob = new Blob([params.toString()], { type: 'text/plain;charset=UTF-8' });
-        if (navigator.sendBeacon(METRICS_ENDPOINT, blob)) return;
+        if (navigator.sendBeacon(METRICS_ENDPOINT, params)) return;
       }
 
       fetch(METRICS_ENDPOINT, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          p: activePath,
-          r: referrer,
-          d: durationSec,
-          b: isBounce,
-          is_404: is404Detected,
-          type: 'ping',
-          id: id,
-          ts: timestamp,
-          token: clientToken
-        }),
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params.toString(),
         keepalive: true,
       }).catch(() => {});
     };
@@ -299,12 +299,7 @@ export default function Analytics() {
         const isBounce = !hasInteracted && durationSec < 10;
         const currentId = pageviewId.current;
 
-        if (currentId) {
-          await dispatchPing(currentId, durationSec, isBounce);
-        } else {
-          pendingPingPayload.current = { durationSec, isBounce };
-          await dispatchPing(null, durationSec, isBounce);
-        }
+        dispatchPingSync(currentId, durationSec, isBounce);
         return;
       }
 
@@ -340,7 +335,7 @@ export default function Analytics() {
             if (pendingPingPayload.current) {
               const { durationSec: pDuration, isBounce: pBounce } = pendingPingPayload.current;
               pendingPingPayload.current = null;
-              await dispatchPing(data.id, pDuration, pBounce);
+              dispatchPingSync(data.id, pDuration, pBounce);
             }
           }
         }
@@ -370,7 +365,6 @@ export default function Analytics() {
 
     const handlePopState = () => {
       lastTrackedPath.current = null;
-      pageviewId.current = null;
       isInitialized = false;
       startTrackingIfVisible();
     };
@@ -378,10 +372,7 @@ export default function Analytics() {
     const handlePageShow = (event: PageTransitionEvent) => {
       if (event.persisted) {
         lastTrackedPath.current = null;
-        pageviewId.current = null;
         isInitialized = false;
-        accumulatedMs.current = 0;
-        lastActiveTimestamp.current = Date.now();
         startTrackingIfVisible();
       }
     };
@@ -454,8 +445,6 @@ export default function Analytics() {
       if (isInitialized) {
         sendPayload(true);
       }
-
-      lastTrackedPath.current = null;
     };
 
   }, [rawPathname]);
