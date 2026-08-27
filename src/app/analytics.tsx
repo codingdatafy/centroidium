@@ -106,6 +106,9 @@ export default function Analytics() {
   const pageviewId = useRef<number | null>(null);
   const pendingPingPayload = useRef<{ durationSec: number; isBounce: boolean } | null>(null);
 
+  const accumulatedMs = useRef<number>(0);
+  const lastActiveTimestamp = useRef<number>(0);
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -244,8 +247,9 @@ export default function Analytics() {
       sessionStorage.setItem(sessionKey, 'true');
     }
 
-    let accumulatedMs = 0;
-    let lastActiveTimestamp = 0;
+    accumulatedMs.current = 0;
+    lastActiveTimestamp.current = 0;
+
     let idleTimer: ReturnType<typeof setTimeout> | null = null;
     const IDLE_TIMEOUT_MS = 60000;
 
@@ -253,15 +257,15 @@ export default function Analytics() {
     let isInitialized = false;
 
     const startTimer = () => {
-      if (document.visibilityState === 'visible' && lastActiveTimestamp === 0) {
-        lastActiveTimestamp = Date.now();
+      if (document.visibilityState === 'visible' && lastActiveTimestamp.current === 0) {
+        lastActiveTimestamp.current = Date.now();
       }
     };
 
     const pauseTimer = () => {
-      if (lastActiveTimestamp > 0) {
-        accumulatedMs += Date.now() - lastActiveTimestamp;
-        lastActiveTimestamp = 0;
+      if (lastActiveTimestamp.current > 0) {
+        accumulatedMs.current += Date.now() - lastActiveTimestamp.current;
+        lastActiveTimestamp.current = 0;
       }
     };
 
@@ -270,9 +274,9 @@ export default function Analytics() {
      * @returns {number} Active duration in seconds.
      */
     const getActiveDurationSeconds = (): number => {
-      let total = accumulatedMs;
-      if (document.visibilityState === 'visible' && lastActiveTimestamp > 0) {
-        total += Date.now() - lastActiveTimestamp;
+      let total = accumulatedMs.current;
+      if (document.visibilityState === 'visible' && lastActiveTimestamp.current > 0) {
+        total += Date.now() - lastActiveTimestamp.current;
       }
       return Math.max(0, Math.round(total / 1000));
     };
@@ -283,8 +287,8 @@ export default function Analytics() {
     const resetIdleTimer = () => {
       if (document.visibilityState !== 'visible') return;
 
-      if (lastActiveTimestamp === 0) {
-        lastActiveTimestamp = Date.now();
+      if (lastActiveTimestamp.current === 0) {
+        lastActiveTimestamp.current = Date.now();
       }
 
       if (idleTimer) clearTimeout(idleTimer);
@@ -337,6 +341,9 @@ export default function Analytics() {
      */
     const sendPayload = async (isUpdate = false) => {
       const durationSec = isUpdate ? getActiveDurationSeconds() : 0;
+
+      if (isUpdate && durationSec === 0) return;
+
       const isBounce = isUpdate ? (!hasInteracted && durationSec < 10) : true;
 
       if (isUpdate) {
