@@ -10,25 +10,10 @@
 import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 
-/**
- * Reverse-proxied analytics ingestion edge endpoint.
- * @type {string}
- */
 const METRICS_ENDPOINT = '/lib';
 
-/**
- * Global TextEncoder instance reusable across cryptographic token derivations.
- * @type {TextEncoder}
- */
 const encoder = new TextEncoder();
 
-/**
- * Converts binary cryptographic buffer to truncated hexadecimal string.
- * 
- * @param {ArrayBuffer} buffer - Cryptographic payload hash buffer.
- * @param {number} [length=24] - Truncation output length.
- * @returns {string} Truncated hex signature.
- */
 const bufferToHex = (buffer: ArrayBuffer, length = 24): string => {
   const bytes = new Uint8Array(buffer);
   let hex = '';
@@ -39,13 +24,6 @@ const bufferToHex = (buffer: ArrayBuffer, length = 24): string => {
   return hex.substring(0, length);
 };
 
-/**
- * Generates an HMAC-like client-side cryptographic SHA-256 validation token.
- * 
- * @param {string} path - Cleaned URL pathname.
- * @param {number} timestamp - Epoch timestamp in milliseconds.
- * @returns {Promise<string>} Hexadecimal security token signature.
- */
 const generateClientToken = async (path: string, timestamp: number): Promise<string> => {
   const data = `${path}-${timestamp}-CodingDatafyToken`;
   const msgBuffer = encoder.encode(data);
@@ -53,12 +31,6 @@ const generateClientToken = async (path: string, timestamp: number): Promise<str
   return bufferToHex(hashBuffer, 24);
 };
 
-/**
- * Dispatches interactive custom events.
- * 
- * @param {'copy_code' | 'outbound_click'} eventType - Category of custom interaction.
- * @param {string} [targetValue] - Metadata or destination URI associated with the event.
- */
 export const trackEvent = async (
   eventType: 'copy_code' | 'outbound_click',
   targetValue?: string
@@ -97,9 +69,6 @@ if (typeof window !== 'undefined') {
   (window as any).trackEvent = trackEvent;
 }
 
-/**
- * React client component tracking pageviews, duration, bounce rate, and anti-bot validation.
- */
 export default function Analytics() {
   const rawPathname = usePathname();
   const lastTrackedPath = useRef<string | null>(null);
@@ -117,7 +86,6 @@ export default function Analytics() {
 
     const cleanPathname = (rawPathname?.split('?')[0] || '/').replace(/\/+$/, '') || '/';
 
-    // Prevent duplicate tracking triggers on identical path evaluations
     if (lastTrackedPath.current === cleanPathname) return;
 
     const sessionKeyId = `cd_pv_id_${cleanPathname}`;
@@ -127,7 +95,6 @@ export default function Analytics() {
     isPingInFlight.current = false;
     lastDispatchedDuration.current = -1;
 
-    // Admin opt-out flag via URL query param (?admin=true)
     const queryParams = new URLSearchParams(window.location.search);
     if (queryParams.get('admin') === 'true') {
       localStorage.setItem('analytics-disable', 'true');
@@ -139,11 +106,9 @@ export default function Analytics() {
     const hostname = window.location.hostname;
     const isOfficialDomain = hostname === 'www.codingdatafy.com' || hostname === 'codingdatafy.com';
 
-    // 1. User-Agent Pattern Bot Filtering
     const ua = navigator.userAgent.toLowerCase();
     const isBotAgent = /bot|googlebot|crawler|spider|robot|crawling|lighthouse|chrome-lighthouse|google-inspectiontool|ahrefs|semrush|gptbot|chatgpt|chatgpt-user|oai-searchbot|claudebot|claude-user|claude-searchbot|coherebot|headlesschrome|python|node-fetch|axios|bytespider|ccbot|facebookbot|meta-external|amazonbot|petalbot|scrapy|diffbot|dotbot|rogerbot|blexbot|dataforseo|mj12bot|serpstatbot|perplexity|perplexity-user|perplexitybot|applebot|yandex|bingbot|baidu/i.test(ua);
 
-    // 2. Automated Webdriver & Headless Environment Detection
     const isWebDriver = navigator.webdriver === true;
     const isPhantom = 'callPhantom' in window || '_phantom' in window;
     const isHeadlessWindow = 'Buffer' in window || 'emit' in window;
@@ -153,10 +118,6 @@ export default function Analytics() {
 
     const isExplicitlyDisabled = localStorage.getItem('analytics-disable') === 'true';
 
-    /**
-     * Inspects browser capabilities for advanced spoofed bot anomalies.
-     * @returns {boolean} True if client exhibits bot traits.
-     */
     const isAdvancedBotGuard = (): boolean => {
       try {
         const isScreenMismatch = 
@@ -180,10 +141,6 @@ export default function Analytics() {
       }
     };
 
-    /**
-     * Inspects WebGL software rendering and hardware footprints to block cloud/datacenter instances.
-     * @returns {boolean} True if client is executing inside virtualized cloud environment.
-     */
     const isDatacenterBot = () => {
       if (document.visibilityState === 'hidden') return false;
 
@@ -229,10 +186,6 @@ export default function Analytics() {
 
     const activePath = cleanPathname;
 
-    /**
-     * Checks document metadata to verify if the rendered path represents a 404 page.
-     * @returns {boolean} True if path is a 404 response.
-     */
     const checkIs404Page = (): boolean => {
       const has404Meta = !!document.querySelector('meta[name="next-error"]');
       const isNotFoundTitle = document.title.toLowerCase().includes('404') || document.title.toLowerCase().includes('not found');
@@ -274,10 +227,6 @@ export default function Analytics() {
       }
     };
 
-    /**
-     * Computes exact active reading time in seconds excluding background idle state.
-     * @returns {number} Active duration in seconds.
-     */
     const getActiveDurationSeconds = (): number => {
       let total = accumulatedMs.current;
       if (document.visibilityState === 'visible' && lastActiveTimestamp.current > 0) {
@@ -286,9 +235,6 @@ export default function Analytics() {
       return Math.max(0, Math.round(total / 1000));
     };
 
-    /**
-     * Resets active duration timer on user interaction and schedules idle cutoff timeout.
-     */
     const resetIdleTimer = () => {
       if (document.visibilityState !== 'visible') return;
 
@@ -303,13 +249,6 @@ export default function Analytics() {
       }, IDLE_TIMEOUT_MS);
     };
 
-    /**
-     * Sends duration and bounce update ping payload to edge collector.
-     * 
-     * @param {number|null} id - Primary Key ID returned from initial pageview initialization.
-     * @param {number} durationSec - Calculated active duration in seconds.
-     * @param {boolean} isBounce - Bounce determination indicator.
-     */
     const dispatchPing = async (id: number | null, durationSec: number, isBounce: boolean) => {
       if (durationSec === lastDispatchedDuration.current) return;
       lastDispatchedDuration.current = durationSec;
@@ -317,36 +256,41 @@ export default function Analytics() {
       const timestamp = Date.now();
       const clientToken = await generateClientToken(activePath, timestamp);
 
-      const payload = JSON.stringify({
+      const params = new URLSearchParams({
         p: activePath,
         r: referrer,
-        d: durationSec,
-        b: isBounce,
-        is_404: is404Detected,
+        d: durationSec.toString(),
+        b: isBounce ? 'true' : 'false',
+        is_404: is404Detected ? 'true' : 'false',
         type: 'ping',
-        id: id,
-        ts: timestamp,
+        id: id ? id.toString() : '',
+        ts: timestamp.toString(),
         token: clientToken
       });
 
       if (navigator.sendBeacon) {
-        const blob = new Blob([payload], { type: 'application/json' });
+        const blob = new Blob([params.toString()], { type: 'text/plain;charset=UTF-8' });
         if (navigator.sendBeacon(METRICS_ENDPOINT, blob)) return;
       }
 
       fetch(METRICS_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: payload,
+        body: JSON.stringify({
+          p: activePath,
+          r: referrer,
+          d: durationSec,
+          b: isBounce,
+          is_404: is404Detected,
+          type: 'ping',
+          id: id,
+          ts: timestamp,
+          token: clientToken
+        }),
         keepalive: true,
       }).catch(() => {});
     };
 
-    /**
-     * Handles initial pageview record creation or subsequent ping updates.
-     * 
-     * @param {boolean} [isUpdate=false] - True if dispatching a heartbeat update rather than initialization.
-     */
     const sendPayload = async (isUpdate = false) => {
       if (isUpdate) {
         pauseTimer();
@@ -408,10 +352,6 @@ export default function Analytics() {
       resetIdleTimer();
     };
 
-    /**
-     * Intercepts anchor element navigation to record external domain exit links.
-     * @param {MouseEvent} event - Click event object.
-     */
     const handleOutboundClick = (event: MouseEvent) => {
       const targetAnchor = (event.target as HTMLElement).closest('a');
       if (!targetAnchor) return;
@@ -430,6 +370,7 @@ export default function Analytics() {
 
     const handlePopState = () => {
       lastTrackedPath.current = null;
+      pageviewId.current = null;
       isInitialized = false;
       startTrackingIfVisible();
     };
@@ -437,7 +378,10 @@ export default function Analytics() {
     const handlePageShow = (event: PageTransitionEvent) => {
       if (event.persisted) {
         lastTrackedPath.current = null;
+        pageviewId.current = null;
         isInitialized = false;
+        accumulatedMs.current = 0;
+        lastActiveTimestamp.current = Date.now();
         startTrackingIfVisible();
       }
     };
@@ -510,6 +454,8 @@ export default function Analytics() {
       if (isInitialized) {
         sendPayload(true);
       }
+
+      lastTrackedPath.current = null;
     };
 
   }, [rawPathname]);
