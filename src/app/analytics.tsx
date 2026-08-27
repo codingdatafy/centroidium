@@ -294,35 +294,9 @@ export default function Analytics() {
     };
 
     /**
-     * Synchronously dispatches exit ping payloads without async delays for Firefox compatibility.
-     */
-    const dispatchSyncPing = (id: number | null, durationSec: number, isBounce: boolean) => {
-      const timestamp = Date.now();
-      // Fast fallback string derivation to prevent WebCrypto async drops on unload/refresh in Firefox
-      const clientToken = `sync-${timestamp}`;
-
-      const payload = JSON.stringify({
-        p: activePath,
-        r: referrer,
-        d: durationSec,
-        b: isBounce,
-        is_404: is404Detected,
-        type: 'ping',
-        id: id,
-        ts: timestamp,
-        token: clientToken
-      });
-
-      if (navigator.sendBeacon) {
-        const blob = new Blob([payload], { type: 'application/json' });
-        navigator.sendBeacon(METRICS_ENDPOINT, blob);
-      }
-    };
-
-    /**
      * Sends duration and bounce update ping payload to edge collector.
      */
-    const dispatchPing = async (id: number, durationSec: number, isBounce: boolean) => {
+    const dispatchPing = async (id: number | null, durationSec: number, isBounce: boolean) => {
       const timestamp = Date.now();
       const clientToken = await generateClientToken(activePath, timestamp);
 
@@ -354,54 +328,56 @@ export default function Analytics() {
     /**
      * Handles initial pageview record creation or subsequent ping updates.
      */
-    const sendPayload = (isUpdate = false) => {
+    const sendPayload = async (isUpdate = false) => {
       const durationSec = isUpdate ? getActiveDurationSeconds() : 0;
       const isBounce = isUpdate ? (!hasInteracted && durationSec < 10) : true;
 
       if (isUpdate) {
         pauseTimer();
         if (pageviewId.current) {
-          dispatchSyncPing(pageviewId.current, durationSec, isBounce);
+          await dispatchPing(pageviewId.current, durationSec, isBounce);
         } else {
           pendingPingPayload.current = { durationSec, isBounce };
-          dispatchSyncPing(null, durationSec, isBounce);
+          await dispatchPing(null, durationSec, isBounce);
         }
         return;
       }
 
       const timestamp = Date.now();
-      generateClientToken(activePath, timestamp).then((clientToken) => {
-        const payload = JSON.stringify({
-          p: activePath,
-          r: referrer,
-          d: 0,
-          b: true,
-          is_404: is404Detected,
-          type: 'init',
-          id: null,
-          ts: timestamp,
-          token: clientToken
-        });
+      const clientToken = await generateClientToken(activePath, timestamp);
 
-        fetch(METRICS_ENDPOINT, {
+      const payload = JSON.stringify({
+        p: activePath,
+        r: referrer,
+        d: 0,
+        b: true,
+        is_404: is404Detected,
+        type: 'init',
+        id: null,
+        ts: timestamp,
+        token: clientToken
+      });
+
+      try {
+        const res = await fetch(METRICS_ENDPOINT, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: payload,
           keepalive: true,
-        }).then(async (res) => {
-          if (res.ok) {
-            const data = await res.json();
-            if (data?.id) {
-              pageviewId.current = data.id;
-              if (pendingPingPayload.current) {
-                const { durationSec: pDuration, isBounce: pBounce } = pendingPingPayload.current;
-                pendingPingPayload.current = null;
-                await dispatchPing(data.id, pDuration, pBounce);
-              }
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.id) {
+            pageviewId.current = data.id;
+            if (pendingPingPayload.current) {
+              const { durationSec: pDuration, isBounce: pBounce } = pendingPingPayload.current;
+              pendingPingPayload.current = null;
+              await dispatchPing(data.id, pDuration, pBounce);
             }
           }
-        }).catch(() => {});
-      });
+        }
+      } catch {}
     };
 
     const handleInteraction = () => {
@@ -433,12 +409,8 @@ export default function Analytics() {
     };
 
     const handlePageShow = (event: PageTransitionEvent) => {
-      // Handles Firefox Back-Forward Cache (bfcache) restorations
       if (event.persisted) {
         lastTrackedPath.current = null;
-        if (document.visibilityState === 'visible') {
-          startTrackingIfVisible();
-        }
       }
     };
 
