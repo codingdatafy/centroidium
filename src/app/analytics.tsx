@@ -11,7 +11,6 @@ import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 
 const METRICS_ENDPOINT = '/lib';
-const PERSIST_KEY = 'cd_active_session_state';
 
 const encoder = new TextEncoder();
 
@@ -88,62 +87,15 @@ export default function Analytics() {
   const rawPathname = usePathname();
   const lastTrackedPath = useRef<string | null>(null);
   const pageviewId = useRef<number | null>(null);
+  const pendingPingPayload = useRef<{ durationSec: number; isBounce: boolean } | null>(null);
 
   const accumulatedMs = useRef<number>(0);
   const lastActiveTimestamp = useRef<number>(0);
-  const lastDispatchedDuration = useRef<number>(-1);
-
-  const flushOrphanedSession = () => {
-    try {
-      const saved = localStorage.getItem(PERSIST_KEY);
-      if (!saved) return;
-
-      const data = JSON.parse(saved);
-      localStorage.removeItem(PERSIST_KEY);
-
-      if (data && data.path && data.startTime) {
-        const durationSec = Math.max(0, Math.round((Date.now() - data.startTime) / 1000));
-        
   
-        if (durationSec <= 0 || durationSec > 86400) return;
-
-        const timestamp = Date.now();
-        const clientToken = generateClientTokenSync(data.path, timestamp);
-
-        const params = new URLSearchParams();
-        params.append('p', data.path);
-        params.append('r', data.referrer || 'direct');
-        params.append('d', durationSec.toString());
-        params.append('b', durationSec < 10 ? 'true' : 'false');
-        params.append('is_404', 'false');
-        params.append('ts', timestamp.toString());
-        params.append('token', clientToken);
-
-        if (data.id) {
-          params.append('type', 'ping');
-          params.append('id', data.id.toString());
-        } else {
-          params.append('type', 'init');
-        }
-
-        if (navigator.sendBeacon) {
-          navigator.sendBeacon(METRICS_ENDPOINT, params);
-        } else {
-          fetch(METRICS_ENDPOINT, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: params.toString(),
-            keepalive: true,
-          }).catch(() => {});
-        }
-      }
-    } catch {}
-  };
+  const lastDispatchedDuration = useRef<number>(-1);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-
-    flushOrphanedSession();
 
     const cleanPathname = (rawPathname?.split('?')[0] || '/').replace(/\/+$/, '') || '/';
 
@@ -152,6 +104,7 @@ export default function Analytics() {
     const sessionKeyId = `cd_pv_id_${cleanPathname}`;
     const cachedId = sessionStorage.getItem(sessionKeyId);
     pageviewId.current = cachedId ? parseInt(cachedId, 10) : null;
+    pendingPingPayload.current = null;
     lastDispatchedDuration.current = -1;
 
     const queryParams = new URLSearchParams(window.location.search);
@@ -273,15 +226,6 @@ export default function Analytics() {
     let hasInteracted = false;
     let isInitialized = false;
 
-    try {
-      localStorage.setItem(PERSIST_KEY, JSON.stringify({
-        path: activePath,
-        referrer,
-        startTime: Date.now(),
-        id: pageviewId.current
-      }));
-    } catch {}
-
     const startTimer = () => {
       if (document.visibilityState === 'visible' && lastActiveTimestamp.current === 0) {
         lastActiveTimestamp.current = Date.now();
@@ -335,23 +279,16 @@ export default function Analytics() {
       params.append('ts', timestamp.toString());
       params.append('token', clientToken);
 
-      let sent = false;
       if (navigator.sendBeacon) {
-        sent = navigator.sendBeacon(METRICS_ENDPOINT, params);
+        if (navigator.sendBeacon(METRICS_ENDPOINT, params)) return;
       }
 
-      if (!sent) {
-        fetch(METRICS_ENDPOINT, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: params.toString(),
-          keepalive: true,
-        }).then(() => {
-          localStorage.removeItem(PERSIST_KEY);
-        }).catch(() => {});
-      } else {
-        localStorage.removeItem(PERSIST_KEY);
-      }
+      fetch(METRICS_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params.toString(),
+        keepalive: true,
+      }).catch(() => {});
     };
 
     const sendPayload = async (isUpdate = false) => {
@@ -394,15 +331,12 @@ export default function Analytics() {
           if (data?.id) {
             pageviewId.current = data.id;
             sessionStorage.setItem(sessionKeyId, data.id.toString());
-
-            try {
-              const saved = localStorage.getItem(PERSIST_KEY);
-              if (saved) {
-                const parsed = JSON.parse(saved);
-                parsed.id = data.id;
-                localStorage.setItem(PERSIST_KEY, JSON.stringify(parsed));
-              }
-            } catch {}
+            
+            if (pendingPingPayload.current) {
+              const { durationSec: pDuration, isBounce: pBounce } = pendingPingPayload.current;
+              pendingPingPayload.current = null;
+              dispatchPingSync(data.id, pDuration, pBounce);
+            }
           }
         }
       } catch {}
