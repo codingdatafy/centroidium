@@ -279,14 +279,17 @@ export default function Analytics() {
       params.append('ts', timestamp.toString());
       params.append('token', clientToken);
 
+      const payloadString = params.toString();
+
       if (navigator.sendBeacon) {
-        if (navigator.sendBeacon(METRICS_ENDPOINT, params)) return;
+        const blob = new Blob([payloadString], { type: 'application/x-www-form-urlencoded;charset=UTF-8' });
+        if (navigator.sendBeacon(METRICS_ENDPOINT, blob)) return;
       }
 
       fetch(METRICS_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: params.toString(),
+        body: payloadString,
         keepalive: true,
       }).catch(() => {});
     };
@@ -298,10 +301,6 @@ export default function Analytics() {
         const durationSec = getActiveDurationSeconds();
         const isBounce = !hasInteracted && durationSec < 10;
         const currentId = pageviewId.current;
-
-        if (!currentId) {
-          pendingPingPayload.current = { durationSec, isBounce };
-        }
 
         dispatchPingSync(currentId, durationSec, isBounce);
         return;
@@ -423,18 +422,8 @@ export default function Analytics() {
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    const handlePageHide = () => {
-      if (isInitialized) {
-        if (idleTimer) clearTimeout(idleTimer);
-        sendPayload(true);
-      }
-    };
-
-    window.addEventListener('pagehide', handlePageHide);
-
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('pagehide', handlePageHide);
       window.removeEventListener('pageshow', handlePageShow);
       window.removeEventListener('popstate', handlePopState);
       
