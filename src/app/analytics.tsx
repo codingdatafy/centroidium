@@ -291,15 +291,27 @@ export default function Analytics() {
       }).catch(() => {});
     };
 
+    const triggerSyncPing = () => {
+      if (!isInitialized) return;
+
+      if (idleTimer) clearTimeout(idleTimer);
+
+      pauseTimer();
+
+      const durationSec = getActiveDurationSeconds();
+      const isBounce = !hasInteracted && durationSec < 10;
+      const currentId = pageviewId.current;
+
+      if (currentId) {
+        dispatchPingSync(currentId, durationSec, isBounce);
+      } else {
+        pendingPingPayload.current = { durationSec, isBounce };
+      }
+    };
+
     const sendPayload = async (isUpdate = false) => {
       if (isUpdate) {
-        pauseTimer();
-
-        const durationSec = getActiveDurationSeconds();
-        const isBounce = !hasInteracted && durationSec < 10;
-        const currentId = pageviewId.current;
-
-        dispatchPingSync(currentId, durationSec, isBounce);
+        triggerSyncPing();
         return;
       }
 
@@ -410,36 +422,26 @@ export default function Analytics() {
           resetIdleTimer();
         }
       } else if (document.visibilityState === 'hidden') {
-        if (isInitialized) {
-          if (idleTimer) clearTimeout(idleTimer);
-          sendPayload(true);
-        }
+        triggerSyncPing();
       }
     };
 
     const handleFreeze = () => {
-      if (isInitialized) {
-        if (idleTimer) clearTimeout(idleTimer);
-        sendPayload(true);
-      }
+      triggerSyncPing();
     };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('freeze', handleFreeze, { capture: true });
 
     const handlePageHide = () => {
-      if (isInitialized) {
-        if (idleTimer) clearTimeout(idleTimer);
-        sendPayload(true);
-      }
+      triggerSyncPing();
     };
 
-    window.addEventListener('pagehide', handlePageHide);
+    document.addEventListener('visibilitychange', handleVisibilityChange, { capture: true });
+    window.addEventListener('freeze', handleFreeze, { capture: true });
+    window.addEventListener('pagehide', handlePageHide, { capture: true });
 
     return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      document.removeEventListener('visibilitychange', handleVisibilityChange, { capture: true });
       window.removeEventListener('freeze', handleFreeze, { capture: true });
-      window.removeEventListener('pagehide', handlePageHide);
+      window.removeEventListener('pagehide', handlePageHide, { capture: true });
       window.removeEventListener('pageshow', handlePageShow);
       window.removeEventListener('popstate', handlePopState);
       
@@ -452,7 +454,7 @@ export default function Analytics() {
       if (idleTimer) clearTimeout(idleTimer);
 
       if (isInitialized) {
-        sendPayload(true);
+        triggerSyncPing();
       }
     };
 
