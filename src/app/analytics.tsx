@@ -154,8 +154,6 @@ export default function Analytics() {
     };
 
     const isDatacenterBot = () => {
-      if (document.visibilityState === 'hidden') return false;
-
       const hasZeroDimensions = window.outerWidth === 0 && window.outerHeight === 0;
       const hasInvalidScreen = screen.width === 0 || screen.height === 0;
       const hasNoHardwareConcurrency = !navigator.hardwareConcurrency || navigator.hardwareConcurrency < 1;
@@ -218,7 +216,7 @@ export default function Analytics() {
     }
 
     accumulatedMs.current = 0;
-    lastActiveTimestamp.current = 0;
+    lastActiveTimestamp.current = Date.now();
 
     let idleTimer: ReturnType<typeof setTimeout> | null = null;
     const IDLE_TIMEOUT_MS = 60000;
@@ -227,7 +225,7 @@ export default function Analytics() {
     let isInitialized = false;
 
     const startTimer = () => {
-      if (document.visibilityState === 'visible' && lastActiveTimestamp.current === 0) {
+      if (lastActiveTimestamp.current === 0) {
         lastActiveTimestamp.current = Date.now();
       }
     };
@@ -241,7 +239,7 @@ export default function Analytics() {
 
     const getActiveDurationSeconds = (): number => {
       let total = accumulatedMs.current;
-      if (document.visibilityState === 'visible' && lastActiveTimestamp.current > 0) {
+      if (lastActiveTimestamp.current > 0) {
         total += Date.now() - lastActiveTimestamp.current;
       }
       return Math.max(0, Math.round(total / 1000));
@@ -268,25 +266,29 @@ export default function Analytics() {
       const timestamp = Date.now();
       const clientToken = generateClientTokenSync(activePath, timestamp);
 
-      const params = new URLSearchParams();
-      params.append('p', activePath);
-      params.append('r', referrer);
-      params.append('d', durationSec.toString());
-      params.append('b', isBounce ? 'true' : 'false');
-      params.append('is_404', is404Detected ? 'true' : 'false');
-      params.append('type', 'ping');
-      if (id) params.append('id', id.toString());
-      params.append('ts', timestamp.toString());
-      params.append('token', clientToken);
+      const payloadObj = {
+        p: activePath,
+        r: referrer,
+        d: durationSec,
+        b: isBounce,
+        is_404: is404Detected,
+        type: 'ping',
+        id: id,
+        ts: timestamp,
+        token: clientToken
+      };
+
+      const payloadStr = JSON.stringify(payloadObj);
 
       if (navigator.sendBeacon) {
-        if (navigator.sendBeacon(METRICS_ENDPOINT, params)) return;
+        const blob = new Blob([payloadStr], { type: 'application/json' });
+        if (navigator.sendBeacon(METRICS_ENDPOINT, blob)) return;
       }
 
       fetch(METRICS_ENDPOINT, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: params.toString(),
+        headers: { 'Content-Type': 'application/json' },
+        body: payloadStr,
         keepalive: true,
       }).catch(() => {});
     };
@@ -397,18 +399,12 @@ export default function Analytics() {
       window.addEventListener('pageshow', handlePageShow);
     };
 
-    if (document.visibilityState === 'visible') {
-      startTrackingIfVisible();
-    }
+    startTrackingIfVisible();
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        if (!isInitialized) {
-          startTrackingIfVisible();
-        } else {
-          startTimer();
-          resetIdleTimer();
-        }
+        startTimer();
+        resetIdleTimer();
       } else if (document.visibilityState === 'hidden') {
         if (isInitialized) {
           if (idleTimer) clearTimeout(idleTimer);
