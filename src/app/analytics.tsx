@@ -11,6 +11,7 @@ import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 
 const METRICS_ENDPOINT = '/lib';
+const PERSIST_KEY = 'cd_pending_pv_duration';
 
 const encoder = new TextEncoder();
 
@@ -88,12 +89,50 @@ export default function Analytics() {
   const lastTrackedPath = useRef<string | null>(null);
   const pageviewId = useRef<number | null>(null);
 
-  const startTimeRef = useRef<number>(0);
-  const isPingDispatched = useRef<boolean>(false);
-  const hasInteracted = useRef<boolean>(false);
+  const accumulatedMs = useRef<number>(0);
+  const lastActiveTimestamp = useRef<number>(0);
+  const lastDispatchedDuration = useRef<number>(-1);
+
+  const flushPersistedMetrics = () => {
+    try {
+      const saved = localStorage.getItem(PERSIST_KEY);
+      if (!saved) return;
+
+      const data = JSON.parse(saved);
+      if (data && data.id && data.path) {
+        const timestamp = Date.now();
+        const clientToken = generateClientTokenSync(data.path, timestamp);
+
+        const params = new URLSearchParams();
+        params.append('p', data.path);
+        params.append('r', 'internal');
+        params.append('d', data.durationSec.toString());
+        params.append('b', data.isBounce ? 'true' : 'false');
+        params.append('is_404', 'false');
+        params.append('type', 'ping');
+        params.append('id', data.id.toString());
+        params.append('ts', timestamp.toString());
+        params.append('token', clientToken);
+
+        if (navigator.sendBeacon) {
+          navigator.sendBeacon(METRICS_ENDPOINT, params);
+        } else {
+          fetch(METRICS_ENDPOINT, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params.toString(),
+            keepalive: true,
+          }).catch(() => {});
+        }
+      }
+      localStorage.removeItem(PERSIST_KEY);
+    } catch {}
+  };
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
+
+    flushPersistedMetrics();
 
     const cleanPathname = (rawPathname?.split('?')[0] || '/').replace(/\/+$/, '') || '/';
 
@@ -102,6 +141,7 @@ export default function Analytics() {
     const sessionKeyId = `cd_pv_id_${cleanPathname}`;
     const cachedId = sessionStorage.getItem(sessionKeyId);
     pageviewId.current = cachedId ? parseInt(cachedId, 10) : null;
+    lastDispatchedDuration.current = -1;
 
     const queryParams = new URLSearchParams(window.location.search);
     if (queryParams.get('admin') === 'true') {
@@ -213,17 +253,68 @@ export default function Analytics() {
       sessionStorage.setItem(sessionKey, 'true');
     }
 
-    startTimeRef.current = Date.now();
-    isPingDispatched.current = false;
-    hasInteracted.current = false;
-    lastTrackedPath.current = cleanPathname;
+    accumulatedMs.current = 0;
+    lastActiveTimestamp.current = 0;
 
-    const dispatchPingSync = () => {
-      if (isPingDispatched.current) return;
-      isPingDispatched.current = true;
+    let idleTimer: ReturnType<typeof setTimeout> | null = null;
+    const IDLE_TIMEOUT_MS = 60000;
 
-      const durationSec = Math.max(0, Math.round((Date.now() - startTimeRef.current) / 1000));
-      const isBounce = !hasInteracted.current && durationSec < 10;
+    let hasInteracted = false;
+    let isInitialized = false;
+
+    const startTimer = () => {
+      if (document.visibilityState === 'visible' && lastActiveTimestamp.current === 0) {
+        lastActiveTimestamp.current = Date.now();
+      }
+    };
+
+    const pauseTimer = () => {
+      if (lastActiveTimestamp.current > 0) {
+        accumulatedMs.current += Date.now() - lastActiveTimestamp.current;
+        lastActiveTimestamp.current = 0;
+      }
+    };
+
+    const getActiveDurationSeconds = (): number => {
+      let total = accumulatedMs.current;
+      if (document.visibilityState === 'visible' && lastActiveTimestamp.current > 0) {
+        total += Date.now() - lastActiveTimestamp.current;
+      }
+      return Math.max(0, Math.round(total / 1000));
+    };
+
+    const resetIdleTimer = () => {
+      if (document.visibilityState !== 'visible') return;
+
+      if (lastActiveTimestamp.current === 0) {
+        lastActiveTimestamp.current = Date.now();
+      }
+
+      if (idleTimer) clearTimeout(idleTimer);
+
+      idleTimer = setTimeout(() => {
+        pauseTimer();
+      }, IDLE_TIMEOUT_MS);
+    };
+
+    const savePendingMetricsLocally = (id: number | null, durationSec: number, isBounce: boolean) => {
+      if (!id) return;
+      try {
+        localStorage.setItem(PERSIST_KEY, JSON.stringify({
+          id,
+          path: activePath,
+          durationSec,
+          isBounce
+        }));
+      } catch {}
+    };
+
+    const dispatchPingSync = (id: number | null, durationSec: number, isBounce: boolean) => {
+      if (durationSec === lastDispatchedDuration.current) return;
+      lastDispatchedDuration.current = durationSec;
+
+      savePendingMetricsLocally(id, durationSec, isBounce);
+
       const timestamp = Date.now();
       const clientToken = generateClientTokenSync(activePath, timestamp);
 
@@ -234,28 +325,41 @@ export default function Analytics() {
       params.append('b', isBounce ? 'true' : 'false');
       params.append('is_404', is404Detected ? 'true' : 'false');
       params.append('type', 'ping');
-      if (pageviewId.current) params.append('id', pageviewId.current.toString());
+      if (id) params.append('id', id.toString());
       params.append('ts', timestamp.toString());
       params.append('token', clientToken);
 
-      const payloadString = params.toString();
-
+      let sent = false;
       if (navigator.sendBeacon) {
-        const blob = new Blob([payloadString], { 
-          type: 'application/x-www-form-urlencoded; charset=UTF-8' 
-        });
-        navigator.sendBeacon(METRICS_ENDPOINT, blob);
-      } else {
+        sent = navigator.sendBeacon(METRICS_ENDPOINT, params);
+      }
+
+      if (!sent) {
         fetch(METRICS_ENDPOINT, {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: payloadString,
+          body: params.toString(),
           keepalive: true,
+        }).then(() => {
+          localStorage.removeItem(PERSIST_KEY);
         }).catch(() => {});
+      } else {
+        localStorage.removeItem(PERSIST_KEY);
       }
     };
 
-    const sendInitPayload = async () => {
+    const sendPayload = async (isUpdate = false) => {
+      if (isUpdate) {
+        pauseTimer();
+
+        const durationSec = getActiveDurationSeconds();
+        const isBounce = !hasInteracted && durationSec < 10;
+        const currentId = pageviewId.current;
+
+        dispatchPingSync(currentId, durationSec, isBounce);
+        return;
+      }
+
       const timestamp = Date.now();
       const clientToken = await generateClientToken(activePath, timestamp);
 
@@ -289,10 +393,9 @@ export default function Analytics() {
       } catch {}
     };
 
-    sendInitPayload();
-
     const handleInteraction = () => {
-      hasInteracted.current = true;
+      hasInteracted = true;
+      resetIdleTimer();
     };
 
     const handleOutboundClick = (event: MouseEvent) => {
@@ -311,28 +414,88 @@ export default function Analytics() {
       }
     };
 
-    const handleFreezeOrHide = () => {
-      dispatchPingSync();
+    const handlePopState = () => {
+      lastTrackedPath.current = null;
+      isInitialized = false;
+      startTrackingIfVisible();
     };
 
-    const activityEvents = ['mousemove', 'keydown', 'scroll', 'click', 'touchstart'];
-    activityEvents.forEach((evt) => {
-      window.addEventListener(evt, handleInteraction, { passive: true });
-    });
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) {
+        lastTrackedPath.current = null;
+        isInitialized = false;
+        startTrackingIfVisible();
+      }
+    };
 
-    window.addEventListener('click', handleOutboundClick, { capture: true, passive: true });
-    window.addEventListener('pagehide', handleFreezeOrHide);
-    document.addEventListener('freeze', handleFreezeOrHide);
+    const startTrackingIfVisible = () => {
+      if (isInitialized) return;
+      
+      isInitialized = true;
+      lastTrackedPath.current = cleanPathname;
+      startTimer();
+      resetIdleTimer();
+
+      sendPayload(false);
+
+      const activityEvents = ['mousemove', 'keydown', 'scroll', 'click', 'touchstart'];
+      activityEvents.forEach((evt) => {
+        window.addEventListener(evt, handleInteraction, { passive: true });
+      });
+
+      window.addEventListener('click', handleOutboundClick, { capture: true, passive: true });
+      window.addEventListener('popstate', handlePopState);
+      window.addEventListener('pageshow', handlePageShow);
+    };
+
+    if (document.visibilityState === 'visible') {
+      startTrackingIfVisible();
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        if (!isInitialized) {
+          startTrackingIfVisible();
+        } else {
+          startTimer();
+          resetIdleTimer();
+        }
+      } else if (document.visibilityState === 'hidden') {
+        if (isInitialized) {
+          if (idleTimer) clearTimeout(idleTimer);
+          sendPayload(true);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    const handlePageHide = () => {
+      if (isInitialized) {
+        if (idleTimer) clearTimeout(idleTimer);
+        sendPayload(true);
+      }
+    };
+
+    window.addEventListener('pagehide', handlePageHide);
 
     return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pagehide', handlePageHide);
+      window.removeEventListener('pageshow', handlePageShow);
+      window.removeEventListener('popstate', handlePopState);
+      
+      const activityEvents = ['mousemove', 'keydown', 'scroll', 'click', 'touchstart'];
       activityEvents.forEach((evt) => {
         window.removeEventListener(evt, handleInteraction);
       });
       window.removeEventListener('click', handleOutboundClick, { capture: true });
-      window.removeEventListener('pagehide', handleFreezeOrHide);
-      document.removeEventListener('freeze', handleFreezeOrHide);
 
-      dispatchPingSync();
+      if (idleTimer) clearTimeout(idleTimer);
+
+      if (isInitialized) {
+        sendPayload(true);
+      }
     };
 
   }, [rawPathname]);
