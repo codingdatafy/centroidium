@@ -87,9 +87,12 @@ export default function Analytics() {
   const rawPathname = usePathname();
   const lastTrackedPath = useRef<string | null>(null);
   const pageviewId = useRef<number | null>(null);
+  const pendingPingPayload = useRef<{ durationSec: number; isBounce: boolean } | null>(null);
 
   const accumulatedMs = useRef<number>(0);
   const lastActiveTimestamp = useRef<number>(0);
+  
+  const lastDispatchedDuration = useRef<number>(-1);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -101,6 +104,8 @@ export default function Analytics() {
     const sessionKeyId = `cd_pv_id_${cleanPathname}`;
     const cachedId = sessionStorage.getItem(sessionKeyId);
     pageviewId.current = cachedId ? parseInt(cachedId, 10) : null;
+    pendingPingPayload.current = null;
+    lastDispatchedDuration.current = -1;
 
     const queryParams = new URLSearchParams(window.location.search);
     if (queryParams.get('admin') === 'true') {
@@ -257,6 +262,9 @@ export default function Analytics() {
     };
 
     const dispatchPingSync = (id: number | null, durationSec: number, isBounce: boolean) => {
+      if (durationSec === lastDispatchedDuration.current) return;
+      lastDispatchedDuration.current = durationSec;
+
       const timestamp = Date.now();
       const clientToken = generateClientTokenSync(activePath, timestamp);
 
@@ -271,14 +279,19 @@ export default function Analytics() {
       params.append('ts', timestamp.toString());
       params.append('token', clientToken);
 
+      const payloadString = params.toString();
+
       if (navigator.sendBeacon) {
-        if (navigator.sendBeacon(METRICS_ENDPOINT, params)) return;
+        const blob = new Blob([payloadString], { 
+          type: 'application/x-www-form-urlencoded; charset=UTF-8' 
+        });
+        if (navigator.sendBeacon(METRICS_ENDPOINT, blob)) return;
       }
 
       fetch(METRICS_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: params.toString(),
+        body: payloadString,
         keepalive: true,
       }).catch(() => {});
     };
@@ -286,10 +299,12 @@ export default function Analytics() {
     const sendPayload = async (isUpdate = false) => {
       if (isUpdate) {
         pauseTimer();
+
         const durationSec = getActiveDurationSeconds();
         const isBounce = !hasInteracted && durationSec < 10;
-        
-        dispatchPingSync(pageviewId.current, durationSec, isBounce);
+        const currentId = pageviewId.current;
+
+        dispatchPingSync(currentId, durationSec, isBounce);
         return;
       }
 
@@ -321,6 +336,12 @@ export default function Analytics() {
           if (data?.id) {
             pageviewId.current = data.id;
             sessionStorage.setItem(sessionKeyId, data.id.toString());
+            
+            if (pendingPingPayload.current) {
+              const { durationSec: pDuration, isBounce: pBounce } = pendingPingPayload.current;
+              pendingPingPayload.current = null;
+              dispatchPingSync(data.id, pDuration, pBounce);
+            }
           }
         }
       } catch {}
@@ -385,6 +406,13 @@ export default function Analytics() {
       startTrackingIfVisible();
     }
 
+    const handleFlushMetrics = () => {
+      if (isInitialized) {
+        if (idleTimer) clearTimeout(idleTimer);
+        sendPayload(true);
+      }
+    };
+
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         if (!isInitialized) {
@@ -394,27 +422,16 @@ export default function Analytics() {
           resetIdleTimer();
         }
       } else if (document.visibilityState === 'hidden') {
-        if (isInitialized) {
-          if (idleTimer) clearTimeout(idleTimer);
-          sendPayload(true);
-        }
+        handleFlushMetrics();
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    const handlePageHide = () => {
-      if (isInitialized) {
-        if (idleTimer) clearTimeout(idleTimer);
-        sendPayload(true);
-      }
-    };
-
-    window.addEventListener('pagehide', handlePageHide);
+    window.addEventListener('pagehide', handleFlushMetrics);
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('pagehide', handlePageHide);
+      window.removeEventListener('pagehide', handleFlushMetrics);
       window.removeEventListener('pageshow', handlePageShow);
       window.removeEventListener('popstate', handlePopState);
       
