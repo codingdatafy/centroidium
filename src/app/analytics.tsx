@@ -268,30 +268,32 @@ export default function Analytics() {
       const timestamp = Date.now();
       const clientToken = generateClientTokenSync(activePath, timestamp);
 
-      const params = new URLSearchParams();
-      params.append('p', activePath);
-      params.append('r', referrer);
-      params.append('d', durationSec.toString());
-      params.append('b', isBounce ? 'true' : 'false');
-      params.append('is_404', is404Detected ? 'true' : 'false');
-      params.append('type', 'ping');
-      if (id) params.append('id', id.toString());
-      params.append('ts', timestamp.toString());
-      params.append('token', clientToken);
+      const payload = JSON.stringify({
+        p: activePath,
+        r: referrer,
+        d: durationSec,
+        b: isBounce,
+        is_404: is404Detected,
+        type: 'ping',
+        id: id,
+        ts: timestamp,
+        token: clientToken
+      });
 
-      const payloadString = params.toString();
-
+      let sent = false;
       if (navigator.sendBeacon) {
-        const blob = new Blob([payloadString], { type: 'application/x-www-form-urlencoded;charset=UTF-8' });
-        if (navigator.sendBeacon(METRICS_ENDPOINT, blob)) return;
+        const blob = new Blob([payload], { type: 'application/json' });
+        sent = navigator.sendBeacon(METRICS_ENDPOINT, blob);
       }
 
-      fetch(METRICS_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: payloadString,
-        keepalive: true,
-      }).catch(() => {});
+      if (!sent) {
+        fetch(METRICS_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: payload,
+          keepalive: true,
+        }).catch(() => {});
+      }
     };
 
     const sendPayload = async (isUpdate = false) => {
@@ -422,8 +424,18 @@ export default function Analytics() {
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
+    const handlePageHide = () => {
+      if (isInitialized) {
+        if (idleTimer) clearTimeout(idleTimer);
+        sendPayload(true);
+      }
+    };
+
+    window.addEventListener('pagehide', handlePageHide);
+
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pagehide', handlePageHide);
       window.removeEventListener('pageshow', handlePageShow);
       window.removeEventListener('popstate', handlePopState);
       
