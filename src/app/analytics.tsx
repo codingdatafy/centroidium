@@ -87,12 +87,9 @@ export default function Analytics() {
   const rawPathname = usePathname();
   const lastTrackedPath = useRef<string | null>(null);
   const pageviewId = useRef<number | null>(null);
-  const pendingPingPayload = useRef<{ durationSec: number; isBounce: boolean } | null>(null);
 
   const accumulatedMs = useRef<number>(0);
   const lastActiveTimestamp = useRef<number>(0);
-  
-  const lastDispatchedDuration = useRef<number>(-1);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -104,8 +101,6 @@ export default function Analytics() {
     const sessionKeyId = `cd_pv_id_${cleanPathname}`;
     const cachedId = sessionStorage.getItem(sessionKeyId);
     pageviewId.current = cachedId ? parseInt(cachedId, 10) : null;
-    pendingPingPayload.current = null;
-    lastDispatchedDuration.current = -1;
 
     const queryParams = new URLSearchParams(window.location.search);
     if (queryParams.get('admin') === 'true') {
@@ -262,9 +257,6 @@ export default function Analytics() {
     };
 
     const dispatchPingSync = (id: number | null, durationSec: number, isBounce: boolean) => {
-      if (durationSec === lastDispatchedDuration.current) return;
-      lastDispatchedDuration.current = durationSec;
-
       const timestamp = Date.now();
       const clientToken = generateClientTokenSync(activePath, timestamp);
 
@@ -294,12 +286,10 @@ export default function Analytics() {
     const sendPayload = async (isUpdate = false) => {
       if (isUpdate) {
         pauseTimer();
-
         const durationSec = getActiveDurationSeconds();
         const isBounce = !hasInteracted && durationSec < 10;
-        const currentId = pageviewId.current;
-
-        dispatchPingSync(currentId, durationSec, isBounce);
+        
+        dispatchPingSync(pageviewId.current, durationSec, isBounce);
         return;
       }
 
@@ -331,12 +321,6 @@ export default function Analytics() {
           if (data?.id) {
             pageviewId.current = data.id;
             sessionStorage.setItem(sessionKeyId, data.id.toString());
-            
-            if (pendingPingPayload.current) {
-              const { durationSec: pDuration, isBounce: pBounce } = pendingPingPayload.current;
-              pendingPingPayload.current = null;
-              dispatchPingSync(data.id, pDuration, pBounce);
-            }
           }
         }
       } catch {}
