@@ -220,7 +220,7 @@ export default function Analytics() {
     accumulatedMs.current = 0;
     lastActiveTimestamp.current = 0;
 
-    let idleTimer: ReturnType<setTimeout> | null = null;
+    let idleTimer: ReturnType<typeof setTimeout> | null = null;
     const IDLE_TIMEOUT_MS = 60000;
 
     let hasInteracted = false;
