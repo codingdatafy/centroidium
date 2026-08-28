@@ -67,7 +67,7 @@ export const trackEvent = async (
   });
 
   if (navigator.sendBeacon) {
-    const blob = new Blob([payload], { type: 'application/json' });
+    const blob = new Blob([payload], { type: 'text/plain' });
     navigator.sendBeacon(METRICS_ENDPOINT, blob);
   } else {
     fetch(METRICS_ENDPOINT, {
@@ -164,7 +164,6 @@ export default function Analytics() {
         if (!gl) return hasZeroDimensions || hasInvalidScreen || hasNoHardwareConcurrency;
 
         let isSoftware = false;
-
         const standardRenderer = (gl as WebGLRenderingContext).getParameter((gl as WebGLRenderingContext).RENDERER) || '';
         if (typeof standardRenderer === 'string') {
           const rendererLower = standardRenderer.toLowerCase();
@@ -200,7 +199,6 @@ export default function Analytics() {
       const has404Meta = !!document.querySelector('meta[name="next-error"]');
       const isNotFoundTitle = document.title.toLowerCase().includes('404') || document.title.toLowerCase().includes('not found');
       const has404Element = !!document.querySelector('[data-is-404="true"]');
-
       return has404Meta || isNotFoundTitle || has404Element;
     };
 
@@ -281,7 +279,7 @@ export default function Analytics() {
       const payloadStr = JSON.stringify(payloadObj);
 
       if (navigator.sendBeacon) {
-        const blob = new Blob([payloadStr], { type: 'application/json' });
+        const blob = new Blob([payloadStr], { type: 'text/plain' });
         if (navigator.sendBeacon(METRICS_ENDPOINT, blob)) return;
       }
 
