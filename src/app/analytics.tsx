@@ -11,7 +11,7 @@ import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 
 const METRICS_ENDPOINT = '/lib';
-const PERSIST_KEY = 'cd_pending_pv_duration';
+const PERSIST_KEY = 'cd_active_session_state';
 
 const encoder = new TextEncoder();
 
@@ -93,26 +93,38 @@ export default function Analytics() {
   const lastActiveTimestamp = useRef<number>(0);
   const lastDispatchedDuration = useRef<number>(-1);
 
-  const flushPersistedMetrics = () => {
+  const flushOrphanedSession = () => {
     try {
       const saved = localStorage.getItem(PERSIST_KEY);
       if (!saved) return;
 
       const data = JSON.parse(saved);
-      if (data && data.id && data.path) {
+      localStorage.removeItem(PERSIST_KEY);
+
+      if (data && data.path && data.startTime) {
+        const durationSec = Math.max(0, Math.round((Date.now() - data.startTime) / 1000));
+        
+  
+        if (durationSec <= 0 || durationSec > 86400) return;
+
         const timestamp = Date.now();
         const clientToken = generateClientTokenSync(data.path, timestamp);
 
         const params = new URLSearchParams();
         params.append('p', data.path);
-        params.append('r', 'internal');
-        params.append('d', data.durationSec.toString());
-        params.append('b', data.isBounce ? 'true' : 'false');
+        params.append('r', data.referrer || 'direct');
+        params.append('d', durationSec.toString());
+        params.append('b', durationSec < 10 ? 'true' : 'false');
         params.append('is_404', 'false');
-        params.append('type', 'ping');
-        params.append('id', data.id.toString());
         params.append('ts', timestamp.toString());
         params.append('token', clientToken);
+
+        if (data.id) {
+          params.append('type', 'ping');
+          params.append('id', data.id.toString());
+        } else {
+          params.append('type', 'init');
+        }
 
         if (navigator.sendBeacon) {
           navigator.sendBeacon(METRICS_ENDPOINT, params);
@@ -125,14 +137,13 @@ export default function Analytics() {
           }).catch(() => {});
         }
       }
-      localStorage.removeItem(PERSIST_KEY);
     } catch {}
   };
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    flushPersistedMetrics();
+    flushOrphanedSession();
 
     const cleanPathname = (rawPathname?.split('?')[0] || '/').replace(/\/+$/, '') || '/';
 
@@ -262,6 +273,15 @@ export default function Analytics() {
     let hasInteracted = false;
     let isInitialized = false;
 
+    try {
+      localStorage.setItem(PERSIST_KEY, JSON.stringify({
+        path: activePath,
+        referrer,
+        startTime: Date.now(),
+        id: pageviewId.current
+      }));
+    } catch {}
+
     const startTimer = () => {
       if (document.visibilityState === 'visible' && lastActiveTimestamp.current === 0) {
         lastActiveTimestamp.current = Date.now();
@@ -297,23 +317,9 @@ export default function Analytics() {
       }, IDLE_TIMEOUT_MS);
     };
 
-    const savePendingMetricsLocally = (id: number | null, durationSec: number, isBounce: boolean) => {
-      if (!id) return;
-      try {
-        localStorage.setItem(PERSIST_KEY, JSON.stringify({
-          id,
-          path: activePath,
-          durationSec,
-          isBounce
-        }));
-      } catch {}
-    };
-
     const dispatchPingSync = (id: number | null, durationSec: number, isBounce: boolean) => {
       if (durationSec === lastDispatchedDuration.current) return;
       lastDispatchedDuration.current = durationSec;
-
-      savePendingMetricsLocally(id, durationSec, isBounce);
 
       const timestamp = Date.now();
       const clientToken = generateClientTokenSync(activePath, timestamp);
@@ -388,6 +394,15 @@ export default function Analytics() {
           if (data?.id) {
             pageviewId.current = data.id;
             sessionStorage.setItem(sessionKeyId, data.id.toString());
+
+            try {
+              const saved = localStorage.getItem(PERSIST_KEY);
+              if (saved) {
+                const parsed = JSON.parse(saved);
+                parsed.id = data.id;
+                localStorage.setItem(PERSIST_KEY, JSON.stringify(parsed));
+              }
+            } catch {}
           }
         }
       } catch {}
