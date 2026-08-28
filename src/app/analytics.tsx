@@ -220,7 +220,7 @@ export default function Analytics() {
     accumulatedMs.current = 0;
     lastActiveTimestamp.current = 0;
 
-    let idleTimer: ReturnType<typeof setTimeout> | null = null;
+    let idleTimer: ReturnType<setTimeout> | null = null;
     const IDLE_TIMEOUT_MS = 60000;
 
     let hasInteracted = false;
@@ -417,7 +417,15 @@ export default function Analytics() {
       }
     };
 
+    const handleFreeze = () => {
+      if (isInitialized) {
+        if (idleTimer) clearTimeout(idleTimer);
+        sendPayload(true);
+      }
+    };
+
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('freeze', handleFreeze, { capture: true });
 
     const handlePageHide = () => {
       if (isInitialized) {
@@ -430,6 +438,7 @@ export default function Analytics() {
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('freeze', handleFreeze, { capture: true });
       window.removeEventListener('pagehide', handlePageHide);
       window.removeEventListener('pageshow', handlePageShow);
       window.removeEventListener('popstate', handlePopState);
