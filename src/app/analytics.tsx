@@ -226,6 +226,44 @@ export default function Analytics() {
     let hasInteracted = false;
     let isInitialized = false;
 
+    const flushUnsentLastSessionDuration = () => {
+      try {
+        const unsentData = localStorage.getItem('cd_unsent_pv');
+        if (!unsentData) return;
+
+        const { id, path, durationSec, isBounce, is404 } = JSON.parse(unsentData);
+        if (id && durationSec > 0) {
+          const timestamp = Date.now();
+          const clientToken = generateClientTokenSync(path, timestamp);
+
+          const params = new URLSearchParams();
+          params.append('p', path);
+          params.append('r', 'direct');
+          params.append('d', durationSec.toString());
+          params.append('b', isBounce ? 'true' : 'false');
+          params.append('is_404', is404 ? 'true' : 'false');
+          params.append('type', 'ping');
+          params.append('id', id.toString());
+          params.append('ts', timestamp.toString());
+          params.append('token', clientToken);
+
+          if (navigator.sendBeacon) {
+            navigator.sendBeacon(METRICS_ENDPOINT, params);
+          } else {
+            fetch(METRICS_ENDPOINT, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: params.toString(),
+              keepalive: true,
+            }).catch(() => {});
+          }
+        }
+        localStorage.removeItem('cd_unsent_pv');
+      } catch {}
+    };
+
+    flushUnsentLastSessionDuration();
+
     const startTimer = () => {
       if (document.visibilityState === 'visible' && lastActiveTimestamp.current === 0) {
         lastActiveTimestamp.current = Date.now();
@@ -247,6 +285,20 @@ export default function Analytics() {
       return Math.max(0, Math.round(total / 1000));
     };
 
+    const saveDurationToStorage = (durationSec: number, isBounce: boolean) => {
+      if (pageviewId.current && durationSec > 0) {
+        try {
+          localStorage.setItem('cd_unsent_pv', JSON.stringify({
+            id: pageviewId.current,
+            path: activePath,
+            durationSec,
+            isBounce,
+            is404: is404Detected
+          }));
+        } catch {}
+      }
+    };
+
     const resetIdleTimer = () => {
       if (document.visibilityState !== 'visible') return;
 
@@ -265,6 +317,8 @@ export default function Analytics() {
       if (durationSec === lastDispatchedDuration.current) return;
       lastDispatchedDuration.current = durationSec;
 
+      saveDurationToStorage(durationSec, isBounce);
+
       const timestamp = Date.now();
       const clientToken = generateClientTokenSync(activePath, timestamp);
 
@@ -279,16 +333,19 @@ export default function Analytics() {
       params.append('ts', timestamp.toString());
       params.append('token', clientToken);
 
+      let sent = false;
       if (navigator.sendBeacon) {
-        if (navigator.sendBeacon(METRICS_ENDPOINT, params)) return;
+        sent = navigator.sendBeacon(METRICS_ENDPOINT, params);
       }
 
-      fetch(METRICS_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: params.toString(),
-        keepalive: true,
-      }).catch(() => {});
+      if (!sent) {
+        fetch(METRICS_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: params.toString(),
+          keepalive: true,
+        }).catch(() => {});
+      }
     };
 
     const triggerSyncPing = () => {
@@ -357,6 +414,7 @@ export default function Analytics() {
     const handleInteraction = () => {
       hasInteracted = true;
       resetIdleTimer();
+      saveDurationToStorage(getActiveDurationSeconds(), false);
     };
 
     const handleOutboundClick = (event: MouseEvent) => {
