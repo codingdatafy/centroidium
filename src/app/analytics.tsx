@@ -299,6 +299,10 @@ export default function Analytics() {
         const isBounce = !hasInteracted && durationSec < 10;
         const currentId = pageviewId.current;
 
+        if (!currentId) {
+          pendingPingPayload.current = { durationSec, isBounce };
+        }
+
         dispatchPingSync(currentId, durationSec, isBounce);
         return;
       }
