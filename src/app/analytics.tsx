@@ -67,7 +67,7 @@ export const trackEvent = async (
   });
 
   if (navigator.sendBeacon) {
-    const blob = new Blob([payload], { type: 'text/plain' });
+    const blob = new Blob([payload], { type: 'application/json' });
     navigator.sendBeacon(METRICS_ENDPOINT, blob);
   } else {
     fetch(METRICS_ENDPOINT, {
@@ -87,11 +87,9 @@ export default function Analytics() {
   const rawPathname = usePathname();
   const lastTrackedPath = useRef<string | null>(null);
   const pageviewId = useRef<number | null>(null);
-  const pendingPingPayload = useRef<{ durationSec: number; isBounce: boolean } | null>(null);
 
   const accumulatedMs = useRef<number>(0);
   const lastActiveTimestamp = useRef<number>(0);
-  
   const lastDispatchedDuration = useRef<number>(-1);
 
   useEffect(() => {
@@ -104,7 +102,6 @@ export default function Analytics() {
     const sessionKeyId = `cd_pv_id_${cleanPathname}`;
     const cachedId = sessionStorage.getItem(sessionKeyId);
     pageviewId.current = cachedId ? parseInt(cachedId, 10) : null;
-    pendingPingPayload.current = null;
     lastDispatchedDuration.current = -1;
 
     const queryParams = new URLSearchParams(window.location.search);
@@ -154,6 +151,8 @@ export default function Analytics() {
     };
 
     const isDatacenterBot = () => {
+      if (document.visibilityState === 'hidden') return false;
+
       const hasZeroDimensions = window.outerWidth === 0 && window.outerHeight === 0;
       const hasInvalidScreen = screen.width === 0 || screen.height === 0;
       const hasNoHardwareConcurrency = !navigator.hardwareConcurrency || navigator.hardwareConcurrency < 1;
@@ -164,6 +163,7 @@ export default function Analytics() {
         if (!gl) return hasZeroDimensions || hasInvalidScreen || hasNoHardwareConcurrency;
 
         let isSoftware = false;
+
         const standardRenderer = (gl as WebGLRenderingContext).getParameter((gl as WebGLRenderingContext).RENDERER) || '';
         if (typeof standardRenderer === 'string') {
           const rendererLower = standardRenderer.toLowerCase();
@@ -199,6 +199,7 @@ export default function Analytics() {
       const has404Meta = !!document.querySelector('meta[name="next-error"]');
       const isNotFoundTitle = document.title.toLowerCase().includes('404') || document.title.toLowerCase().includes('not found');
       const has404Element = !!document.querySelector('[data-is-404="true"]');
+
       return has404Meta || isNotFoundTitle || has404Element;
     };
 
@@ -214,7 +215,7 @@ export default function Analytics() {
     }
 
     accumulatedMs.current = 0;
-    lastActiveTimestamp.current = Date.now();
+    lastActiveTimestamp.current = 0;
 
     let idleTimer: ReturnType<typeof setTimeout> | null = null;
     const IDLE_TIMEOUT_MS = 60000;
@@ -223,7 +224,7 @@ export default function Analytics() {
     let isInitialized = false;
 
     const startTimer = () => {
-      if (lastActiveTimestamp.current === 0) {
+      if (document.visibilityState === 'visible' && lastActiveTimestamp.current === 0) {
         lastActiveTimestamp.current = Date.now();
       }
     };
@@ -237,7 +238,7 @@ export default function Analytics() {
 
     const getActiveDurationSeconds = (): number => {
       let total = accumulatedMs.current;
-      if (lastActiveTimestamp.current > 0) {
+      if (document.visibilityState === 'visible' && lastActiveTimestamp.current > 0) {
         total += Date.now() - lastActiveTimestamp.current;
       }
       return Math.max(0, Math.round(total / 1000));
@@ -257,89 +258,36 @@ export default function Analytics() {
       }, IDLE_TIMEOUT_MS);
     };
 
-    const dispatchPingSync = (id: number | null, durationSec: number, isBounce: boolean) => {
+    const sendBeaconPayload = (isUpdate = false) => {
+      if (isUpdate) {
+        pauseTimer();
+      }
+
+      const durationSec = getActiveDurationSeconds();
       if (durationSec === lastDispatchedDuration.current) return;
       lastDispatchedDuration.current = durationSec;
 
+      const isBounce = !hasInteracted && durationSec < 10;
+      const currentId = pageviewId.current;
       const timestamp = Date.now();
       const clientToken = generateClientTokenSync(activePath, timestamp);
 
-      const payloadObj = {
+      const payload = JSON.stringify({
         p: activePath,
         r: referrer,
         d: durationSec,
         b: isBounce,
         is_404: is404Detected,
-        type: 'ping',
-        id: id,
-        ts: timestamp,
-        token: clientToken
-      };
-
-      const payloadStr = JSON.stringify(payloadObj);
-
-      if (navigator.sendBeacon) {
-        const blob = new Blob([payloadStr], { type: 'text/plain' });
-        if (navigator.sendBeacon(METRICS_ENDPOINT, blob)) return;
-      }
-
-      fetch(METRICS_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: payloadStr,
-        keepalive: true,
-      }).catch(() => {});
-    };
-
-    const sendPayload = async (isUpdate = false) => {
-      if (isUpdate) {
-        pauseTimer();
-
-        const durationSec = getActiveDurationSeconds();
-        const isBounce = !hasInteracted && durationSec < 10;
-        const currentId = pageviewId.current;
-
-        dispatchPingSync(currentId, durationSec, isBounce);
-        return;
-      }
-
-      const timestamp = Date.now();
-      const clientToken = await generateClientToken(activePath, timestamp);
-
-      const payload = JSON.stringify({
-        p: activePath,
-        r: referrer,
-        d: 0,
-        b: true,
-        is_404: is404Detected,
-        type: 'init',
-        id: null,
+        type: currentId ? 'ping' : 'init',
+        id: currentId,
         ts: timestamp,
         token: clientToken
       });
 
-      try {
-        const res = await fetch(METRICS_ENDPOINT, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: payload,
-          keepalive: true,
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          if (data?.id) {
-            pageviewId.current = data.id;
-            sessionStorage.setItem(sessionKeyId, data.id.toString());
-            
-            if (pendingPingPayload.current) {
-              const { durationSec: pDuration, isBounce: pBounce } = pendingPingPayload.current;
-              pendingPingPayload.current = null;
-              dispatchPingSync(data.id, pDuration, pBounce);
-            }
-          }
-        }
-      } catch {}
+      if (navigator.sendBeacon) {
+        const blob = new Blob([payload], { type: 'application/json' });
+        navigator.sendBeacon(METRICS_ENDPOINT, blob);
+      }
     };
 
     const handleInteraction = () => {
@@ -385,7 +333,30 @@ export default function Analytics() {
       startTimer();
       resetIdleTimer();
 
-      sendPayload(false);
+      const timestamp = Date.now();
+      generateClientToken(activePath, timestamp).then((clientToken) => {
+        return fetch(METRICS_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            p: activePath,
+            r: referrer,
+            d: 0,
+            b: true,
+            is_404: is404Detected,
+            type: 'init',
+            id: null,
+            ts: timestamp,
+            token: clientToken
+          }),
+          keepalive: true,
+        });
+      }).then(res => res?.json()).then(data => {
+        if (data?.id) {
+          pageviewId.current = data.id;
+          sessionStorage.setItem(sessionKeyId, data.id.toString());
+        }
+      }).catch(() => {});
 
       const activityEvents = ['mousemove', 'keydown', 'scroll', 'click', 'touchstart'];
       activityEvents.forEach((evt) => {
@@ -397,16 +368,22 @@ export default function Analytics() {
       window.addEventListener('pageshow', handlePageShow);
     };
 
-    startTrackingIfVisible();
+    if (document.visibilityState === 'visible') {
+      startTrackingIfVisible();
+    }
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        startTimer();
-        resetIdleTimer();
+        if (!isInitialized) {
+          startTrackingIfVisible();
+        } else {
+          startTimer();
+          resetIdleTimer();
+        }
       } else if (document.visibilityState === 'hidden') {
         if (isInitialized) {
           if (idleTimer) clearTimeout(idleTimer);
-          sendPayload(true);
+          sendBeaconPayload(true);
         }
       }
     };
@@ -416,7 +393,7 @@ export default function Analytics() {
     const handlePageHide = () => {
       if (isInitialized) {
         if (idleTimer) clearTimeout(idleTimer);
-        sendPayload(true);
+        sendBeaconPayload(true);
       }
     };
 
@@ -437,7 +414,7 @@ export default function Analytics() {
       if (idleTimer) clearTimeout(idleTimer);
 
       if (isInitialized) {
-        sendPayload(true);
+        sendBeaconPayload(true);
       }
     };
 
