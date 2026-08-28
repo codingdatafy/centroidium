@@ -263,18 +263,6 @@ export default function Analytics() {
 
     const dispatchPingSync = (id: number | null, durationSec: number, isBounce: boolean) => {
       if (durationSec === lastDispatchedDuration.current) return;
-
-      let currentId = id || pageviewId.current;
-      if (!currentId) {
-        const cachedId = sessionStorage.getItem(sessionKeyId);
-        if (cachedId) currentId = parseInt(cachedId, 10);
-      }
-
-      if (!currentId) {
-        pendingPingPayload.current = { durationSec, isBounce };
-        return;
-      }
-
       lastDispatchedDuration.current = durationSec;
 
       const timestamp = Date.now();
@@ -287,21 +275,26 @@ export default function Analytics() {
       params.append('b', isBounce ? 'true' : 'false');
       params.append('is_404', is404Detected ? 'true' : 'false');
       params.append('type', 'ping');
-      params.append('id', currentId.toString());
+      
+      const effectiveId = id || (sessionStorage.getItem(sessionKeyId) ? parseInt(sessionStorage.getItem(sessionKeyId)!, 10) : null);
+      if (effectiveId) {
+        params.append('id', effectiveId.toString());
+      }
+
       params.append('ts', timestamp.toString());
       params.append('token', clientToken);
 
-      const payloadStr = params.toString();
+      const payloadString = params.toString();
 
       if (navigator.sendBeacon) {
-        const blob = new Blob([payloadStr], { type: 'application/x-www-form-urlencoded' });
+        const blob = new Blob([payloadString], { type: 'application/x-www-form-urlencoded' });
         if (navigator.sendBeacon(METRICS_ENDPOINT, blob)) return;
       }
 
       fetch(METRICS_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: payloadStr,
+        body: payloadString,
         keepalive: true,
       }).catch(() => {});
     };
