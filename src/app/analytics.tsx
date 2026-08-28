@@ -88,6 +88,7 @@ export default function Analytics() {
   const lastTrackedPath = useRef<string | null>(null);
   const pageviewId = useRef<number | null>(null);
   const pendingPingPayload = useRef<{ durationSec: number; isBounce: boolean } | null>(null);
+  const isInitPending = useRef<boolean>(false);
 
   const accumulatedMs = useRef<number>(0);
   const lastActiveTimestamp = useRef<number>(0);
@@ -105,6 +106,7 @@ export default function Analytics() {
     const cachedId = sessionStorage.getItem(sessionKeyId);
     pageviewId.current = cachedId ? parseInt(cachedId, 10) : null;
     pendingPingPayload.current = null;
+    isInitPending.current = false;
     lastDispatchedDuration.current = -1;
 
     const queryParams = new URLSearchParams(window.location.search);
@@ -275,26 +277,21 @@ export default function Analytics() {
       params.append('b', isBounce ? 'true' : 'false');
       params.append('is_404', is404Detected ? 'true' : 'false');
       params.append('type', 'ping');
-      
-      const effectiveId = id || (sessionStorage.getItem(sessionKeyId) ? parseInt(sessionStorage.getItem(sessionKeyId)!, 10) : null);
-      if (effectiveId) {
-        params.append('id', effectiveId.toString());
-      }
-
+      if (id) params.append('id', id.toString());
       params.append('ts', timestamp.toString());
       params.append('token', clientToken);
 
-      const payloadString = params.toString();
+      const bodyData = params.toString();
 
       if (navigator.sendBeacon) {
-        const blob = new Blob([payloadString], { type: 'application/x-www-form-urlencoded' });
+        const blob = new Blob([bodyData], { type: 'application/x-www-form-urlencoded' });
         if (navigator.sendBeacon(METRICS_ENDPOINT, blob)) return;
       }
 
       fetch(METRICS_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: payloadString,
+        body: bodyData,
         keepalive: true,
       }).catch(() => {});
     };
@@ -307,10 +304,15 @@ export default function Analytics() {
         const isBounce = !hasInteracted && durationSec < 10;
         const currentId = pageviewId.current;
 
+        if (isInitPending.current && !currentId) {
+          pendingPingPayload.current = { durationSec, isBounce };
+        }
+
         dispatchPingSync(currentId, durationSec, isBounce);
         return;
       }
 
+      isInitPending.current = true;
       const timestamp = Date.now();
       const clientToken = await generateClientToken(activePath, timestamp);
 
@@ -347,7 +349,9 @@ export default function Analytics() {
             }
           }
         }
-      } catch {}
+      } catch {} finally {
+        isInitPending.current = false;
+      }
     };
 
     const handleInteraction = () => {
@@ -434,10 +438,19 @@ export default function Analytics() {
       }
     };
 
+    const handleFreeze = () => {
+      if (isInitialized) {
+        if (idleTimer) clearTimeout(idleTimer);
+        sendPayload(true);
+      }
+    };
+
     window.addEventListener('pagehide', handlePageHide);
+    document.addEventListener('freeze', handleFreeze);
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      document.removeEventListener('freeze', handleFreeze);
       window.removeEventListener('pagehide', handlePageHide);
       window.removeEventListener('pageshow', handlePageShow);
       window.removeEventListener('popstate', handlePopState);
