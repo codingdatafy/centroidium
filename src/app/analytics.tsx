@@ -11,7 +11,6 @@ import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 
 const METRICS_ENDPOINT = '/lib';
-
 const encoder = new TextEncoder();
 
 const bufferToHex = (buffer: ArrayBuffer | Uint8Array, length = 24): string => {
@@ -86,7 +85,7 @@ if (typeof window !== 'undefined') {
 export default function Analytics() {
   const rawPathname = usePathname();
   const lastTrackedPath = useRef<string | null>(null);
-  const pageviewId = useRef<number | null>(null);
+  const pageviewId = useRef<string | null>(null);
 
   const accumulatedMs = useRef<number>(0);
   const lastActiveTimestamp = useRef<number>(0);
@@ -99,20 +98,15 @@ export default function Analytics() {
 
     if (lastTrackedPath.current === cleanPathname) return;
 
-    const sessionKeyId = `cd_pv_id_${cleanPathname}`;
-    let cachedId: string | null = null;
-    try {
-      cachedId = sessionStorage.getItem(sessionKeyId);
-    } catch {}
+    pageviewId.current = typeof crypto.randomUUID === 'function' 
+      ? crypto.randomUUID() 
+      : `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
-    pageviewId.current = cachedId ? parseInt(cachedId, 10) : null;
     lastDispatchedDuration.current = -1;
 
     const queryParams = new URLSearchParams(window.location.search);
     if (queryParams.get('admin') === 'true') {
-      try {
-        localStorage.setItem('analytics-disable', 'true');
-      } catch {}
+      localStorage.setItem('analytics-disable', 'true');
       const newUrl = window.location.pathname;
       window.history.replaceState({}, '', newUrl); 
       alert('CodingDatafy: Analytics tracking is now disabled for this browser.');
@@ -131,10 +125,7 @@ export default function Analytics() {
     const isHeadlessChrome = /headlesschrome/i.test(ua);
     const isAutomatedBot = isWebDriver || isPhantom || isHeadlessWindow || hasNoLanguages || isHeadlessChrome;
 
-    let isExplicitlyDisabled = false;
-    try {
-      isExplicitlyDisabled = localStorage.getItem('analytics-disable') === 'true';
-    } catch {}
+    const isExplicitlyDisabled = localStorage.getItem('analytics-disable') === 'true';
 
     const isAdvancedBotGuard = (): boolean => {
       try {
@@ -217,13 +208,11 @@ export default function Analytics() {
     let referrer = document.referrer || '';
     const sessionKey = 'cd_has_navigated';
     
-    try {
-      if (sessionStorage.getItem(sessionKey)) {
-        referrer = window.location.origin;
-      } else {
-        sessionStorage.setItem(sessionKey, 'true');
-      }
-    } catch {}
+    if (sessionStorage.getItem(sessionKey)) {
+      referrer = window.location.origin;
+    } else {
+      sessionStorage.setItem(sessionKey, 'true');
+    }
 
     accumulatedMs.current = 0;
     lastActiveTimestamp.current = 0;
@@ -252,7 +241,7 @@ export default function Analytics() {
       if (document.visibilityState === 'visible' && lastActiveTimestamp.current > 0) {
         total += Date.now() - lastActiveTimestamp.current;
       }
-      return Math.max(1, Math.ceil(total / 1000));
+      return Math.max(0, Math.round(total / 1000));
     };
 
     const resetIdleTimer = () => {
@@ -269,8 +258,8 @@ export default function Analytics() {
       }, IDLE_TIMEOUT_MS);
     };
 
-    const dispatchPingSync = (id: number | null, durationSec: number, isBounce: boolean) => {
-      if (durationSec <= 0 || durationSec === lastDispatchedDuration.current) return;
+    const dispatchPingSync = (id: string | null, durationSec: number, isBounce: boolean) => {
+      if (durationSec === lastDispatchedDuration.current) return;
       lastDispatchedDuration.current = durationSec;
 
       const timestamp = Date.now();
@@ -283,33 +272,29 @@ export default function Analytics() {
       params.append('b', isBounce ? 'true' : 'false');
       params.append('is_404', is404Detected ? 'true' : 'false');
       params.append('type', 'ping');
-      if (id) params.append('id', id.toString());
+      if (id) params.append('id', id);
       params.append('ts', timestamp.toString());
       params.append('token', clientToken);
 
-      const payloadString = params.toString();
-
       if (navigator.sendBeacon) {
-        const blob = new Blob([payloadString], { type: 'application/x-www-form-urlencoded;charset=UTF-8' });
-        if (navigator.sendBeacon(METRICS_ENDPOINT, blob)) return;
+        if (navigator.sendBeacon(METRICS_ENDPOINT, params)) return;
       }
 
       fetch(METRICS_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: payloadString,
+        body: params.toString(),
         keepalive: true,
       }).catch(() => {});
     };
 
     const sendPayload = async (isUpdate = false) => {
+      pauseTimer();
+      const durationSec = getActiveDurationSeconds();
+      const isBounce = !hasInteracted && durationSec < 10;
+      const currentId = pageviewId.current;
+
       if (isUpdate) {
-        pauseTimer();
-
-        const durationSec = getActiveDurationSeconds();
-        const isBounce = !hasInteracted && durationSec < 10;
-        const currentId = pageviewId.current;
-
         dispatchPingSync(currentId, durationSec, isBounce);
         return;
       }
@@ -320,33 +305,26 @@ export default function Analytics() {
       const payload = JSON.stringify({
         p: activePath,
         r: referrer,
-        d: 0,
-        b: true,
+        d: durationSec,
+        b: isBounce,
         is_404: is404Detected,
         type: 'init',
-        id: null,
+        id: currentId,
         ts: timestamp,
         token: clientToken
       });
 
-      try {
-        const res = await fetch(METRICS_ENDPOINT, {
+      if (navigator.sendBeacon) {
+        const blob = new Blob([payload], { type: 'application/json' });
+        navigator.sendBeacon(METRICS_ENDPOINT, blob);
+      } else {
+        fetch(METRICS_ENDPOINT, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: payload,
           keepalive: true,
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          if (data?.id) {
-            pageviewId.current = data.id;
-            try {
-              sessionStorage.setItem(sessionKeyId, data.id.toString());
-            } catch {}
-          }
-        }
-      } catch {}
+        }).catch(() => {});
+      }
     };
 
     const handleInteraction = () => {
@@ -426,8 +404,18 @@ export default function Analytics() {
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
+    const handlePageHide = () => {
+      if (isInitialized) {
+        if (idleTimer) clearTimeout(idleTimer);
+        sendPayload(true);
+      }
+    };
+
+    window.addEventListener('pagehide', handlePageHide);
+
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pagehide', handlePageHide);
       window.removeEventListener('pageshow', handlePageShow);
       window.removeEventListener('popstate', handlePopState);
       
