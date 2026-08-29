@@ -432,11 +432,13 @@ export default function Analytics() {
 
     window.addEventListener('pagehide', handlePageHide);
     window.addEventListener('freeze', handlePageHide, { capture: true });
+    window.addEventListener('blur', handlePageHide);
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('pagehide', handlePageHide);
       window.removeEventListener('freeze', handlePageHide, { capture: true });
+      window.removeEventListener('blur', handlePageHide);
       window.removeEventListener('pageshow', handlePageShow);
       window.removeEventListener('popstate', handlePopState);
       
