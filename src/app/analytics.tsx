@@ -57,7 +57,7 @@ export const trackEvent = async (
   const timestamp = Date.now();
   const clientToken = await generateClientToken(cleanPath, timestamp);
 
-  const payloadString = JSON.stringify({
+  const payload = JSON.stringify({
     type: 'event',
     event_type: eventType,
     p: cleanPath,
@@ -67,11 +67,13 @@ export const trackEvent = async (
   });
 
   if (navigator.sendBeacon) {
-    navigator.sendBeacon(METRICS_ENDPOINT, payloadString);
+    const blob = new Blob([payload], { type: 'application/json' });
+    navigator.sendBeacon(METRICS_ENDPOINT, blob);
   } else {
     fetch(METRICS_ENDPOINT, {
       method: 'POST',
-      body: payloadString,
+      headers: { 'Content-Type': 'application/json' },
+      body: payload,
       keepalive: true,
     }).catch(() => {});
   }
@@ -85,12 +87,10 @@ export default function Analytics() {
   const rawPathname = usePathname();
   const lastTrackedPath = useRef<string | null>(null);
 
-  const pageviewIdRef = useRef<number | null>(null);
-  const isFinalSentRef = useRef<boolean>(false);
-
   const accumulatedMs = useRef<number>(0);
   const lastActiveTimestamp = useRef<number>(0);
-  const hasInteractedRef = useRef<boolean>(false);
+  const lastDispatchedDuration = useRef<number>(-1);
+  const pageviewNonce = useRef<string | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -99,12 +99,11 @@ export default function Analytics() {
 
     if (lastTrackedPath.current === cleanPathname) return;
 
-    const sessionKeyId = `cd_pv_id_${cleanPathname}`;
-    const cachedId = sessionStorage.getItem(sessionKeyId);
-    
-    pageviewIdRef.current = cachedId ? parseInt(cachedId, 10) : null;
-    isFinalSentRef.current = false;
-    hasInteractedRef.current = false;
+    lastDispatchedDuration.current = -1;
+
+    pageviewNonce.current = typeof crypto !== 'undefined' && crypto.randomUUID 
+      ? crypto.randomUUID() 
+      : `${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
 
     const queryParams = new URLSearchParams(window.location.search);
     if (queryParams.get('admin') === 'true') {
@@ -219,6 +218,10 @@ export default function Analytics() {
     accumulatedMs.current = 0;
     lastActiveTimestamp.current = 0;
 
+    let idleTimer: ReturnType<typeof setTimeout> | null = null;
+    const IDLE_TIMEOUT_MS = 60000;
+
+    let hasInteracted = false;
     let isInitialized = false;
 
     const startTimer = () => {
@@ -242,80 +245,87 @@ export default function Analytics() {
       return Math.max(0, Math.round(total / 1000));
     };
 
-    const dispatchFinalPing = () => {
-      if (isFinalSentRef.current) return;
-      isFinalSentRef.current = true;
+    const resetIdleTimer = () => {
+      if (document.visibilityState !== 'visible') return;
 
-      pauseTimer();
+      if (lastActiveTimestamp.current === 0) {
+        lastActiveTimestamp.current = Date.now();
+      }
 
-      const durationSec = getActiveDurationSeconds();
-      const isBounce = !hasInteractedRef.current && durationSec < 10;
-      const id = pageviewIdRef.current;
+      if (idleTimer) clearTimeout(idleTimer);
+
+      idleTimer = setTimeout(() => {
+        pauseTimer();
+      }, IDLE_TIMEOUT_MS);
+    };
+
+    const dispatchPingSync = (durationSec: number, isBounce: boolean) => {
+      if (durationSec === lastDispatchedDuration.current) return;
+      lastDispatchedDuration.current = durationSec;
 
       const timestamp = Date.now();
       const clientToken = generateClientTokenSync(activePath, timestamp);
 
-      const payloadString = JSON.stringify({
-        p: activePath,
-        r: referrer,
-        d: durationSec,
-        b: isBounce,
-        is_404: is404Detected,
-        type: 'ping',
-        id: id,
-        ts: timestamp,
-        token: clientToken
-      });
+      const params = new URLSearchParams();
+      params.append('p', activePath);
+      params.append('r', referrer);
+      params.append('d', durationSec.toString());
+      params.append('b', isBounce ? 'true' : 'false');
+      params.append('is_404', is404Detected ? 'true' : 'false');
+      params.append('type', 'ping');
+      if (pageviewNonce.current) params.append('nonce', pageviewNonce.current);
+      params.append('ts', timestamp.toString());
+      params.append('token', clientToken);
 
       if (navigator.sendBeacon) {
-        navigator.sendBeacon(METRICS_ENDPOINT, payloadString);
-      } else {
-        fetch(METRICS_ENDPOINT, {
-          method: 'POST',
-          body: payloadString,
-          keepalive: true,
-        }).catch(() => {});
+        const blob = new Blob([params.toString()], { type: 'application/x-www-form-urlencoded' });
+        if (navigator.sendBeacon(METRICS_ENDPOINT, blob)) return;
       }
+
+      fetch(METRICS_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params.toString(),
+        keepalive: true,
+      }).catch(() => {});
     };
 
-    const sendInitPayload = async () => {
+    const sendPayload = async (isUpdate = false) => {
+      if (isUpdate) {
+        pauseTimer();
+        const durationSec = getActiveDurationSeconds();
+        const isBounce = !hasInteracted && durationSec < 10;
+
+        dispatchPingSync(durationSec, isBounce);
+        return;
+      }
+
       const timestamp = Date.now();
       const clientToken = await generateClientToken(activePath, timestamp);
 
-      const payloadString = JSON.stringify({
+      const payload = JSON.stringify({
         p: activePath,
         r: referrer,
         d: 0,
         b: true,
         is_404: is404Detected,
         type: 'init',
-        id: null,
+        nonce: pageviewNonce.current,
         ts: timestamp,
         token: clientToken
       });
 
-      try {
-        const res = await fetch(METRICS_ENDPOINT, {
-          method: 'POST',
-          body: payloadString,
-          keepalive: true,
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          if (data?.id) {
-            pageviewIdRef.current = data.id;
-            sessionStorage.setItem(sessionKeyId, data.id.toString());
-          }
-        }
-      } catch {}
+      fetch(METRICS_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: payload,
+        keepalive: true,
+      }).catch(() => {});
     };
 
     const handleInteraction = () => {
-      hasInteractedRef.current = true;
-      if (lastActiveTimestamp.current === 0 && document.visibilityState === 'visible') {
-        lastActiveTimestamp.current = Date.now();
-      }
+      hasInteracted = true;
+      resetIdleTimer();
     };
 
     const handleOutboundClick = (event: MouseEvent) => {
@@ -335,7 +345,6 @@ export default function Analytics() {
     };
 
     const handlePopState = () => {
-      dispatchFinalPing();
       lastTrackedPath.current = null;
       isInitialized = false;
       startTrackingIfVisible();
@@ -355,8 +364,9 @@ export default function Analytics() {
       isInitialized = true;
       lastTrackedPath.current = cleanPathname;
       startTimer();
+      resetIdleTimer();
 
-      sendInitPayload();
+      sendPayload(false);
 
       const activityEvents = ['mousemove', 'keydown', 'scroll', 'click', 'touchstart'];
       activityEvents.forEach((evt) => {
@@ -378,10 +388,12 @@ export default function Analytics() {
           startTrackingIfVisible();
         } else {
           startTimer();
+          resetIdleTimer();
         }
       } else if (document.visibilityState === 'hidden') {
         if (isInitialized) {
-          dispatchFinalPing();
+          if (idleTimer) clearTimeout(idleTimer);
+          sendPayload(true);
         }
       }
     };
@@ -390,7 +402,8 @@ export default function Analytics() {
 
     const handlePageHide = () => {
       if (isInitialized) {
-        dispatchFinalPing();
+        if (idleTimer) clearTimeout(idleTimer);
+        sendPayload(true);
       }
     };
 
@@ -408,8 +421,10 @@ export default function Analytics() {
       });
       window.removeEventListener('click', handleOutboundClick, { capture: true });
 
+      if (idleTimer) clearTimeout(idleTimer);
+
       if (isInitialized) {
-        dispatchFinalPing();
+        sendPayload(true);
       }
     };
 
