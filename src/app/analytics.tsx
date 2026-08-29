@@ -11,6 +11,7 @@ import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 
 const METRICS_ENDPOINT = '/lib';
+
 const encoder = new TextEncoder();
 
 const bufferToHex = (buffer: ArrayBuffer | Uint8Array, length = 24): string => {
@@ -85,10 +86,12 @@ if (typeof window !== 'undefined') {
 export default function Analytics() {
   const rawPathname = usePathname();
   const lastTrackedPath = useRef<string | null>(null);
-  const pageviewId = useRef<string | null>(null);
+  const pageviewId = useRef<number | null>(null);
+  const pendingPingPayload = useRef<{ durationSec: number; isBounce: boolean } | null>(null);
 
   const accumulatedMs = useRef<number>(0);
   const lastActiveTimestamp = useRef<number>(0);
+  
   const lastDispatchedDuration = useRef<number>(-1);
 
   useEffect(() => {
@@ -98,10 +101,10 @@ export default function Analytics() {
 
     if (lastTrackedPath.current === cleanPathname) return;
 
-    pageviewId.current = typeof crypto.randomUUID === 'function' 
-      ? crypto.randomUUID() 
-      : `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-
+    const sessionKeyId = `cd_pv_id_${cleanPathname}`;
+    const cachedId = sessionStorage.getItem(sessionKeyId);
+    pageviewId.current = cachedId ? parseInt(cachedId, 10) : null;
+    pendingPingPayload.current = null;
     lastDispatchedDuration.current = -1;
 
     const queryParams = new URLSearchParams(window.location.search);
@@ -258,7 +261,10 @@ export default function Analytics() {
       }, IDLE_TIMEOUT_MS);
     };
 
-    const dispatchPingSync = (id: string | null, durationSec: number, isBounce: boolean) => {
+    const dispatchPingSync = (id: number | null, durationSec: number, isBounce: boolean) => {
+      const sessionKeyId = `cd_pv_id_${activePath}`;
+      const effectiveId = id || (sessionStorage.getItem(sessionKeyId) ? parseInt(sessionStorage.getItem(sessionKeyId)!, 10) : null);
+
       if (durationSec === lastDispatchedDuration.current) return;
       lastDispatchedDuration.current = durationSec;
 
@@ -272,29 +278,33 @@ export default function Analytics() {
       params.append('b', isBounce ? 'true' : 'false');
       params.append('is_404', is404Detected ? 'true' : 'false');
       params.append('type', 'ping');
-      if (id) params.append('id', id);
+      if (effectiveId) params.append('id', effectiveId.toString());
       params.append('ts', timestamp.toString());
       params.append('token', clientToken);
 
+      const payloadString = params.toString();
+
       if (navigator.sendBeacon) {
-        if (navigator.sendBeacon(METRICS_ENDPOINT, params)) return;
+        const blob = new Blob([payloadString], { type: 'application/x-www-form-urlencoded' });
+        if (navigator.sendBeacon(METRICS_ENDPOINT, blob)) return;
       }
 
       fetch(METRICS_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: params.toString(),
+        body: payloadString,
         keepalive: true,
       }).catch(() => {});
     };
 
     const sendPayload = async (isUpdate = false) => {
-      pauseTimer();
-      const durationSec = getActiveDurationSeconds();
-      const isBounce = !hasInteracted && durationSec < 10;
-      const currentId = pageviewId.current;
-
       if (isUpdate) {
+        pauseTimer();
+
+        const durationSec = getActiveDurationSeconds();
+        const isBounce = !hasInteracted && durationSec < 10;
+        const currentId = pageviewId.current;
+
         dispatchPingSync(currentId, durationSec, isBounce);
         return;
       }
@@ -305,26 +315,37 @@ export default function Analytics() {
       const payload = JSON.stringify({
         p: activePath,
         r: referrer,
-        d: durationSec,
-        b: isBounce,
+        d: 0,
+        b: true,
         is_404: is404Detected,
         type: 'init',
-        id: currentId,
+        id: null,
         ts: timestamp,
         token: clientToken
       });
 
-      if (navigator.sendBeacon) {
-        const blob = new Blob([payload], { type: 'application/json' });
-        navigator.sendBeacon(METRICS_ENDPOINT, blob);
-      } else {
-        fetch(METRICS_ENDPOINT, {
+      try {
+        const res = await fetch(METRICS_ENDPOINT, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: payload,
           keepalive: true,
-        }).catch(() => {});
-      }
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.id) {
+            pageviewId.current = data.id;
+            sessionStorage.setItem(sessionKeyId, data.id.toString());
+            
+            if (pendingPingPayload.current) {
+              const { durationSec: pDuration, isBounce: pBounce } = pendingPingPayload.current;
+              pendingPingPayload.current = null;
+              dispatchPingSync(data.id, pDuration, pBounce);
+            }
+          }
+        }
+      } catch {}
     };
 
     const handleInteraction = () => {
