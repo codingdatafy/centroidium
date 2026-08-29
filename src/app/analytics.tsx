@@ -57,7 +57,7 @@ export const trackEvent = async (
   const timestamp = Date.now();
   const clientToken = await generateClientToken(cleanPath, timestamp);
 
-  const payload = JSON.stringify({
+  const payloadString = JSON.stringify({
     type: 'event',
     event_type: eventType,
     p: cleanPath,
@@ -67,13 +67,11 @@ export const trackEvent = async (
   });
 
   if (navigator.sendBeacon) {
-    const blob = new Blob([payload], { type: 'application/json' });
-    navigator.sendBeacon(METRICS_ENDPOINT, blob);
+    navigator.sendBeacon(METRICS_ENDPOINT, payloadString);
   } else {
     fetch(METRICS_ENDPOINT, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: payload,
+      body: payloadString,
       keepalive: true,
     }).catch(() => {});
   }
@@ -257,36 +255,34 @@ export default function Analytics() {
       const timestamp = Date.now();
       const clientToken = generateClientTokenSync(activePath, timestamp);
 
-      const params = new URLSearchParams();
-      params.append('p', activePath);
-      params.append('r', referrer);
-      params.append('d', durationSec.toString());
-      params.append('b', isBounce ? 'true' : 'false');
-      params.append('is_404', is404Detected ? 'true' : 'false');
-      params.append('type', 'ping');
-      if (id) params.append('id', id.toString());
-      params.append('ts', timestamp.toString());
-      params.append('token', clientToken);
-
-      const blobPayload = new Blob([params.toString()], { type: 'application/x-www-form-urlencoded' });
+      const payloadString = JSON.stringify({
+        p: activePath,
+        r: referrer,
+        d: durationSec,
+        b: isBounce,
+        is_404: is404Detected,
+        type: 'ping',
+        id: id,
+        ts: timestamp,
+        token: clientToken
+      });
 
       if (navigator.sendBeacon) {
-        if (navigator.sendBeacon(METRICS_ENDPOINT, blobPayload)) return;
+        navigator.sendBeacon(METRICS_ENDPOINT, payloadString);
+      } else {
+        fetch(METRICS_ENDPOINT, {
+          method: 'POST',
+          body: payloadString,
+          keepalive: true,
+        }).catch(() => {});
       }
-
-      fetch(METRICS_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: params.toString(),
-        keepalive: true,
-      }).catch(() => {});
     };
 
     const sendInitPayload = async () => {
       const timestamp = Date.now();
       const clientToken = await generateClientToken(activePath, timestamp);
 
-      const payload = JSON.stringify({
+      const payloadString = JSON.stringify({
         p: activePath,
         r: referrer,
         d: 0,
@@ -301,8 +297,7 @@ export default function Analytics() {
       try {
         const res = await fetch(METRICS_ENDPOINT, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: payload,
+          body: payloadString,
           keepalive: true,
         });
 
