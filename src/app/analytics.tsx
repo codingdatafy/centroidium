@@ -67,7 +67,7 @@ export const trackEvent = async (
   });
 
   if (navigator.sendBeacon) {
-    const blob = new Blob([payload], { type: 'application/json' });
+    const blob = new Blob([payload], { type: 'text/plain;charset=UTF-8' });
     navigator.sendBeacon(METRICS_ENDPOINT, blob);
   } else {
     fetch(METRICS_ENDPOINT, {
@@ -100,13 +100,19 @@ export default function Analytics() {
     if (lastTrackedPath.current === cleanPathname) return;
 
     const sessionKeyId = `cd_pv_id_${cleanPathname}`;
-    const cachedId = sessionStorage.getItem(sessionKeyId);
+    let cachedId: string | null = null;
+    try {
+      cachedId = sessionStorage.getItem(sessionKeyId);
+    } catch {}
+
     pageviewId.current = cachedId ? parseInt(cachedId, 10) : null;
     lastDispatchedDuration.current = -1;
 
     const queryParams = new URLSearchParams(window.location.search);
     if (queryParams.get('admin') === 'true') {
-      localStorage.setItem('analytics-disable', 'true');
+      try {
+        localStorage.setItem('analytics-disable', 'true');
+      } catch {}
       const newUrl = window.location.pathname;
       window.history.replaceState({}, '', newUrl); 
       alert('CodingDatafy: Analytics tracking is now disabled for this browser.');
@@ -125,7 +131,10 @@ export default function Analytics() {
     const isHeadlessChrome = /headlesschrome/i.test(ua);
     const isAutomatedBot = isWebDriver || isPhantom || isHeadlessWindow || hasNoLanguages || isHeadlessChrome;
 
-    const isExplicitlyDisabled = localStorage.getItem('analytics-disable') === 'true';
+    let isExplicitlyDisabled = false;
+    try {
+      isExplicitlyDisabled = localStorage.getItem('analytics-disable') === 'true';
+    } catch {}
 
     const isAdvancedBotGuard = (): boolean => {
       try {
@@ -208,11 +217,13 @@ export default function Analytics() {
     let referrer = document.referrer || '';
     const sessionKey = 'cd_has_navigated';
     
-    if (sessionStorage.getItem(sessionKey)) {
-      referrer = window.location.origin;
-    } else {
-      sessionStorage.setItem(sessionKey, 'true');
-    }
+    try {
+      if (sessionStorage.getItem(sessionKey)) {
+        referrer = window.location.origin;
+      } else {
+        sessionStorage.setItem(sessionKey, 'true');
+      }
+    } catch {}
 
     accumulatedMs.current = 0;
     lastActiveTimestamp.current = 0;
@@ -265,39 +276,43 @@ export default function Analytics() {
       const timestamp = Date.now();
       const clientToken = generateClientTokenSync(activePath, timestamp);
 
-      const params = new URLSearchParams();
-      params.append('p', activePath);
-      params.append('r', referrer);
-      params.append('d', durationSec.toString());
-      params.append('b', isBounce ? 'true' : 'false');
-      params.append('is_404', is404Detected ? 'true' : 'false');
-      params.append('type', 'ping');
-      if (id) params.append('id', id.toString());
-      params.append('ts', timestamp.toString());
-      params.append('token', clientToken);
+      const jsonPayload = JSON.stringify({
+        p: activePath,
+        r: referrer,
+        d: durationSec,
+        b: isBounce,
+        is_404: is404Detected,
+        type: 'ping',
+        id: id || null,
+        ts: timestamp,
+        token: clientToken
+      });
+
+      if (navigator.sendBeacon) {
+        const blob = new Blob([jsonPayload], { type: 'text/plain;charset=UTF-8' });
+        if (navigator.sendBeacon(METRICS_ENDPOINT, blob)) return;
+      }
 
       fetch(METRICS_ENDPOINT, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: params.toString(),
+        headers: { 'Content-Type': 'application/json' },
+        body: jsonPayload,
         keepalive: true,
       }).catch(() => {});
+    };
 
-      if (navigator.sendBeacon) {
-        navigator.sendBeacon(METRICS_ENDPOINT, params);
+    const sendPayload = async (isUpdate = false) => {
+      if (isUpdate) {
+        pauseTimer();
+
+        const durationSec = getActiveDurationSeconds();
+        const isBounce = !hasInteracted && durationSec < 10;
+        const currentId = pageviewId.current;
+
+        dispatchPingSync(currentId, durationSec, isBounce);
+        return;
       }
-    };
 
-    const sendFinalPing = () => {
-      pauseTimer();
-      const durationSec = getActiveDurationSeconds();
-      const isBounce = !hasInteracted && durationSec < 10;
-      const currentId = pageviewId.current;
-
-      dispatchPingSync(currentId, durationSec, isBounce);
-    };
-
-    const sendPayload = async () => {
       const timestamp = Date.now();
       const clientToken = await generateClientToken(activePath, timestamp);
 
@@ -325,7 +340,9 @@ export default function Analytics() {
           const data = await res.json();
           if (data?.id) {
             pageviewId.current = data.id;
-            sessionStorage.setItem(sessionKeyId, data.id.toString());
+            try {
+              sessionStorage.setItem(sessionKeyId, data.id.toString());
+            } catch {}
           }
         }
       } catch {}
@@ -352,6 +369,20 @@ export default function Analytics() {
       }
     };
 
+    const handlePopState = () => {
+      lastTrackedPath.current = null;
+      isInitialized = false;
+      startTrackingIfVisible();
+    };
+
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) {
+        lastTrackedPath.current = null;
+        isInitialized = false;
+        startTrackingIfVisible();
+      }
+    };
+
     const startTrackingIfVisible = () => {
       if (isInitialized) return;
       
@@ -360,7 +391,7 @@ export default function Analytics() {
       startTimer();
       resetIdleTimer();
 
-      sendPayload();
+      sendPayload(false);
 
       const activityEvents = ['mousemove', 'keydown', 'scroll', 'click', 'touchstart'];
       activityEvents.forEach((evt) => {
@@ -368,6 +399,8 @@ export default function Analytics() {
       });
 
       window.addEventListener('click', handleOutboundClick, { capture: true, passive: true });
+      window.addEventListener('popstate', handlePopState);
+      window.addEventListener('pageshow', handlePageShow);
     };
 
     if (document.visibilityState === 'visible') {
@@ -385,15 +418,29 @@ export default function Analytics() {
       } else if (document.visibilityState === 'hidden') {
         if (isInitialized) {
           if (idleTimer) clearTimeout(idleTimer);
-          sendFinalPing();
+          sendPayload(true);
         }
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
+    const handlePageHide = () => {
+      if (isInitialized) {
+        if (idleTimer) clearTimeout(idleTimer);
+        sendPayload(true);
+      }
+    };
+
+    window.addEventListener('pagehide', handlePageHide);
+    window.addEventListener('beforeunload', handlePageHide);
+
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pagehide', handlePageHide);
+      window.removeEventListener('beforeunload', handlePageHide);
+      window.removeEventListener('pageshow', handlePageShow);
+      window.removeEventListener('popstate', handlePopState);
       
       const activityEvents = ['mousemove', 'keydown', 'scroll', 'click', 'touchstart'];
       activityEvents.forEach((evt) => {
@@ -404,7 +451,7 @@ export default function Analytics() {
       if (idleTimer) clearTimeout(idleTimer);
 
       if (isInitialized) {
-        sendFinalPing();
+        sendPayload(true);
       }
     };
 
