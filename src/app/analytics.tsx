@@ -87,13 +87,12 @@ export default function Analytics() {
   const rawPathname = usePathname();
   const lastTrackedPath = useRef<string | null>(null);
   const pageviewId = useRef<number | null>(null);
-  const pendingPingPayload = useRef<{ durationSec: number; isBounce: boolean } | null>(null);
 
   const accumulatedMs = useRef<number>(0);
   const lastActiveTimestamp = useRef<number>(0);
   
   const lastDispatchedDuration = useRef<number>(-1);
-  const lastSentPingTimestamp = useRef<number>(0);
+  const pingDispatched = useRef<boolean>(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -105,9 +104,8 @@ export default function Analytics() {
     const sessionKeyId = `cd_pv_id_${cleanPathname}`;
     const cachedId = sessionStorage.getItem(sessionKeyId);
     pageviewId.current = cachedId ? parseInt(cachedId, 10) : null;
-    pendingPingPayload.current = null;
     lastDispatchedDuration.current = -1;
-    lastSentPingTimestamp.current = 0;
+    pingDispatched.current = false;
 
     const queryParams = new URLSearchParams(window.location.search);
     if (queryParams.get('admin') === 'true') {
@@ -264,35 +262,31 @@ export default function Analytics() {
     };
 
     const dispatchPingSync = (id: number | null, durationSec: number, isBounce: boolean) => {
-      if (durationSec === lastDispatchedDuration.current) return;
+      if (pingDispatched.current) return;
+      pingDispatched.current = true;
       lastDispatchedDuration.current = durationSec;
 
       const timestamp = Date.now();
       const clientToken = generateClientTokenSync(activePath, timestamp);
 
-      const params = new URLSearchParams();
-      params.append('p', activePath);
-      params.append('r', referrer);
-      params.append('d', durationSec.toString());
-      params.append('b', isBounce ? 'true' : 'false');
-      params.append('is_404', is404Detected ? 'true' : 'false');
-      params.append('type', 'ping');
-      if (id) params.append('id', id.toString());
-      params.append('ts', timestamp.toString());
-      params.append('token', clientToken);
-
-      const blobPayload = new Blob([params.toString()], {
-        type: 'application/x-www-form-urlencoded'
-      });
+      const formData = new FormData();
+      formData.append('p', activePath);
+      formData.append('r', referrer);
+      formData.append('d', durationSec.toString());
+      formData.append('b', isBounce ? 'true' : 'false');
+      formData.append('is_404', is404Detected ? 'true' : 'false');
+      formData.append('type', 'ping');
+      if (id) formData.append('id', id.toString());
+      formData.append('ts', timestamp.toString());
+      formData.append('token', clientToken);
 
       if (navigator.sendBeacon) {
-        if (navigator.sendBeacon(METRICS_ENDPOINT, blobPayload)) return;
+        if (navigator.sendBeacon(METRICS_ENDPOINT, formData)) return;
       }
 
       fetch(METRICS_ENDPOINT, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: params.toString(),
+        body: formData,
         keepalive: true,
       }).catch(() => {});
     };
@@ -300,12 +294,9 @@ export default function Analytics() {
     const sendPayload = async (isUpdate = false) => {
       if (isUpdate) {
         pauseTimer();
-
         const durationSec = getActiveDurationSeconds();
         const isBounce = !hasInteracted && durationSec < 10;
-        const currentId = pageviewId.current;
-
-        dispatchPingSync(currentId, durationSec, isBounce);
+        dispatchPingSync(pageviewId.current, durationSec, isBounce);
         return;
       }
 
@@ -337,12 +328,6 @@ export default function Analytics() {
           if (data?.id) {
             pageviewId.current = data.id;
             sessionStorage.setItem(sessionKeyId, data.id.toString());
-            
-            if (pendingPingPayload.current) {
-              const { durationSec: pDuration, isBounce: pBounce } = pendingPingPayload.current;
-              pendingPingPayload.current = null;
-              dispatchPingSync(data.id, pDuration, pBounce);
-            }
           }
         }
       } catch {}
@@ -407,15 +392,11 @@ export default function Analytics() {
       startTrackingIfVisible();
     }
 
-    const handlePageExit = () => {
-      if (!isInitialized) return;
-
-      const now = Date.now();
-      if (now - lastSentPingTimestamp.current < 1000) return;
-
-      lastSentPingTimestamp.current = now;
-      if (idleTimer) clearTimeout(idleTimer);
-      sendPayload(true);
+    const handleExit = () => {
+      if (isInitialized && !pingDispatched.current) {
+        if (idleTimer) clearTimeout(idleTimer);
+        sendPayload(true);
+      }
     };
 
     const handleVisibilityChange = () => {
@@ -427,20 +408,20 @@ export default function Analytics() {
           resetIdleTimer();
         }
       } else if (document.visibilityState === 'hidden') {
-        handlePageExit();
+        handleExit();
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('pagehide', handlePageExit);
-    window.addEventListener('freeze', handlePageExit, { capture: true });
-    window.addEventListener('blur', handlePageExit);
+    window.addEventListener('pagehide', handleExit);
+    window.addEventListener('freeze', handleExit, { capture: true });
+    window.addEventListener('blur', handleExit);
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('pagehide', handlePageExit);
-      window.removeEventListener('freeze', handlePageExit, { capture: true });
-      window.removeEventListener('blur', handlePageExit);
+      window.removeEventListener('pagehide', handleExit);
+      window.removeEventListener('freeze', handleExit, { capture: true });
+      window.removeEventListener('blur', handleExit);
       window.removeEventListener('pageshow', handlePageShow);
       window.removeEventListener('popstate', handlePopState);
       
@@ -453,7 +434,7 @@ export default function Analytics() {
       if (idleTimer) clearTimeout(idleTimer);
 
       if (isInitialized) {
-        handlePageExit();
+        handleExit();
       }
     };
 
