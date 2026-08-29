@@ -67,7 +67,8 @@ export const trackEvent = async (
   });
 
   if (navigator.sendBeacon) {
-    navigator.sendBeacon(METRICS_ENDPOINT, payload);
+    const blob = new Blob([payload], { type: 'application/json' });
+    navigator.sendBeacon(METRICS_ENDPOINT, blob);
   } else {
     fetch(METRICS_ENDPOINT, {
       method: 'POST',
@@ -225,6 +226,8 @@ export default function Analytics() {
     let hasInteracted = false;
     let isInitialized = false;
 
+    const isMobileDevice = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(ua);
+
     const startTimer = () => {
       if (document.visibilityState === 'visible' && lastActiveTimestamp.current === 0) {
         lastActiveTimestamp.current = Date.now();
@@ -278,18 +281,20 @@ export default function Analytics() {
       params.append('ts', timestamp.toString());
       params.append('token', clientToken);
 
-      const payloadString = params.toString();
+      const blobPayload = new Blob([params.toString()], {
+        type: 'application/x-www-form-urlencoded'
+      });
 
       let sent = false;
       if (navigator.sendBeacon) {
-        sent = navigator.sendBeacon(METRICS_ENDPOINT, payloadString);
+        sent = navigator.sendBeacon(METRICS_ENDPOINT, blobPayload);
       }
 
       if (!sent) {
         fetch(METRICS_ENDPOINT, {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: payloadString,
+          body: params.toString(),
           keepalive: true,
         }).catch(() => {});
       }
@@ -430,41 +435,23 @@ export default function Analytics() {
       }
     };
 
-    const handleMouseLeaveWindow = (e: MouseEvent) => {
-      if (e.clientY <= 0 || e.clientX <= 0 || e.clientX >= window.innerWidth || e.clientY >= window.innerHeight) {
-        if (isInitialized) {
-          sendPayload(true);
-        }
-      }
-    };
-
-    let isIncognitoListenerAttached = false;
-    const isChromium = /chrome|crios/i.test(ua) && !/edg/i.test(ua);
-
-    if (isChromium && navigator.storage && navigator.storage.estimate) {
-      navigator.storage.estimate().then((estimate) => {
-        const quotaMB = estimate.quota ? estimate.quota / (1024 * 1024) : 0;
-        if (quotaMB > 0 && quotaMB < 120) {
-          window.addEventListener('mouseleave', handleMouseLeaveWindow);
-          isIncognitoListenerAttached = true;
-        }
-      }).catch(() => {});
-    }
-
     window.addEventListener('pagehide', handlePageHide);
-    window.addEventListener('beforeunload', handlePageHide);
     window.addEventListener('freeze', handlePageHide, { capture: true });
+
+    if (isMobileDevice) {
+      window.addEventListener('blur', handlePageHide);
+    }
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('pagehide', handlePageHide);
-      window.removeEventListener('beforeunload', handlePageHide);
-      if (isIncognitoListenerAttached) {
-        window.removeEventListener('mouseleave', handleMouseLeaveWindow);
-      }
       window.removeEventListener('freeze', handlePageHide, { capture: true });
       window.removeEventListener('pageshow', handlePageShow);
       window.removeEventListener('popstate', handlePopState);
+      
+      if (isMobileDevice) {
+        window.removeEventListener('blur', handlePageHide);
+      }
 
       const activityEvents = ['mousemove', 'keydown', 'scroll', 'click', 'touchstart'];
       activityEvents.forEach((evt) => {
