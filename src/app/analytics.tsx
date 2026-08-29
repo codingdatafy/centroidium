@@ -262,9 +262,6 @@ export default function Analytics() {
     };
 
     const dispatchPingSync = (id: number | null, durationSec: number, isBounce: boolean) => {
-      const sessionKeyId = `cd_pv_id_${activePath}`;
-      const effectiveId = id || (sessionStorage.getItem(sessionKeyId) ? parseInt(sessionStorage.getItem(sessionKeyId)!, 10) : null);
-
       if (durationSec === lastDispatchedDuration.current) return;
       lastDispatchedDuration.current = durationSec;
 
@@ -278,21 +275,18 @@ export default function Analytics() {
       params.append('b', isBounce ? 'true' : 'false');
       params.append('is_404', is404Detected ? 'true' : 'false');
       params.append('type', 'ping');
-      if (effectiveId) params.append('id', effectiveId.toString());
+      if (id) params.append('id', id.toString());
       params.append('ts', timestamp.toString());
       params.append('token', clientToken);
 
-      const payloadString = params.toString();
-
       if (navigator.sendBeacon) {
-        const blob = new Blob([payloadString], { type: 'application/x-www-form-urlencoded' });
-        if (navigator.sendBeacon(METRICS_ENDPOINT, blob)) return;
+        if (navigator.sendBeacon(METRICS_ENDPOINT, params)) return;
       }
 
       fetch(METRICS_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: payloadString,
+        body: params.toString(),
         keepalive: true,
       }).catch(() => {});
     };
