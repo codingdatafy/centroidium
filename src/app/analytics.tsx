@@ -86,7 +86,7 @@ if (typeof window !== 'undefined') {
 export default function Analytics() {
   const rawPathname = usePathname();
   const lastTrackedPath = useRef<string | null>(null);
-  
+
   const pageviewIdRef = useRef<number | null>(null);
   const isFinalSentRef = useRef<boolean>(false);
 
@@ -103,6 +103,7 @@ export default function Analytics() {
 
     const sessionKeyId = `cd_pv_id_${cleanPathname}`;
     const cachedId = sessionStorage.getItem(sessionKeyId);
+    
     pageviewIdRef.current = cachedId ? parseInt(cachedId, 10) : null;
     isFinalSentRef.current = false;
     hasInteractedRef.current = false;
@@ -385,7 +386,7 @@ export default function Analytics() {
         }
       } else if (document.visibilityState === 'hidden') {
         if (isInitialized) {
-          dis
+          dispatchFinalPing();
         }
       }
     };
