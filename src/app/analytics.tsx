@@ -252,7 +252,7 @@ export default function Analytics() {
       if (document.visibilityState === 'visible' && lastActiveTimestamp.current > 0) {
         total += Date.now() - lastActiveTimestamp.current;
       }
-      return Math.max(0, Math.round(total / 1000));
+      return Math.max(1, Math.ceil(total / 1000));
     };
 
     const resetIdleTimer = () => {
@@ -426,20 +426,8 @@ export default function Analytics() {
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    const handlePageHide = () => {
-      if (isInitialized) {
-        if (idleTimer) clearTimeout(idleTimer);
-        sendPayload(true);
-      }
-    };
-
-    window.addEventListener('pagehide', handlePageHide);
-    window.addEventListener('beforeunload', handlePageHide);
-
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('pagehide', handlePageHide);
-      window.removeEventListener('beforeunload', handlePageHide);
       window.removeEventListener('pageshow', handlePageShow);
       window.removeEventListener('popstate', handlePopState);
       
