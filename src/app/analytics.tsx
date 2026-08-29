@@ -67,7 +67,7 @@ export const trackEvent = async (
   });
 
   if (navigator.sendBeacon) {
-    const blob = new Blob([payload], { type: 'text/plain;charset=UTF-8' });
+    const blob = new Blob([payload], { type: 'application/json' });
     navigator.sendBeacon(METRICS_ENDPOINT, blob);
   } else {
     fetch(METRICS_ENDPOINT, {
@@ -270,33 +270,34 @@ export default function Analytics() {
     };
 
     const dispatchPingSync = (id: number | null, durationSec: number, isBounce: boolean) => {
-      if (durationSec === lastDispatchedDuration.current) return;
+      if (durationSec <= 0 || durationSec === lastDispatchedDuration.current) return;
       lastDispatchedDuration.current = durationSec;
 
       const timestamp = Date.now();
       const clientToken = generateClientTokenSync(activePath, timestamp);
 
-      const jsonPayload = JSON.stringify({
-        p: activePath,
-        r: referrer,
-        d: durationSec,
-        b: isBounce,
-        is_404: is404Detected,
-        type: 'ping',
-        id: id || null,
-        ts: timestamp,
-        token: clientToken
-      });
+      const params = new URLSearchParams();
+      params.append('p', activePath);
+      params.append('r', referrer);
+      params.append('d', durationSec.toString());
+      params.append('b', isBounce ? 'true' : 'false');
+      params.append('is_404', is404Detected ? 'true' : 'false');
+      params.append('type', 'ping');
+      if (id) params.append('id', id.toString());
+      params.append('ts', timestamp.toString());
+      params.append('token', clientToken);
+
+      const payloadString = params.toString();
 
       if (navigator.sendBeacon) {
-        const blob = new Blob([jsonPayload], { type: 'text/plain;charset=UTF-8' });
+        const blob = new Blob([payloadString], { type: 'application/x-www-form-urlencoded;charset=UTF-8' });
         if (navigator.sendBeacon(METRICS_ENDPOINT, blob)) return;
       }
 
       fetch(METRICS_ENDPOINT, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: jsonPayload,
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: payloadString,
         keepalive: true,
       }).catch(() => {});
     };
