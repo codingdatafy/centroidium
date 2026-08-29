@@ -87,11 +87,9 @@ export default function Analytics() {
   const rawPathname = usePathname();
   const lastTrackedPath = useRef<string | null>(null);
   const pageviewId = useRef<number | null>(null);
-  const pendingPingPayload = useRef<{ durationSec: number; isBounce: boolean } | null>(null);
 
   const accumulatedMs = useRef<number>(0);
   const lastActiveTimestamp = useRef<number>(0);
-  
   const lastDispatchedDuration = useRef<number>(-1);
 
   useEffect(() => {
@@ -104,7 +102,6 @@ export default function Analytics() {
     const sessionKeyId = `cd_pv_id_${cleanPathname}`;
     const cachedId = sessionStorage.getItem(sessionKeyId);
     pageviewId.current = cachedId ? parseInt(cachedId, 10) : null;
-    pendingPingPayload.current = null;
     lastDispatchedDuration.current = -1;
 
     const queryParams = new URLSearchParams(window.location.search);
@@ -279,35 +276,28 @@ export default function Analytics() {
       params.append('ts', timestamp.toString());
       params.append('token', clientToken);
 
-      if (navigator.sendBeacon) {
-        if (navigator.sendBeacon(METRICS_ENDPOINT, params)) return;
-      }
-
       fetch(METRICS_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: params.toString(),
         keepalive: true,
       }).catch(() => {});
+
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon(METRICS_ENDPOINT, params);
+      }
     };
 
-    const sendPayload = async (isUpdate = false) => {
-      if (isUpdate) {
-        pauseTimer();
+    const sendFinalPing = () => {
+      pauseTimer();
+      const durationSec = getActiveDurationSeconds();
+      const isBounce = !hasInteracted && durationSec < 10;
+      const currentId = pageviewId.current;
 
-        const durationSec = getActiveDurationSeconds();
-        const isBounce = !hasInteracted && durationSec < 10;
-        const currentId = pageviewId.current;
+      dispatchPingSync(currentId, durationSec, isBounce);
+    };
 
-        if (!currentId) {
-          pendingPingPayload.current = { durationSec, isBounce };
-          return;
-        }
-
-        dispatchPingSync(currentId, durationSec, isBounce);
-        return;
-      }
-
+    const sendPayload = async () => {
       const timestamp = Date.now();
       const clientToken = await generateClientToken(activePath, timestamp);
 
@@ -336,12 +326,6 @@ export default function Analytics() {
           if (data?.id) {
             pageviewId.current = data.id;
             sessionStorage.setItem(sessionKeyId, data.id.toString());
-            
-            if (pendingPingPayload.current) {
-              const { durationSec: pDuration, isBounce: pBounce } = pendingPingPayload.current;
-              pendingPingPayload.current = null;
-              dispatchPingSync(data.id, pDuration, pBounce);
-            }
           }
         }
       } catch {}
@@ -368,20 +352,6 @@ export default function Analytics() {
       }
     };
 
-    const handlePopState = () => {
-      lastTrackedPath.current = null;
-      isInitialized = false;
-      startTrackingIfVisible();
-    };
-
-    const handlePageShow = (event: PageTransitionEvent) => {
-      if (event.persisted) {
-        lastTrackedPath.current = null;
-        isInitialized = false;
-        startTrackingIfVisible();
-      }
-    };
-
     const startTrackingIfVisible = () => {
       if (isInitialized) return;
       
@@ -390,7 +360,7 @@ export default function Analytics() {
       startTimer();
       resetIdleTimer();
 
-      sendPayload(false);
+      sendPayload();
 
       const activityEvents = ['mousemove', 'keydown', 'scroll', 'click', 'touchstart'];
       activityEvents.forEach((evt) => {
@@ -398,8 +368,6 @@ export default function Analytics() {
       });
 
       window.addEventListener('click', handleOutboundClick, { capture: true, passive: true });
-      window.addEventListener('popstate', handlePopState);
-      window.addEventListener('pageshow', handlePageShow);
     };
 
     if (document.visibilityState === 'visible') {
@@ -417,27 +385,15 @@ export default function Analytics() {
       } else if (document.visibilityState === 'hidden') {
         if (isInitialized) {
           if (idleTimer) clearTimeout(idleTimer);
-          sendPayload(true);
+          sendFinalPing();
         }
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    const handlePageHide = () => {
-      if (isInitialized) {
-        if (idleTimer) clearTimeout(idleTimer);
-        sendPayload(true);
-      }
-    };
-
-    window.addEventListener('pagehide', handlePageHide);
-
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('pagehide', handlePageHide);
-      window.removeEventListener('pageshow', handlePageShow);
-      window.removeEventListener('popstate', handlePopState);
       
       const activityEvents = ['mousemove', 'keydown', 'scroll', 'click', 'touchstart'];
       activityEvents.forEach((evt) => {
@@ -448,7 +404,7 @@ export default function Analytics() {
       if (idleTimer) clearTimeout(idleTimer);
 
       if (isInitialized) {
-        sendPayload(true);
+        sendFinalPing();
       }
     };
 
