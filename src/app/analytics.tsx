@@ -279,8 +279,12 @@ export default function Analytics() {
       params.append('ts', timestamp.toString());
       params.append('token', clientToken);
 
+      const blobPayload = new Blob([params.toString()], {
+        type: 'application/x-www-form-urlencoded'
+      });
+
       if (navigator.sendBeacon) {
-        if (navigator.sendBeacon(METRICS_ENDPOINT, params)) return;
+        if (navigator.sendBeacon(METRICS_ENDPOINT, blobPayload)) return;
       }
 
       fetch(METRICS_ENDPOINT, {
@@ -427,10 +431,12 @@ export default function Analytics() {
     };
 
     window.addEventListener('pagehide', handlePageHide);
+    window.addEventListener('freeze', handlePageHide, { capture: true });
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('pagehide', handlePageHide);
+      window.removeEventListener('freeze', handlePageHide, { capture: true });
       window.removeEventListener('pageshow', handlePageShow);
       window.removeEventListener('popstate', handlePopState);
       
