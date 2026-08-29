@@ -86,13 +86,13 @@ if (typeof window !== 'undefined') {
 export default function Analytics() {
   const rawPathname = usePathname();
   const lastTrackedPath = useRef<string | null>(null);
-  const pageviewId = useRef<number | null>(null);
-  const pendingPingPayload = useRef<{ durationSec: number; isBounce: boolean } | null>(null);
+  
+  const pageviewIdRef = useRef<number | null>(null);
+  const isFinalSentRef = useRef<boolean>(false);
 
   const accumulatedMs = useRef<number>(0);
   const lastActiveTimestamp = useRef<number>(0);
-  
-  const lastDispatchedDuration = useRef<number>(-1);
+  const hasInteractedRef = useRef<boolean>(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -103,9 +103,9 @@ export default function Analytics() {
 
     const sessionKeyId = `cd_pv_id_${cleanPathname}`;
     const cachedId = sessionStorage.getItem(sessionKeyId);
-    pageviewId.current = cachedId ? parseInt(cachedId, 10) : null;
-    pendingPingPayload.current = null;
-    lastDispatchedDuration.current = -1;
+    pageviewIdRef.current = cachedId ? parseInt(cachedId, 10) : null;
+    isFinalSentRef.current = false;
+    hasInteractedRef.current = false;
 
     const queryParams = new URLSearchParams(window.location.search);
     if (queryParams.get('admin') === 'true') {
@@ -220,10 +220,6 @@ export default function Analytics() {
     accumulatedMs.current = 0;
     lastActiveTimestamp.current = 0;
 
-    let idleTimer: ReturnType<typeof setTimeout> | null = null;
-    const IDLE_TIMEOUT_MS = 60000;
-
-    let hasInteracted = false;
     let isInitialized = false;
 
     const startTimer = () => {
@@ -247,23 +243,15 @@ export default function Analytics() {
       return Math.max(0, Math.round(total / 1000));
     };
 
-    const resetIdleTimer = () => {
-      if (document.visibilityState !== 'visible') return;
+    const dispatchFinalPing = () => {
+      if (isFinalSentRef.current) return;
+      isFinalSentRef.current = true;
 
-      if (lastActiveTimestamp.current === 0) {
-        lastActiveTimestamp.current = Date.now();
-      }
+      pauseTimer();
 
-      if (idleTimer) clearTimeout(idleTimer);
-
-      idleTimer = setTimeout(() => {
-        pauseTimer();
-      }, IDLE_TIMEOUT_MS);
-    };
-
-    const dispatchPingSync = (id: number | null, durationSec: number, isBounce: boolean) => {
-      if (durationSec === lastDispatchedDuration.current) return;
-      lastDispatchedDuration.current = durationSec;
+      const durationSec = getActiveDurationSeconds();
+      const isBounce = !hasInteractedRef.current && durationSec < 10;
+      const id = pageviewIdRef.current;
 
       const timestamp = Date.now();
       const clientToken = generateClientTokenSync(activePath, timestamp);
@@ -279,8 +267,10 @@ export default function Analytics() {
       params.append('ts', timestamp.toString());
       params.append('token', clientToken);
 
+      const blobPayload = new Blob([params.toString()], { type: 'application/x-www-form-urlencoded' });
+
       if (navigator.sendBeacon) {
-        if (navigator.sendBeacon(METRICS_ENDPOINT, params)) return;
+        if (navigator.sendBeacon(METRICS_ENDPOINT, blobPayload)) return;
       }
 
       fetch(METRICS_ENDPOINT, {
@@ -291,18 +281,7 @@ export default function Analytics() {
       }).catch(() => {});
     };
 
-    const sendPayload = async (isUpdate = false) => {
-      if (isUpdate) {
-        pauseTimer();
-
-        const durationSec = getActiveDurationSeconds();
-        const isBounce = !hasInteracted && durationSec < 10;
-        const currentId = pageviewId.current;
-
-        dispatchPingSync(currentId, durationSec, isBounce);
-        return;
-      }
-
+    const sendInitPayload = async () => {
       const timestamp = Date.now();
       const clientToken = await generateClientToken(activePath, timestamp);
 
@@ -329,22 +308,18 @@ export default function Analytics() {
         if (res.ok) {
           const data = await res.json();
           if (data?.id) {
-            pageviewId.current = data.id;
+            pageviewIdRef.current = data.id;
             sessionStorage.setItem(sessionKeyId, data.id.toString());
-            
-            if (pendingPingPayload.current) {
-              const { durationSec: pDuration, isBounce: pBounce } = pendingPingPayload.current;
-              pendingPingPayload.current = null;
-              dispatchPingSync(data.id, pDuration, pBounce);
-            }
           }
         }
       } catch {}
     };
 
     const handleInteraction = () => {
-      hasInteracted = true;
-      resetIdleTimer();
+      hasInteractedRef.current = true;
+      if (lastActiveTimestamp.current === 0 && document.visibilityState === 'visible') {
+        lastActiveTimestamp.current = Date.now();
+      }
     };
 
     const handleOutboundClick = (event: MouseEvent) => {
@@ -364,6 +339,7 @@ export default function Analytics() {
     };
 
     const handlePopState = () => {
+      dispatchFinalPing();
       lastTrackedPath.current = null;
       isInitialized = false;
       startTrackingIfVisible();
@@ -383,9 +359,8 @@ export default function Analytics() {
       isInitialized = true;
       lastTrackedPath.current = cleanPathname;
       startTimer();
-      resetIdleTimer();
 
-      sendPayload(false);
+      sendInitPayload();
 
       const activityEvents = ['mousemove', 'keydown', 'scroll', 'click', 'touchstart'];
       activityEvents.forEach((evt) => {
@@ -407,12 +382,10 @@ export default function Analytics() {
           startTrackingIfVisible();
         } else {
           startTimer();
-          resetIdleTimer();
         }
       } else if (document.visibilityState === 'hidden') {
         if (isInitialized) {
-          if (idleTimer) clearTimeout(idleTimer);
-          sendPayload(true);
+          dis
         }
       }
     };
@@ -421,8 +394,7 @@ export default function Analytics() {
 
     const handlePageHide = () => {
       if (isInitialized) {
-        if (idleTimer) clearTimeout(idleTimer);
-        sendPayload(true);
+        dispatchFinalPing();
       }
     };
 
@@ -440,10 +412,8 @@ export default function Analytics() {
       });
       window.removeEventListener('click', handleOutboundClick, { capture: true });
 
-      if (idleTimer) clearTimeout(idleTimer);
-
       if (isInitialized) {
-        sendPayload(true);
+        dispatchFinalPing();
       }
     };
 
