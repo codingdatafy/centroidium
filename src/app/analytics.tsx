@@ -93,6 +93,7 @@ export default function Analytics() {
   const lastActiveTimestamp = useRef<number>(0);
   
   const lastDispatchedDuration = useRef<number>(-1);
+  const lastSentPingTimestamp = useRef<number>(0);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -106,6 +107,7 @@ export default function Analytics() {
     pageviewId.current = cachedId ? parseInt(cachedId, 10) : null;
     pendingPingPayload.current = null;
     lastDispatchedDuration.current = -1;
+    lastSentPingTimestamp.current = 0;
 
     const queryParams = new URLSearchParams(window.location.search);
     if (queryParams.get('admin') === 'true') {
@@ -405,6 +407,17 @@ export default function Analytics() {
       startTrackingIfVisible();
     }
 
+    const handlePageExit = () => {
+      if (!isInitialized) return;
+
+      const now = Date.now();
+      if (now - lastSentPingTimestamp.current < 1000) return;
+
+      lastSentPingTimestamp.current = now;
+      if (idleTimer) clearTimeout(idleTimer);
+      sendPayload(true);
+    };
+
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         if (!isInitialized) {
@@ -414,31 +427,20 @@ export default function Analytics() {
           resetIdleTimer();
         }
       } else if (document.visibilityState === 'hidden') {
-        if (isInitialized) {
-          if (idleTimer) clearTimeout(idleTimer);
-          sendPayload(true);
-        }
+        handlePageExit();
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    const handlePageHide = () => {
-      if (isInitialized) {
-        if (idleTimer) clearTimeout(idleTimer);
-        sendPayload(true);
-      }
-    };
-
-    window.addEventListener('pagehide', handlePageHide);
-    window.addEventListener('freeze', handlePageHide, { capture: true });
-    window.addEventListener('blur', handlePageHide);
+    window.addEventListener('pagehide', handlePageExit);
+    window.addEventListener('freeze', handlePageExit, { capture: true });
+    window.addEventListener('blur', handlePageExit);
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('pagehide', handlePageHide);
-      window.removeEventListener('freeze', handlePageHide, { capture: true });
-      window.removeEventListener('blur', handlePageHide);
+      window.removeEventListener('pagehide', handlePageExit);
+      window.removeEventListener('freeze', handlePageExit, { capture: true });
+      window.removeEventListener('blur', handlePageExit);
       window.removeEventListener('pageshow', handlePageShow);
       window.removeEventListener('popstate', handlePopState);
       
@@ -451,7 +453,7 @@ export default function Analytics() {
       if (idleTimer) clearTimeout(idleTimer);
 
       if (isInitialized) {
-        sendPayload(true);
+        handlePageExit();
       }
     };
 
