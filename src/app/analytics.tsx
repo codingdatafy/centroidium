@@ -67,8 +67,7 @@ export const trackEvent = async (
   });
 
   if (navigator.sendBeacon) {
-    const blob = new Blob([payload], { type: 'application/json' });
-    navigator.sendBeacon(METRICS_ENDPOINT, blob);
+    navigator.sendBeacon(METRICS_ENDPOINT, payload);
   } else {
     fetch(METRICS_ENDPOINT, {
       method: 'POST',
@@ -281,20 +280,18 @@ export default function Analytics() {
       params.append('ts', timestamp.toString());
       params.append('token', clientToken);
 
-      const blobPayload = new Blob([params.toString()], {
-        type: 'application/x-www-form-urlencoded'
-      });
+      const payloadString = params.toString();
 
       let sent = false;
       if (navigator.sendBeacon) {
-        sent = navigator.sendBeacon(METRICS_ENDPOINT, blobPayload);
+        sent = navigator.sendBeacon(METRICS_ENDPOINT, payloadString);
       }
 
       if (!sent) {
         fetch(METRICS_ENDPOINT, {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: params.toString(),
+          body: payloadString,
           keepalive: true,
         }).catch(() => {});
       }
@@ -436,6 +433,7 @@ export default function Analytics() {
     };
 
     window.addEventListener('pagehide', handlePageHide);
+    window.addEventListener('beforeunload', handlePageHide);
     window.addEventListener('freeze', handlePageHide, { capture: true });
 
     if (isMobileDevice) {
@@ -445,6 +443,7 @@ export default function Analytics() {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('pagehide', handlePageHide);
+      window.removeEventListener('beforeunload', handlePageHide);
       window.removeEventListener('freeze', handlePageHide, { capture: true });
       window.removeEventListener('pageshow', handlePageShow);
       window.removeEventListener('popstate', handlePopState);
