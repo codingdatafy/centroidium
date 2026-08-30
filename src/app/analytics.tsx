@@ -10,10 +10,19 @@
 import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 
+// ============================================================================
+// BLOCK 1: CONSTANTS & UTILITIES
+// ============================================================================
+
+/** Endpoint routing for metrics dispatch */
 const METRICS_ENDPOINT = '/lib';
 
+/** Reusable text encoder instance for string hashing */
 const encoder = new TextEncoder();
 
+/**
+ * Converts an ArrayBuffer or Uint8Array to a hex string of specified length.
+ */
 const bufferToHex = (buffer: ArrayBuffer | Uint8Array, length = 24): string => {
   const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
   let hex = '';
@@ -24,6 +33,13 @@ const bufferToHex = (buffer: ArrayBuffer | Uint8Array, length = 24): string => {
   return hex.substring(0, length);
 };
 
+// ============================================================================
+// BLOCK 2: CRYPTOGRAPHIC TOKEN GENERATORS (HMAC SIGNATURES)
+// ============================================================================
+
+/**
+ * Generates an asynchronous SHA-256 client token using Web Crypto API.
+ */
 const generateClientToken = async (path: string, timestamp: number): Promise<string> => {
   const data = `${path}-${timestamp}-CodingDatafyToken`;
   const msgBuffer = encoder.encode(data);
@@ -31,6 +47,10 @@ const generateClientToken = async (path: string, timestamp: number): Promise<str
   return bufferToHex(hashBuffer, 24);
 };
 
+/**
+ * Generates a synchronous fallback hash token using Murmur-like bitwise shifts.
+ * Used primarily during page unload / beacon flush events.
+ */
 const generateClientTokenSync = (path: string, timestamp: number): string => {
   const str = `${path}-${timestamp}-CodingDatafyToken`;
   let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
@@ -45,6 +65,13 @@ const generateClientTokenSync = (path: string, timestamp: number): string => {
   return hashVal.toString(16).padStart(24, '0').substring(0, 24);
 };
 
+// ============================================================================
+// BLOCK 3: EVENT TRACKING EXPORT & GLOBAL BINDING
+// ============================================================================
+
+/**
+ * Programmatically tracks user interactions (e.g. code copy, outbound links).
+ */
 export const trackEvent = async (
   eventType: 'copy_code' | 'outbound_click',
   targetValue?: string
@@ -79,34 +106,47 @@ export const trackEvent = async (
   }
 };
 
+/** Expose tracking globally for non-React contexts */
 if (typeof window !== 'undefined') {
   (window as any).trackEvent = trackEvent;
 }
 
+// ============================================================================
+// BLOCK 4: MAIN REACT ANALYTICS COMPONENT
+// ============================================================================
+
 export default function Analytics() {
   const rawPathname = usePathname();
+
+  // State Persistence Refs across Route Changes
   const lastTrackedPath = useRef<string | null>(null);
   const pageviewId = useRef<number | null>(null);
   const pendingPingPayload = useRef<{ durationSec: number; isBounce: boolean } | null>(null);
 
+  // Time & Active Duration Metrics Refs
   const accumulatedMs = useRef<number>(0);
   const lastActiveTimestamp = useRef<number>(0);
-  
   const lastDispatchedDuration = useRef<number>(-1);
 
   useEffect(() => {
+    // ------------------------------------------------------------------------
+    // STEP 4.1: ENVIRONMENT & INITIALIZATION VALIDATION
+    // ------------------------------------------------------------------------
     if (typeof window === 'undefined') return;
 
     const cleanPathname = (rawPathname?.split('?')[0] || '/').replace(/\/+$/, '') || '/';
 
+    // Prevent duplicate triggers on identical route evaluations
     if (lastTrackedPath.current === cleanPathname) return;
 
+    // Restore cached pageview session ID
     const sessionKeyId = `cd_pv_id_${cleanPathname}`;
     const cachedId = sessionStorage.getItem(sessionKeyId);
     pageviewId.current = cachedId ? parseInt(cachedId, 10) : null;
     pendingPingPayload.current = null;
     lastDispatchedDuration.current = -1;
 
+    // Handle internal admin bypass query parameter (?admin=true)
     const queryParams = new URLSearchParams(window.location.search);
     if (queryParams.get('admin') === 'true') {
       localStorage.setItem('analytics-disable', 'true');
@@ -115,12 +155,18 @@ export default function Analytics() {
       alert('CodingDatafy: Analytics tracking is now disabled for this browser.');
     }
 
+    // ------------------------------------------------------------------------
+    // STEP 4.2: SECURITY & MULTI-LAYER BOT DETECTION
+    // ------------------------------------------------------------------------
     const hostname = window.location.hostname;
     const isOfficialDomain = hostname === 'www.codingdatafy.com' || hostname === 'codingdatafy.com';
 
     const ua = navigator.userAgent.toLowerCase();
+    
+    // Check 1: User-Agent RegEx Pattern Matching
     const isBotAgent = /bot|googlebot|crawler|spider|robot|crawling|lighthouse|chrome-lighthouse|google-inspectiontool|ahrefs|semrush|gptbot|chatgpt|chatgpt-user|oai-searchbot|claudebot|claude-user|claude-searchbot|coherebot|headlesschrome|python|node-fetch|axios|bytespider|ccbot|facebookbot|meta-external|amazonbot|petalbot|scrapy|diffbot|dotbot|rogerbot|blexbot|dataforseo|mj12bot|serpstatbot|perplexity|perplexity-user|perplexitybot|applebot|yandex|bingbot|baidu/i.test(ua);
 
+    // Check 2: Headless & Automation Signals
     const isWebDriver = navigator.webdriver === true;
     const isPhantom = 'callPhantom' in window || '_phantom' in window;
     const isHeadlessWindow = 'Buffer' in window || 'emit' in window;
@@ -130,6 +176,7 @@ export default function Analytics() {
 
     const isExplicitlyDisabled = localStorage.getItem('analytics-disable') === 'true';
 
+    // Check 3: Advanced Browser Fingerprint Verification
     const isAdvancedBotGuard = (): boolean => {
       try {
         const isScreenMismatch = 
@@ -153,6 +200,7 @@ export default function Analytics() {
       }
     };
 
+    // Check 4: Datacenter & Software Rendering Detection via WebGL / Canvas
     const isDatacenterBot = () => {
       if (document.visibilityState === 'hidden') return false;
 
@@ -192,12 +240,17 @@ export default function Analytics() {
       }
     };
 
+    // Evaluate global visitor legitimacy
     const isValidVisitor = isOfficialDomain && !isBotAgent && !isAutomatedBot && !isExplicitlyDisabled && !isDatacenterBot() && !isAdvancedBotGuard();
 
     if (!isValidVisitor) return;
 
+    // ------------------------------------------------------------------------
+    // STEP 4.3: METRICS SETUP & PAGE STATE PARSING
+    // ------------------------------------------------------------------------
     const activePath = cleanPathname;
 
+    /** Determines if the current page is a 404 error page */
     const checkIs404Page = (): boolean => {
       const has404Meta = !!document.querySelector('meta[name="next-error"]');
       const isNotFoundTitle = document.title.toLowerCase().includes('404') || document.title.toLowerCase().includes('not found');
@@ -208,6 +261,7 @@ export default function Analytics() {
 
     const is404Detected = checkIs404Page();
 
+    // Determine internal vs external referrer
     let referrer = document.referrer || '';
     const sessionKey = 'cd_has_navigated';
     
@@ -217,6 +271,7 @@ export default function Analytics() {
       sessionStorage.setItem(sessionKey, 'true');
     }
 
+    // Timer and State Flags Initialization
     accumulatedMs.current = 0;
     lastActiveTimestamp.current = 0;
 
@@ -228,6 +283,9 @@ export default function Analytics() {
 
     const isMobileDevice = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(ua);
 
+    // ------------------------------------------------------------------------
+    // STEP 4.4: DURATION CALCULATOR & IDLE TIMERS
+    // ------------------------------------------------------------------------
     const startTimer = () => {
       if (document.visibilityState === 'visible' && lastActiveTimestamp.current === 0) {
         lastActiveTimestamp.current = Date.now();
@@ -263,6 +321,11 @@ export default function Analytics() {
       }, IDLE_TIMEOUT_MS);
     };
 
+    // ------------------------------------------------------------------------
+    // STEP 4.5: METRICS DISPATCH METHODOLOGY
+    // ------------------------------------------------------------------------
+    
+    /** Flushes duration ping payload synchronously via Beacon API or fallback Fetch */
     const dispatchPingSync = (id: number | null, durationSec: number, isBounce: boolean) => {
       if (durationSec === lastDispatchedDuration.current) return;
       lastDispatchedDuration.current = durationSec;
@@ -300,6 +363,7 @@ export default function Analytics() {
       }
     };
 
+    /** Handles initial pageview logging (init) or update updates (ping) */
     const sendPayload = async (isUpdate = false) => {
       if (isUpdate) {
         pauseTimer();
@@ -351,6 +415,9 @@ export default function Analytics() {
       } catch {}
     };
 
+    // ------------------------------------------------------------------------
+    // STEP 4.6: EVENT HANDLERS & BROWSER LISTENERS
+    // ------------------------------------------------------------------------
     const handleInteraction = () => {
       hasInteracted = true;
       resetIdleTimer();
@@ -386,6 +453,7 @@ export default function Analytics() {
       }
     };
 
+    /** Initializes listeners and sends the initial tracking payload */
     const startTrackingIfVisible = () => {
       if (isInitialized) return;
       
@@ -406,6 +474,7 @@ export default function Analytics() {
       window.addEventListener('pageshow', handlePageShow);
     };
 
+    // Start execution if current tab is active
     if (document.visibilityState === 'visible') {
       startTrackingIfVisible();
     }
@@ -442,6 +511,9 @@ export default function Analytics() {
       window.addEventListener('blur', handlePageHide);
     }
 
+    // ------------------------------------------------------------------------
+    // STEP 4.7: LIFECYCLE CLEANUP (UNMOUNT PHASE)
+    // ------------------------------------------------------------------------
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('pagehide', handlePageHide);
