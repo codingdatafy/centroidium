@@ -34,7 +34,7 @@ const bufferToHex = (buffer: ArrayBuffer | Uint8Array, length = 24): string => {
 };
 
 // ============================================================================
-// BLOCK 2: CRYPTOGRAPHIC TOKEN GENERATORS (HMAC SIGNATURES)
+// BLOCK 2: CRYPTOGRAPHIC TOKEN GENERATORS
 // ============================================================================
 
 /**
@@ -45,24 +45,6 @@ const generateClientToken = async (path: string, timestamp: number): Promise<str
   const msgBuffer = encoder.encode(data);
   const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
   return bufferToHex(hashBuffer, 24);
-};
-
-/**
- * Generates a synchronous fallback hash token using Murmur-like bitwise shifts.
- * Used primarily during page unload / beacon flush events.
- */
-const generateClientTokenSync = (path: string, timestamp: number): string => {
-  const str = `${path}-${timestamp}-CodingDatafyToken`;
-  let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
-  for (let i = 0, ch; i < str.length; i++) {
-    ch = str.charCodeAt(i);
-    h1 = Math.imul(h1 ^ ch, 2654435761);
-    h2 = Math.imul(h2 ^ ch, 1597334677);
-  }
-  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
-  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
-  const hashVal = 4294967296 * (2097151 & h2) + (h1 >>> 0);
-  return hashVal.toString(16).padStart(24, '0').substring(0, 24);
 };
 
 // ============================================================================
@@ -118,15 +100,8 @@ if (typeof window !== 'undefined') {
 export default function Analytics() {
   const rawPathname = usePathname();
 
-  // State Persistence Refs across Route Changes
+  // Track the last tracked path to avoid duplicate triggers on identical route evaluations
   const lastTrackedPath = useRef<string | null>(null);
-  const pageviewId = useRef<number | null>(null);
-  const pendingPingPayload = useRef<{ durationSec: number; isBounce: boolean } | null>(null);
-
-  // Time & Active Duration Metrics Refs
-  const accumulatedMs = useRef<number>(0);
-  const lastActiveTimestamp = useRef<number>(0);
-  const lastDispatchedDuration = useRef<number>(-1);
 
   useEffect(() => {
     // ------------------------------------------------------------------------
@@ -138,13 +113,6 @@ export default function Analytics() {
 
     // Prevent duplicate triggers on identical route evaluations
     if (lastTrackedPath.current === cleanPathname) return;
-
-    // Restore cached pageview session ID
-    const sessionKeyId = `cd_pv_id_${cleanPathname}`;
-    const cachedId = sessionStorage.getItem(sessionKeyId);
-    pageviewId.current = cachedId ? parseInt(cachedId, 10) : null;
-    pendingPingPayload.current = null;
-    lastDispatchedDuration.current = -1;
 
     // Handle internal admin bypass query parameter (?admin=true)
     const queryParams = new URLSearchParams(window.location.search);
@@ -246,7 +214,7 @@ export default function Analytics() {
     if (!isValidVisitor) return;
 
     // ------------------------------------------------------------------------
-    // STEP 4.3: METRICS SETUP & PAGE STATE PARSING
+    // STEP 4.3: PAGE STATE PARSING & PAGEVIEW DISPATCH
     // ------------------------------------------------------------------------
     const activePath = cleanPathname;
 
@@ -271,110 +239,9 @@ export default function Analytics() {
       sessionStorage.setItem(sessionKey, 'true');
     }
 
-    // Timer and State Flags Initialization
-    accumulatedMs.current = 0;
-    lastActiveTimestamp.current = 0;
-
-    let idleTimer: ReturnType<typeof setTimeout> | null = null;
-    const IDLE_TIMEOUT_MS = 60000;
-
-    let hasInteracted = false;
-    let isInitialized = false;
-
-    const isMobileDevice = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(ua);
-
-    // ------------------------------------------------------------------------
-    // STEP 4.4: DURATION CALCULATOR & IDLE TIMERS
-    // ------------------------------------------------------------------------
-    const startTimer = () => {
-      if (document.visibilityState === 'visible' && lastActiveTimestamp.current === 0) {
-        lastActiveTimestamp.current = Date.now();
-      }
-    };
-
-    const pauseTimer = () => {
-      if (lastActiveTimestamp.current > 0) {
-        accumulatedMs.current += Date.now() - lastActiveTimestamp.current;
-        lastActiveTimestamp.current = 0;
-      }
-    };
-
-    const getActiveDurationSeconds = (): number => {
-      let total = accumulatedMs.current;
-      if (document.visibilityState === 'visible' && lastActiveTimestamp.current > 0) {
-        total += Date.now() - lastActiveTimestamp.current;
-      }
-      return Math.max(0, Math.round(total / 1000));
-    };
-
-    const resetIdleTimer = () => {
-      if (document.visibilityState !== 'visible') return;
-
-      if (lastActiveTimestamp.current === 0) {
-        lastActiveTimestamp.current = Date.now();
-      }
-
-      if (idleTimer) clearTimeout(idleTimer);
-
-      idleTimer = setTimeout(() => {
-        pauseTimer();
-      }, IDLE_TIMEOUT_MS);
-    };
-
-    // ------------------------------------------------------------------------
-    // STEP 4.5: METRICS DISPATCH METHODOLOGY
-    // ------------------------------------------------------------------------
-    
-    /** Flushes duration ping payload synchronously via Beacon API or fallback Fetch */
-    const dispatchPingSync = (id: number | null, durationSec: number, isBounce: boolean) => {
-      if (durationSec === lastDispatchedDuration.current) return;
-      lastDispatchedDuration.current = durationSec;
-
-      const timestamp = Date.now();
-      const clientToken = generateClientTokenSync(activePath, timestamp);
-
-      const params = new URLSearchParams();
-      params.append('p', activePath);
-      params.append('r', referrer);
-      params.append('d', durationSec.toString());
-      params.append('b', isBounce ? 'true' : 'false');
-      params.append('is_404', is404Detected ? 'true' : 'false');
-      params.append('type', 'ping');
-      if (id) params.append('id', id.toString());
-      params.append('ts', timestamp.toString());
-      params.append('token', clientToken);
-
-      const blobPayload = new Blob([params.toString()], {
-        type: 'application/x-www-form-urlencoded'
-      });
-
-      let sent = false;
-      if (navigator.sendBeacon) {
-        sent = navigator.sendBeacon(METRICS_ENDPOINT, blobPayload);
-      }
-
-      if (!sent) {
-        fetch(METRICS_ENDPOINT, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: params.toString(),
-          keepalive: true,
-        }).catch(() => {});
-      }
-    };
-
-    /** Handles initial pageview logging (init) or update updates (ping) */
-    const sendPayload = async (isUpdate = false) => {
-      if (isUpdate) {
-        pauseTimer();
-
-        const durationSec = getActiveDurationSeconds();
-        const isBounce = !hasInteracted && durationSec < 10;
-        const currentId = pageviewId.current;
-
-        dispatchPingSync(currentId, durationSec, isBounce);
-        return;
-      }
+    /** Sends initial pageview logging payload */
+    const sendPageview = async () => {
+      lastTrackedPath.current = activePath;
 
       const timestamp = Date.now();
       const clientToken = await generateClientToken(activePath, timestamp);
@@ -382,47 +249,25 @@ export default function Analytics() {
       const payload = JSON.stringify({
         p: activePath,
         r: referrer,
-        d: 0,
-        b: true,
         is_404: is404Detected,
         type: 'init',
-        id: null,
         ts: timestamp,
         token: clientToken
       });
 
       try {
-        const res = await fetch(METRICS_ENDPOINT, {
+        fetch(METRICS_ENDPOINT, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: payload,
           keepalive: true,
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          if (data?.id) {
-            pageviewId.current = data.id;
-            sessionStorage.setItem(sessionKeyId, data.id.toString());
-            
-            if (pendingPingPayload.current) {
-              const { durationSec: pDuration, isBounce: pBounce } = pendingPingPayload.current;
-              pendingPingPayload.current = null;
-              dispatchPingSync(data.id, pDuration, pBounce);
-            }
-          }
-        }
+        }).catch(() => {});
       } catch {}
     };
 
     // ------------------------------------------------------------------------
-    // STEP 4.6: EVENT HANDLERS & BROWSER LISTENERS
+    // STEP 4.4: LISTENERS FOR INTERACTION & NAVIGATION
     // ------------------------------------------------------------------------
-    const handleInteraction = () => {
-      hasInteracted = true;
-      resetIdleTimer();
-    };
-
     const handleOutboundClick = (event: MouseEvent) => {
       const targetAnchor = (event.target as HTMLElement).closest('a');
       if (!targetAnchor) return;
@@ -439,103 +284,17 @@ export default function Analytics() {
       }
     };
 
-    const handlePopState = () => {
-      lastTrackedPath.current = null;
-      isInitialized = false;
-      startTrackingIfVisible();
-    };
+    // Trigger pageview on initial load
+    sendPageview();
 
-    const handlePageShow = (event: PageTransitionEvent) => {
-      if (event.persisted) {
-        lastTrackedPath.current = null;
-        isInitialized = false;
-        startTrackingIfVisible();
-      }
-    };
-
-    /** Initializes listeners and sends the initial tracking payload */
-    const startTrackingIfVisible = () => {
-      if (isInitialized) return;
-      
-      isInitialized = true;
-      lastTrackedPath.current = cleanPathname;
-      startTimer();
-      resetIdleTimer();
-
-      sendPayload(false);
-
-      const activityEvents = ['mousemove', 'keydown', 'scroll', 'click', 'touchstart'];
-      activityEvents.forEach((evt) => {
-        window.addEventListener(evt, handleInteraction, { passive: true });
-      });
-
-      window.addEventListener('click', handleOutboundClick, { capture: true, passive: true });
-      window.addEventListener('popstate', handlePopState);
-      window.addEventListener('pageshow', handlePageShow);
-    };
-
-    // Start execution if current tab is active
-    if (document.visibilityState === 'visible') {
-      startTrackingIfVisible();
-    }
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        if (!isInitialized) {
-          startTrackingIfVisible();
-        } else {
-          startTimer();
-          resetIdleTimer();
-        }
-      } else if (document.visibilityState === 'hidden') {
-        if (isInitialized) {
-          if (idleTimer) clearTimeout(idleTimer);
-          sendPayload(true);
-        }
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    const handlePageHide = () => {
-      if (isInitialized) {
-        if (idleTimer) clearTimeout(idleTimer);
-        sendPayload(true);
-      }
-    };
-
-    window.addEventListener('pagehide', handlePageHide);
-    window.addEventListener('freeze', handlePageHide, { capture: true });
-
-    if (isMobileDevice) {
-      window.addEventListener('blur', handlePageHide);
-    }
+    // Event bindings
+    window.addEventListener('click', handleOutboundClick, { capture: true, passive: true });
 
     // ------------------------------------------------------------------------
-    // STEP 4.7: LIFECYCLE CLEANUP (UNMOUNT PHASE)
+    // STEP 4.5: CLEANUP
     // ------------------------------------------------------------------------
     return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('pagehide', handlePageHide);
-      window.removeEventListener('freeze', handlePageHide, { capture: true });
-      window.removeEventListener('pageshow', handlePageShow);
-      window.removeEventListener('popstate', handlePopState);
-      
-      if (isMobileDevice) {
-        window.removeEventListener('blur', handlePageHide);
-      }
-
-      const activityEvents = ['mousemove', 'keydown', 'scroll', 'click', 'touchstart'];
-      activityEvents.forEach((evt) => {
-        window.removeEventListener(evt, handleInteraction);
-      });
       window.removeEventListener('click', handleOutboundClick, { capture: true });
-
-      if (idleTimer) clearTimeout(idleTimer);
-
-      if (isInitialized) {
-        sendPayload(true);
-      }
     };
 
   }, [rawPathname]);
