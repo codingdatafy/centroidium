@@ -102,6 +102,9 @@ export default function Analytics() {
 
   // Track the last tracked path to avoid duplicate triggers on identical route evaluations
   const lastTrackedPath = useRef<string | null>(null);
+  
+  // Flag to check if the page has already been viewed during this lifecycle
+  const hasReportedPageview = useRef<boolean>(false);
 
   useEffect(() => {
     // ------------------------------------------------------------------------
@@ -111,8 +114,10 @@ export default function Analytics() {
 
     const cleanPathname = (rawPathname?.split('?')[0] || '/').replace(/\/+$/, '') || '/';
 
-    // Prevent duplicate triggers on identical route evaluations
-    if (lastTrackedPath.current === cleanPathname) return;
+    // Reset view state when the pathname changes
+    if (lastTrackedPath.current !== cleanPathname) {
+      hasReportedPageview.current = false;
+    }
 
     // Handle internal admin bypass query parameter (?admin=true)
     const queryParams = new URLSearchParams(window.location.search);
@@ -228,12 +233,16 @@ export default function Analytics() {
     };
 
     const is404Detected = checkIs404Page();
-
-    // Determine internal vs external referrer
     const referrer = document.referrer || '';
 
-    /** Sends initial pageview logging payload */
+    /** Sends initial pageview logging payload strictly once per visible path */
     const sendPageview = async () => {
+      if (hasReportedPageview.current) return;
+      
+      // ABSOLUTE GUARD: Double check visibility state right before execution
+      if (document.visibilityState !== 'visible') return;
+
+      hasReportedPageview.current = true;
       lastTrackedPath.current = activePath;
 
       const timestamp = Date.now();
@@ -259,7 +268,7 @@ export default function Analytics() {
     };
 
     // ------------------------------------------------------------------------
-    // STEP 4.4: VISIBILITY GUARD & INTERACTION LISTENERS
+    // STEP 4.4: STRICT VISIBILITY & INTERACTION LISTENERS
     // ------------------------------------------------------------------------
     const handleOutboundClick = (event: MouseEvent) => {
       const targetAnchor = (event.target as HTMLElement).closest('a');
@@ -278,22 +287,21 @@ export default function Analytics() {
     };
 
     /**
-     * Lazy Pageview Dispatcher:
-     * Triggered when the document transitions from hidden (background tab) to visible.
+     * Event listener specifically for MDN visibilitychange.
+     * Only fires when document transitions to 'visible'.
      */
-    const triggerPageviewIfVisible = () => {
+    const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        if (lastTrackedPath.current !== activePath) {
-          sendPageview();
-        }
+        sendPageview();
       }
     };
 
-    // Execute tracking immediately if visible, otherwise attach visibilitychange handler
+    // If active tab is visible right now, send pageview immediately
     if (document.visibilityState === 'visible') {
       sendPageview();
     } else {
-      document.addEventListener('visibilitychange', triggerPageviewIfVisible, { once: true });
+      // If opened in background tab (Ctrl+Click), wait ONLY until user brings tab to focus
+      document.addEventListener('visibilitychange', handleVisibilityChange);
     }
 
     // Event bindings
@@ -303,7 +311,7 @@ export default function Analytics() {
     // STEP 4.5: CLEANUP
     // ------------------------------------------------------------------------
     return () => {
-      document.removeEventListener('visibilitychange', triggerPageviewIfVisible);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('click', handleOutboundClick, { capture: true });
     };
 
