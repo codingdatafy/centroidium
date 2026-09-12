@@ -55,7 +55,7 @@ const generateClientToken = async (path: string, timestamp: number): Promise<str
  * Programmatically tracks user interactions (e.g. code copy, outbound links).
  */
 export const trackEvent = async (
-  eventType: 'copy_code' | 'outbound_click',
+  eventType: 'copy_code' | 'outbound_click' | 'site_search',
   targetValue?: string
 ) => {
   if (typeof window === 'undefined') return;
@@ -230,14 +230,7 @@ export default function Analytics() {
     const is404Detected = checkIs404Page();
 
     // Determine internal vs external referrer
-    let referrer = document.referrer || '';
-    const sessionKey = 'cd_has_navigated';
-    
-    if (sessionStorage.getItem(sessionKey)) {
-      referrer = window.location.origin;
-    } else {
-      sessionStorage.setItem(sessionKey, 'true');
-    }
+    const referrer = document.referrer || '';
 
     /** Sends initial pageview logging payload */
     const sendPageview = async () => {
@@ -266,7 +259,7 @@ export default function Analytics() {
     };
 
     // ------------------------------------------------------------------------
-    // STEP 4.4: LISTENERS FOR INTERACTION & NAVIGATION
+    // STEP 4.4: VISIBILITY GUARD & INTERACTION LISTENERS
     // ------------------------------------------------------------------------
     const handleOutboundClick = (event: MouseEvent) => {
       const targetAnchor = (event.target as HTMLElement).closest('a');
@@ -284,8 +277,24 @@ export default function Analytics() {
       }
     };
 
-    // Trigger pageview on initial load
-    sendPageview();
+    /**
+     * Lazy Pageview Dispatcher:
+     * Triggered when the document transitions from hidden (background tab) to visible.
+     */
+    const triggerPageviewIfVisible = () => {
+      if (document.visibilityState === 'visible') {
+        if (lastTrackedPath.current !== activePath) {
+          sendPageview();
+        }
+      }
+    };
+
+    // Execute tracking immediately if visible, otherwise attach visibilitychange handler
+    if (document.visibilityState === 'visible') {
+      sendPageview();
+    } else {
+      document.addEventListener('visibilitychange', triggerPageviewIfVisible, { once: true });
+    }
 
     // Event bindings
     window.addEventListener('click', handleOutboundClick, { capture: true, passive: true });
@@ -294,6 +303,7 @@ export default function Analytics() {
     // STEP 4.5: CLEANUP
     // ------------------------------------------------------------------------
     return () => {
+      document.removeEventListener('visibilitychange', triggerPageviewIfVisible);
       window.removeEventListener('click', handleOutboundClick, { capture: true });
     };
 
