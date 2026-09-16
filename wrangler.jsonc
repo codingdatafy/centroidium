@@ -1,0 +1,47 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "centroidium",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-16",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+
+  // Domain routing configuration
+  "routes": [
+    {
+      "pattern": "www.codingdatafy.com/*",
+      "custom_domain": true
+    }
+  ],
+
+  // Static assets binding for public files
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS"
+  },
+
+  // Storage binding for markdown content in Cloudflare R2
+  "r2_buckets": [
+    {
+      "binding": "CONTENT_BUCKET",
+      "bucket_name": "codingdatafy-content-r2"
+    }
+  ],
+
+  // Analytics Engine dataset binding for first-party tracking
+  "analytics_engine_datasets": [
+    {
+      "binding": "SITE_ANALYTICS",
+      "dataset": "codingdatafy_analytics"
+    }
+  ],
+
+  // Global environment variables
+  "vars": {
+    "ENVIRONMENT": "production",
+    "SITE_URL": "https://www.codingdatafy.com",
+    "SITE_NAME": "CodingDatafy",
+    "DEFAULT_CACHE_TTL": "86400"
+  }
+}
