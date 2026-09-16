@@ -2,28 +2,17 @@
   "name": "centroidium",
   "version": "1.0.0",
   "private": true,
-  "description": "The high-performance core rendering engine for the CodingDatafy platform.",
-  "author": "CodingDatafy Team",
+  "description": "Native Cloudflare Worker engine and rendering core for CodingDatafy",
+  "author": "CodingDatafy",
   "license": "MIT",
+  "type": "module",
+  "main": "src/index.ts",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
     "type-check": "tsc --noEmit"
   },
-  "dependencies": {
-    "next": "16.3.4",
-    "react": "19.2.8",
-    "react-dom": "19.2.8",
-    "gray-matter": "4.0.3",
-    "remark": "15.0.1",
-    "remark-rehype": "^11.1.2",
-    "rehype-stringify": "^10.0.1"
-  },
   "devDependencies": {
-    "@types/node": "^24.0.0",
-    "@types/react": "19.2.18",
-    "@types/react-dom": "19.2.4",
-    "typescript": "7.0.2"
+    "@cloudflare/workers-types": "^5.20260916.1",
+    "typescript": "^7.0.2",
+    "wrangler": "^4.132.0"
   }
 }
