@@ -21,7 +21,7 @@ Only the latest active deployment on the `main` branch is currently supported fo
 If you believe you have discovered a security vulnerability or privacy concern within any **CodingDatafy** repository or live service, please report it responsibly **without opening a public issue**.
 
 ### Preferred Reporting Method
-- **Email:** `contact@codingdatafy.com`
+- **Email:** `security@codingdatafy.com`
 - **Contact Form:** [https://www.codingdatafy.com/contact](https://www.codingdatafy.com/contact)
 
 ### What to Include in Your Report
@@ -44,7 +44,7 @@ We kindly request that you refrain from publicly disclosing the issue until we h
 
 ## Security & Privacy Principles
 
-- **No Trackers / Strict Privacy:** CodingDatafy does not employ third-party tracking scripts or intrusive cookies. Security reports regarding analytics will be evaluated against our zero-tracker architectural model.
-- **Static Architecture:** As a statically generated platform deployed to edge networks, server-side execution attacks are out of scope unless targeting deployment workflows or CI/CD pipelines.
+- **No Trackers / Strict Privacy:** CodingDatafy does not employ third-party tracking scripts or intrusive cookies. Telemetry is handled natively via Cloudflare Workers Analytics Engine with zero-tracker anonymized metrics.
+- **Edge-Native Architecture:** `centroidium` operates as a zero-dependency dynamic renderer executing on Cloudflare Workers (`workerd`) and fetching markdown objects directly from Cloudflare R2 object storage.
 
 Thank you for helping keep CodingDatafy safe for developers worldwide!

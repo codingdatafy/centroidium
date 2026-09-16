@@ -14,5 +14,3 @@ Harassment, trolling, insulting/derogatory comments, and personal or political a
 
 ## Enforcement
 The **CodingDatafy Team** will review and investigate all reports and respond in a way that is deemed necessary and appropriate to the circumstances.
-
-Copyright (c) 2026 CodingDatafy Organization.

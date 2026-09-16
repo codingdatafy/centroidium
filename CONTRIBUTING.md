@@ -1,8 +1,19 @@
 # Contributing to CodingDatafy
+Thank you for your interest in contributing to **centroidium**, the native Cloudflare Worker rendering engine for [CodingDatafy](https://www.codingdatafy.com).
 
-Thank you for your interest in contributing to CodingDatafy **as we build** the world's largest coding language reference. To maintain project integrity and professional standards, please follow these guidelines.
+This repository strictly contains the **engine code, routing logic, standard UI components, and edge rendering pipelines**. If you are looking to edit or add markdown documentation pages, please contribute directly to the [`content`](https://github.com/CodingDatafy/content) repository instead.
+
+---
+
+## Architectural Principles
+Before contributing code, please keep our fundamental design choices in mind:
+
+* **Zero Runtime Dependencies:** The engine must remain lightweight and fast. External NPM runtime packages are strictly prohibited.
+* **TypeScript Strict Mode:** All code must pass `tsc --noEmit` without warnings or implicit types.
+* **Edge-Native Standard:** Core services must utilize native Cloudflare `workerd` APIs (`R2Bucket`, `Cache API`, `AnalyticsEngineDataset`).
 
 ## Development Workflow
+We manage this repository with strict open-source governance standards:
 
 ### 1. Issue First Policy
 Every contribution must address an existing Issue or a newly created one. This ensures that work is not duplicated and aligns with the project roadmap.
@@ -15,7 +26,8 @@ We follow a strict branching model to ensure production stability:
 
 ### 3. Commit Convention
 Use professional English for commit messages. All commits must be linked to an issue number.
-Example: `feat(routing): implement dynamic sub-directory slug resolution #1`
+Commit messages must follow: `<type>(<scope>): <description> #issuenumber`
+Example: `fix(cache): resolve edge hit header parsing #7`
 
 ## Submission Process
 
@@ -34,15 +46,3 @@ Example: `feat(routing): implement dynamic sub-directory slug resolution #1`
 - Submit a Pull Request from your feature branch to the CodingDatafy **develop** branch.
 - PRs must include a detailed description of the changes and link to the relevant Issue.
 - Once the PR is approved and merged into 'develop', it will be staged for the next release to 'main'.
-
-## Coding and Content Standards
-
-### Documentation Standards
-- **Source Code (TS/TSX/CSS):** Every file must include the standard `@project` header as a comment at the beginning of the file:
-```typescript
-/**
- * @project CodingDatafy
- * @license MIT
- * @copyright 2026 CodingDatafy Organization
- * @author CodingDatafy Team
- */
