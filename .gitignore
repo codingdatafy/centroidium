@@ -3,53 +3,40 @@
 # @copyright 2026 CodingDatafy Organization
 # @author CodingDatafy Team
 
-# === Dynamic Data (Decoupled Content Layer) ===
-# Ignore data fetched dynamically at build time via GitHub Actions
-data/*
-!data/.gitkeep
-
 # === Dependencies ===
-# Ignore local dependencies and package manager artifacts
+# Local dependencies and package manager artifacts
 node_modules/
 .pnp
 .pnp.js
 
-# === Next.js Framework ===
-# Ignore Next.js build output, local dev outputs, and Turbopack tracing (Next.js 16)
-.next/
-out/
-.turbo/
-.cache/
-
 # === TypeScript ===
-# Ignore TypeScript incremental build info and auto-generated env types
+# TypeScript incremental build cache
 *.tsbuildinfo
-next-env.d.ts
 
-# === Environment Variables ===
-# Sensitive credentials must NEVER be committed to the repository
-.env
-.env*.local
-.env.development.local
-.env.test.local
-.env.production.local
-
-# === Production & Cloudflare Pages ===
-# Ignore build artifacts and Cloudflare Wrangler's local development storage and logs
-build/
+# === Cloudflare Wrangler & Local Dev Storage ===
+# Local Wrangler runtime data, secrets, bindings cache, and logs
 .wrangler/
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+.mf/
+v3/
+wrangler-*.log
 
-# === Testing & Quality Control ===
-# Code coverage and linter caches
-coverage/
-.eslintcache
+# === Environment & Secrets ===
+# Sensitive credentials must NEVER be committed
+.env
+.env.*
+!.env.example
+
+# === Logs & Package Manager Warnings ===
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+.eslintcache
 
 # === IDEs and Editor Configurations ===
-# Ignore personal editor settings but keep shared workspace extensions
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
@@ -61,7 +48,6 @@ pnpm-debug.log*
 *.sw?
 
 # === Operating System Files ===
-# Common OS-generated files
 .DS_Store
 Thumbs.db
 
