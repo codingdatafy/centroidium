@@ -1,7 +1,5 @@
-/**
- * Cloudflare Worker Environment Bindings
- * Matches the configuration defined in wrangler.jsonc
- */
+import { Request as CFRequest } from '@cloudflare/workers-types';
+
 export interface Env {
   ASSETS: Fetcher;
   CONTENT_BUCKET: R2Bucket;
@@ -12,9 +10,6 @@ export interface Env {
   DEFAULT_CACHE_TTL: string;
 }
 
-/**
- * Parsed Frontmatter metadata extracted from Markdown files
- */
 export interface DocumentMeta {
   title?: string;
   description?: string;
@@ -27,9 +22,6 @@ export interface DocumentMeta {
   [key: string]: unknown;
 }
 
-/**
- * Internal representation of a processed Markdown document
- */
 export interface ProcessedDocument {
   meta: DocumentMeta;
   contentHtml: string;
@@ -37,18 +29,12 @@ export interface ProcessedDocument {
   rawMarkdown: string;
 }
 
-/**
- * Structured Table of Contents item extracted from headings
- */
 export interface TableOfContentsItem {
   id: string;
   text: string;
   level: number;
 }
 
-/**
- * Standardized Context passed to HTTP Handlers and Templates
- */
 export interface RequestContext {
   request: Request;
   env: Env;

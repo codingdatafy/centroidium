@@ -12,24 +12,55 @@
 ******************************************************** */
 
 /////////////////////////////  Root    /////////////////////////////
-// Handle target="_blank" for external links
+// Analytics Tracking
 (function () {
-    var internal = location.host.replace("www.", "");
-    internal = new RegExp(internal, "i");    
-    var a = document.getElementsByTagName('a');
-    for (var i = 0; i < a.length; i++) {
-        var href = a[i].host;
-        if( !internal.test(href) ) {
-            a[i].setAttribute('target', '_blank');
-        }
+  function generateToken(path, timestamp) {
+    var str = path + '-' + timestamp + '-CodingDatafyToken';
+    var h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+    for (var i = 0; i < str.length; i++) {
+      var ch = str.charCodeAt(i);
+      h1 = Math.imul(h1 ^ ch, 2654435761);
+      h2 = Math.imul(h2 ^ ch, 1597334677);
     }
+    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+    var hashVal = 4294967296 * (2097151 & h2) + (h1 >>> 0);
+    return hashVal.toString(16).padStart(24, '0').substring(0, 24);
+  }
+
+  function sendPageview() {
+    var path = window.location.pathname.replace(/\/+$/, '') || '/';
+    var ts = Date.now();
+    var token = generateToken(path, ts);
+    var is404 = document.querySelector('main[data-is-404="true"]') !== null;
+
+    var payload = {
+      p: path,
+      r: document.referrer || '',
+      type: 'init',
+      is_404: is404,
+      ts: ts,
+      token: token
+    };
+
+    if (navigator.sendBeacon) {
+      navigator.sendBeacon('/lib', JSON.stringify(payload));
+    } else {
+      fetch('/lib', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        keepalive: true
+      });
+    }
+  }
+
+  if (document.readyState === 'complete') {
+    sendPageview();
+  } else {
+    window.addEventListener('load', sendPageview);
+  }
 })();
-
-/////////////////////////////  Header  /////////////////////////////
-
-/////////////////////////////  Sidebar /////////////////////////////
-
-/////////////////////////////  Main    /////////////////////////////
 // Code Header: Language Badge & Copy Button + Analytics Tracking
 (function () {
   'use strict';
@@ -106,4 +137,23 @@
 
   observer.observe(document.body, { childList: true, subtree: true });
 })();
+// Handle target="_blank" for external links
+(function () {
+    var internal = location.host.replace("www.", "");
+    internal = new RegExp(internal, "i");    
+    var a = document.getElementsByTagName('a');
+    for (var i = 0; i < a.length; i++) {
+        var href = a[i].host;
+        if( !internal.test(href) ) {
+            a[i].setAttribute('target', '_blank');
+        }
+    }
+})();
+
+/////////////////////////////  Header  /////////////////////////////
+
+/////////////////////////////  Sidebar /////////////////////////////
+
+/////////////////////////////  Main    /////////////////////////////
+
 /////////////////////////////  Footer  /////////////////////////////

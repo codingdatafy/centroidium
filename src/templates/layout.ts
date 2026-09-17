@@ -14,7 +14,7 @@ export interface LayoutOptions {
  */
 export function renderLayout(options: LayoutOptions): string {
   const {
-    title = 'CodingDatafy - Documentation',
+    title = 'CodingDatafy',
     description = "On a mission to build the world's largest reference and knowledge base for coding languages.",
     canonicalUrl = `https://www.codingdatafy.com${options.pathname}`,
     pathname,

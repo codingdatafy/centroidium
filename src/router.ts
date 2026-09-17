@@ -1,13 +1,15 @@
 import { RequestContext } from './types';
 import { handlePageRoute } from './handlers/page';
 import { handleSitemapRoute } from './handlers/sitemap';
+import { handleAnalyticsRoute } from './services/analytics';
 import { renderNotFound } from './templates/not-found';
 
-/**
- * Native lightweight routing engine without external dependencies
- */
 export async function handleRequest(context: RequestContext): Promise<Response> {
   const { request, env, pathname } = context;
+
+  if (pathname === '/lib') {
+    return handleAnalyticsRoute(context);
+  }
 
   if (request.method !== 'GET' && request.method !== 'HEAD') {
     return new Response('Method Not Allowed', {
@@ -46,9 +48,6 @@ export async function handleRequest(context: RequestContext): Promise<Response> 
   });
 }
 
-/**
- * Determines whether a requested pathname should be served via static assets
- */
 function isStaticAsset(pathname: string): boolean {
   if (
     pathname.startsWith('/styles/') ||
