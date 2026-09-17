@@ -1,7 +1,3 @@
-// ======================================================================
-// FILE: src/router.ts
-// ======================================================================
-
 import { RequestContext } from './types';
 import { handlePageRoute } from './handlers/page';
 import { handleSitemapRoute } from './handlers/sitemap';
