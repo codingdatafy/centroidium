@@ -1,5 +1,5 @@
 /**
- * Custom Native Zero-Dependency CommonMark-compliant Markdown Parser
+ * Custom Native Zero-Dependency CommonMark-compliant Markdown Parser (spec.commonmark.org/0.31.2/)
  * Standard independent core for Markdown conversion to HTML
  */
 

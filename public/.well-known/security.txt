@@ -1,4 +1,4 @@
-Contact: mailto:contact@codingdatafy.com
+Contact: mailto:security@codingdatafy.com
 Contact: https://www.codingdatafy.com/contact
 Expires: 2027-12-31T23:59:59.000Z
 Preferred-Languages: en

@@ -1,7 +1,3 @@
-// ======================================================================
-// FILE: src/templates/page.ts
-// ======================================================================
-
 import { ProcessedDocument } from '../types';
 import { renderLayout } from './layout';
 

@@ -1,15 +1,30 @@
 # CodingDatafy
 
-> Master coding with CodingDatafy expert-led documentation. On a mission to build the world's largest reference and knowledge base for coding languages.
+> On a mission to build the world's largest reference and knowledge base for coding.
 
-## Core Reference Pages
-- [Homepage](https://www.codingdatafy.com/) - CodingDatafy main entrance.
-- [Programming Languages Directory](https://www.codingdatafy.com/languages) - Our core coding documentation.
-- [FAQ](https://www.codingdatafy.com/faq) - Frequently Asked Questions.
-- [About Us](https://www.codingdatafy.com/about) - About CodingDatafy Organization.
-- [Contribute Guide](https://www.codingdatafy.com/contribute) - How to contribute to our open-source repositories.
+CodingDatafy is an open-source, edge-rendered developer reference platform providing distraction-free, privacy-first technical documentation across programming languages, frameworks, APIs, protocols, and databases[cite: 1].
 
-## Legal & Contact
-- [Contact Us](https://www.codingdatafy.com/contact) - Get in touch with our team.
-- [Terms of Use](https://www.codingdatafy.com/terms-of-use) - Terms and conditions.
-- [Privacy Policy](https://www.codingdatafy.com/privacy-policy) - Privacy policy and data handling.
+## Core Reference Index
+- Homepage: https://www.codingdatafy.com/
+- Languages: https://www.codingdatafy.com/languages
+- Frameworks: https://www.codingdatafy.com/frameworks
+- APIs: https://www.codingdatafy.com/apis
+- Protocols: https://www.codingdatafy.com/protocols
+- Databases: https://www.codingdatafy.com/databases
+- Tools: https://www.codingdatafy.com/tools
+- Compatibility: https://www.codingdatafy.com/compatibility
+- Development: https://www.codingdatafy.com/development
+- Roadmaps: https://www.codingdatafy.com/roadmaps
+- Glossary: https://www.codingdatafy.com/glossary
+
+## System Information & Policies
+- About: https://www.codingdatafy.com/about
+- Terms of Use: https://www.codingdatafy.com/terms-of-use
+- Privacy Policy: https://www.codingdatafy.com/privacy-policy
+- Contribute: https://www.codingdatafy.com/contribute
+- Machine-Readable Sitemap: https://www.codingdatafy.com/sitemap.xml
+
+## Content & Code Licensing
+- Content License: CC BY-SA 4.0 (Creative Commons Attribution-ShareAlike 4.0 International)
+- Source Code License: MIT License
+- Security Policy: https://www.codingdatafy.com/.well-known/security.txt
