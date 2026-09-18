@@ -1,7 +1,7 @@
 # Code of Conduct
 
 ## Our Goal
-**CodingDatafy** aims to be a professional and welcoming environment for building the world's largest reference of coding languages.
+**CodingDatafy** aims to be a professional and welcoming environment for building the world's largest reference of coding.
 
 ## Expected Behavior
 * **Be Professional:** Use welcoming and inclusive language.
