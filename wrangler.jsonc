@@ -2,7 +2,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "centroidium",
   "main": "src/index.ts",
-  "compatibility_date": "2024-09-16",
+  "compatibility_date": "2024-09-19",
   "compatibility_flags": [
     "nodejs_compat"
   ],
@@ -26,7 +26,7 @@
   "analytics_engine_datasets": [
     {
       "binding": "SITE_ANALYTICS",
-      "dataset": "codingdatafy_analytics"
+      "dataset": "codingdatafy_analytics_dev"
     }
   ],
   "vars": {
