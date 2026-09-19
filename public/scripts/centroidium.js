@@ -12,8 +12,17 @@
 ******************************************************** */
 
 /////////////////////////////  Root    /////////////////////////////
-// Analytics Tracking
 (function () {
+  'use strict';
+
+  // ============================================================================
+  // TOKEN GENERATOR
+  // ============================================================================
+
+  /**
+   * Generates a fast, deterministic cryptographic synchronization token 
+   * matching the server-side `getSyncToken` implementation.
+   */
   function generateToken(path, timestamp) {
     var str = path + '-' + timestamp + '-CodingDatafyToken';
     var h1 = 0xdeadbeef, h2 = 0x41c6ce57;
@@ -28,6 +37,35 @@
     return hashVal.toString(16).padStart(24, '0').substring(0, 24);
   }
 
+  // ============================================================================
+  // DISPATCHER HELPERS
+  // ============================================================================
+
+  /**
+   * Sends the analytics payload to the Cloudflare Worker beacon endpoint (`/lib`).
+   */
+  function sendBeaconPayload(payload) {
+    var jsonString = JSON.stringify(payload);
+
+    if (navigator.sendBeacon) {
+      // Wrap in Blob to preserve application/json MIME type in Beacon API
+      var blob = new Blob([jsonString], { type: 'application/json' });
+      navigator.sendBeacon('/lib', blob);
+    } else {
+      fetch('/lib', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: jsonString,
+        keepalive: true
+      }).catch(function (err) {
+        console.error('[Analytics Error] Transmission failed:', err);
+      });
+    }
+  }
+
+  /**
+   * Records a pageview event (`type: 'init'`)
+   */
   function sendPageview() {
     var path = window.location.pathname.replace(/\/+$/, '') || '/';
     var ts = Date.now();
@@ -43,25 +81,49 @@
       token: token
     };
 
-    if (navigator.sendBeacon) {
-      navigator.sendBeacon('/lib', JSON.stringify(payload));
-    } else {
-      fetch('/lib', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-        keepalive: true
-      });
-    }
+    sendBeaconPayload(payload);
   }
 
+  // ============================================================================
+  // PUBLIC GLOBAL TRACKING DISPATCHER
+  // ============================================================================
+
+  /**
+   * Global tracking entry point for custom client interaction events.
+   * Usage: window.trackEvent('copy_code', 'javascript');
+   */
+  window.trackEvent = function (eventType, target) {
+    if (!eventType) return;
+
+    var path = window.location.pathname.replace(/\/+$/, '') || '/';
+    var ts = Date.now();
+    var token = generateToken(path, ts);
+
+    var payload = {
+      p: path,
+      r: document.referrer || '',
+      type: 'event',
+      event_type: eventType,
+      target: target || '',
+      ts: ts,
+      token: token
+    };
+
+    sendBeaconPayload(payload);
+  };
+
+  // Trigger initial pageview dispatch when DOM is ready
   if (document.readyState === 'complete') {
     sendPageview();
   } else {
     window.addEventListener('load', sendPageview);
   }
+
 })();
-// Code Header: Language Badge & Copy Button + Analytics Tracking
+
+// ============================================================================
+// UI INTEGRATION: CODE SNIPPET HEADERS & COPY ANALYTICS
+// ============================================================================
 (function () {
   'use strict';
 
@@ -81,6 +143,7 @@
           languageName = langClass.replace(/^(language-|lang-)/, '').toUpperCase();
         }
       }
+
       const headerDiv = document.createElement('div');
       headerDiv.className = 'code-header';
 
@@ -105,6 +168,7 @@
           button.querySelector('.btn-text').innerText = 'Copied!';
           button.classList.add('copied');
 
+          // Dispatch event to Cloudflare Analytics Engine via client beacon handler
           if (typeof window.trackEvent === 'function') {
             window.trackEvent('copy_code', languageName.toLowerCase());
           }
@@ -131,6 +195,7 @@
     initCodeHeaders();
   }
 
+  // Observe dynamic DOM insertions to inject headers on dynamically created code snippets
   const observer = new MutationObserver(() => {
     initCodeHeaders();
   });
