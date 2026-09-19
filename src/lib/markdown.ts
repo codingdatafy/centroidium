@@ -2,24 +2,19 @@ import { ProcessedDocument, DocumentMeta, TableOfContentsItem } from '../types';
 import { markdatafy } from './markdatafy';
 
 /**
- * Safe HTML Allowlist against XSS (Zero-Dependency)
+ * Safe HTML Allowlist against XSS
  */
 const ALLOWED_TAGS = new Set([
-  'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'br', 'hr',
-  'strong', 'b', 'em', 'i', 'code', 'pre', 'blockquote',
-  'ul', 'ol', 'li', 'dl', 'dt', 'dd',
-  'a', 'img', 'span', 'div', 'section', 'details', 'summary',
-  'table', 'thead', 'tbody', 'tr', 'th', 'td', 'kbd', 'sub', 'sup', 'mark'
+  'div', 'span', 'h2', 'h3', 'h4', 'p', 'a', 'dfn', 'abbr', 
+  'em', 'strong', 'mark', 'time', 'ul', 'ol', 'li',
+  'dt', 'dd', 'table', 'caption', 'colgroup', 'col',
+  'thead', 'tbody', 'tfoot', 'tr', 'th', 'td', 'img'
 ]);
 
 const ALLOWED_ATTRIBUTES: Record<string, Set<string>> = {
-  a: new Set(['href', 'title', 'target', 'rel']),
-  img: new Set(['src', 'alt', 'title', 'width', 'height', 'loading']),
-  th: new Set(['colspan', 'rowspan', 'align']),
-  td: new Set(['colspan', 'rowspan', 'align']),
-  code: new Set(['class']),
-  pre: new Set(['class']),
-  '*': new Set(['id', 'class', 'aria-label', 'aria-hidden'])
+  a: new Set(['href', 'target']),
+  time: new Set(['datetime']),
+  img: new Set(['alt', 'src', 'width', 'height', 'loading'])
 };
 
 /**
