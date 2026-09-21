@@ -1,27 +1,39 @@
-import { Request as CFRequest } from '@cloudflare/workers-types';
-
+/**
+ * Cloudflare Worker Environment Bindings
+ */
 export interface Env {
-  ASSETS: Fetcher;
   CONTENT_BUCKET: R2Bucket;
-  SITE_ANALYTICS: AnalyticsEngineDataset;
-  ENVIRONMENT: 'production' | 'staging' | 'development';
-  SITE_URL: string;
-  SITE_NAME: string;
-  DEFAULT_CACHE_TTL: string;
+  ENVIRONMENT?: string;
+  SITE_URL?: string;
 }
 
+/**
+ * Frontmatter metadata extracted from Markdown files
+ */
 export interface DocumentMeta {
   title?: string;
   description?: string;
-  keywords?: string[];
-  canonicalUrl?: string;
-  author?: string;
-  publishedAt?: string;
   updatedAt?: string;
-  draft?: boolean;
+  lastUpdated?: string;
+  publishedAt?: string;
+  style?: string;
+  id?: string;
+  sidebarHtml?: string;
   [key: string]: unknown;
 }
 
+/**
+ * Table of Contents heading entry
+ */
+export interface TableOfContentsItem {
+  id: string;
+  text: string;
+  level: number;
+}
+
+/**
+ * Parsed Markdown document representation
+ */
 export interface ProcessedDocument {
   meta: DocumentMeta;
   contentHtml: string;
@@ -29,16 +41,12 @@ export interface ProcessedDocument {
   rawMarkdown: string;
 }
 
-export interface TableOfContentsItem {
-  id: string;
-  text: string;
-  level: number;
-}
-
-export interface RequestContext {
-  request: Request;
-  env: Env;
-  ctx: ExecutionContext;
-  url: URL;
-  pathname: string;
+/**
+ * Sitemap entry item structure
+ */
+export interface SitemapEntry {
+  loc: string;
+  lastmod?: string;
+  changefreq?: 'always' | 'hourly' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'never';
+  priority?: number;
 }

@@ -9,6 +9,25 @@ export interface RenderPageOptions {
 }
 
 /**
+ * Helper to convert YYYY-MM-DD or ISO strings to "D Month YYYY" format
+ */
+function formatDate(dateStr: string): { isoDate: string; formattedDate: string } | null {
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) {
+    return null;
+  }
+
+  const isoDate = date.toISOString().split('T')[0] ?? dateStr;
+  const formattedDate = new Intl.DateTimeFormat('en-GB', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(date);
+
+  return { isoDate, formattedDate };
+}
+
+/**
  * Renders the document/article page content shell and wraps it inside the global layout shell.
  */
 export function renderPage({ doc, pathname, siteName, siteUrl }: RenderPageOptions): string {
@@ -23,7 +42,6 @@ export function renderPage({ doc, pathname, siteName, siteUrl }: RenderPageOptio
     ? `<link rel="stylesheet" href="/styles/${escapeHtml(String(meta.style))}" />`
     : '';
 
-  // Table of Contents / Sidebar Navigation component render
   const sidebarHtml =
     toc.length > 0
       ? `<aside id="sidebar">
@@ -41,13 +59,15 @@ export function renderPage({ doc, pathname, siteName, siteUrl }: RenderPageOptio
       : (meta.sidebarHtml as string) ?? '';
 
   const mainContainerId = meta.id ? ` id="${escapeHtml(String(meta.id))}"` : '';
-  const lastUpdated = meta.lastUpdated || meta.updatedAt;
+  
+  const rawLastUpdated = (meta.updatedAt || meta.lastUpdated || meta.publishedAt) as string | undefined;
+  const parsedDate = rawLastUpdated ? formatDate(String(rawLastUpdated)) : null;
 
   const articleFooterHtml = `
     <footer id="article-footer">
       ${
-        lastUpdated
-          ? `<p><time datetime="${escapeHtml(String(lastUpdated))}">Last Updated: ${escapeHtml(String(lastUpdated))}</time></p>`
+        parsedDate
+          ? `<p>(Last Updated: <time datetime="${escapeHtml(parsedDate.isoDate)}">${escapeHtml(parsedDate.formattedDate)}</time>)</p>`
           : ''
       }
       <p>

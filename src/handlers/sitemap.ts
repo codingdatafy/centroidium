@@ -1,58 +1,116 @@
-import { RequestContext } from '../types';
-import { listAllContentKeys } from '../services/storage';
-import { getCachedResponse, setCachedResponse } from '../services/cache';
+import { Env, SitemapEntry } from '../types';
 
 /**
- * Route handler for dynamic sitemap.xml generation directly from Cloudflare R2
+ * Renders an XML sitemap dynamically by listing all objects in Cloudflare R2 storage.
  */
-export async function handleSitemapRoute(context: RequestContext): Promise<Response> {
-  const { request, env } = context;
+export async function handleSitemapRequest(request: Request, env: Env): Promise<Response> {
+  const siteUrl = env.SITE_URL || new URL(request.url).origin;
+  const entries: SitemapEntry[] = [];
 
-  const cachedResponse = await getCachedResponse(request, env);
-  if (cachedResponse) {
-    return cachedResponse;
+  try {
+    let truncated = true;
+    let cursor: string | undefined = undefined;
+
+    while (truncated) {
+      const listResult = await env.CONTENT_BUCKET.list({
+        prefix: '',
+        cursor,
+      });
+
+      for (const object of listResult.objects) {
+        if (!object.key.endsWith('.md')) {
+          continue;
+        }
+        let path = object.key.replace(/\.md$/, '');
+        if (path.endsWith('/index')) {
+          path = path.slice(0, -5);
+        }
+
+        const loc = `${siteUrl}/${path.replace(/^\/+/, '')}`;
+
+        let lastmod: string | undefined = undefined;
+        
+        if (object.uploaded) {
+          lastmod = object.uploaded.toISOString().split('T')[0];
+        }
+
+        const headObject = await env.CONTENT_BUCKET.head(object.key);
+        if (headObject && headObject.customMetadata && headObject.customMetadata.updatedAt) {
+          lastmod = headObject.customMetadata.updatedAt;
+        }
+
+        entries.push({
+          loc,
+          lastmod,
+          changefreq: path === '' ? 'daily' : 'weekly',
+          priority: path === '' ? 1.0 : 0.8,
+        });
+      }
+
+      truncated = listResult.truncated;
+      if (truncated) {
+        cursor = listResult.cursor;
+      }
+    }
+
+    const xml = buildSitemapXml(entries);
+
+    return new Response(xml, {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/xml; charset=utf-8',
+        'Cache-Control': 'public, max-age=86400, s-maxage=86400',
+      },
+    });
+  } catch (error) {
+    const fallbackXml = buildSitemapXml([
+      {
+        loc: siteUrl,
+        lastmod: new Date().toISOString().split('T')[0],
+        changefreq: 'daily',
+        priority: 1.0,
+      },
+    ]);
+
+    return new Response(fallbackXml, {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/xml; charset=utf-8',
+      },
+    });
   }
-
-  const keys = await listAllContentKeys(env.CONTENT_BUCKET);
-
-  const urlNodes = keys
-    .map((key) => {
-      const routePath = convertKeyToPath(key);
-      const loc = `${env.SITE_URL}${routePath}`;
-      return `  <url>\n    <loc>${loc}</loc>\n    <changefreq>weekly</changefreq>\n    <priority>${routePath === '/' ? '1.0' : '0.8'}</priority>\n  </url>`;
-    })
-    .join('\n');
-
-  const xmlContent = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urlNodes}\n</urlset>`;
-
-  const response = new Response(xmlContent, {
-    status: 200,
-    headers: {
-      'Content-Type': 'application/xml; charset=utf-8',
-      'Cache-Control': `public, max-age=${env.DEFAULT_CACHE_TTL}, s-maxage=${env.DEFAULT_CACHE_TTL}`,
-    },
-  });
-
-  context.ctx.waitUntil(setCachedResponse(request, response, env));
-
-  return response;
 }
 
 /**
- * Converts R2 storage object keys back into public URL pathnames
+ * Formats sitemap entries into standard XML schema.
  */
-function convertKeyToPath(key: string): string {
-  if (key === 'index.md') {
-    return '/';
-  }
+function buildSitemapXml(entries: SitemapEntry[]): string {
+  const urlNodes = entries
+    .map((entry) => {
+      const lastmodNode = entry.lastmod ? `\n    <lastmod>${escapeXml(entry.lastmod)}</lastmod>` : '';
+      const changefreqNode = entry.changefreq ? `\n    <changefreq>${entry.changefreq}</changefreq>` : '';
+      const priorityNode = entry.priority !== undefined ? `\n    <priority>${entry.priority.toFixed(1)}</priority>` : '';
 
-  if (key.endsWith('/index.md')) {
-    return `/${key.replace(/\/index\.md$/, '/')}`;
-  }
+      return `  <url>
+    <loc>${escapeXml(entry.loc)}</loc>${lastmodNode}${changefreqNode}${priorityNode}
+  </url>`;
+    })
+    .join('\n');
 
-  if (key.endsWith('.md')) {
-    return `/${key.replace(/\.md$/, '')}`;
-  }
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${urlNodes}
+</urlset>`.trim();
+}
 
-  return `/${key}`;
+/**
+ * Escapes special XML characters
+ */
+function escapeXml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
 }

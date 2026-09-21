@@ -26,13 +26,10 @@ export async function processMarkdown(rawMarkdown: string): Promise<ProcessedDoc
   const { meta, body } = parseFrontmatter(rawMarkdown);
   const toc = extractTableOfContents(body);
   
-  // 1. Convert Markdown to raw HTML via CommonMark AST core
   const rawHtml = markdatafy(body);
 
-  // 2. Sanitize inline/embedded HTML elements against XSS
   const sanitizedHtml = sanitizeHtml(rawHtml);
 
-  // 3. Wrap H2-H4 titles inside <section> containers using Native Cloudflare HTMLRewriter
   const contentHtml = await wrapSections(sanitizedHtml);
 
   return {
@@ -56,7 +53,6 @@ async function wrapSections(html: string): Promise<string> {
   const rewriter = new HTMLRewriter()
     .on('h2, h3, h4', {
       element(element) {
-        // If we are already inside a section, close the previous section before starting a new one
         if (inSection) {
           element.before('</section>', { html: true });
         }
@@ -68,11 +64,9 @@ async function wrapSections(html: string): Promise<string> {
       }
     });
 
-  // Execute native stream transformation
   const response = rewriter.transform(new Response(html));
   transformedHtml = await response.text();
 
-  // Close the final section if one was opened
   if (inSection) {
     transformedHtml += '</section>';
   }
@@ -84,32 +78,24 @@ async function wrapSections(html: string): Promise<string> {
  * Strips script tags, unsafe protocols (javascript:), and unallowed tags/attributes.
  */
 function sanitizeHtml(html: string): string {
-  // Strip dangerous tag blocks completely
   let clean = html.replace(/<(script|iframe|object|embed|style|form|input)[^>]*>[\s\S]*?<\/\1>/gi, '');
 
-  // Strip dangerous event handlers (e.g. onload=, onerror=, onclick=)
   clean = clean.replace(/\s+on[a-z]+\s*=\s*(?:'[^']*'|"[^"]*"|[^\s>]+)/gi, '');
 
-  // Strip javascript: / vbscript: URI schemes from links and resources
   clean = clean.replace(/(href|src)\s*=\s*["']?\s*(?:javascript|vbscript|data):[^"'>\s]+/gi, '$1="#"');
 
-  // Strip tags and attributes not in the explicit allowlist
   clean = clean.replace(/<\/?([a-z0-9-]+)([^>]*)>/gi, (match, tagName, attrString) => {
     const tag = tagName.toLowerCase();
 
-    // Disallow unlisted tags
     if (!ALLOWED_TAGS.has(tag)) {
       return '';
     }
 
-    // Keep closing tags cleanly
     if (match.startsWith('</')) {
       return `</${tag}>`;
     }
 
-    // Filter allowed attributes
     const allowedAttrs = ALLOWED_ATTRIBUTES[tag] || new Set();
-    const globalAttrs = ALLOWED_ATTRIBUTES['*'];
 
     const cleanAttrs: string[] = [];
     const attrRegex = /([a-z0-9-.]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+)))?/gi;
@@ -119,7 +105,7 @@ function sanitizeHtml(html: string): string {
       const attrName = attrMatch[1].toLowerCase();
       const attrValue = attrMatch[2] ?? attrMatch[3] ?? attrMatch[4] ?? '';
 
-      if (allowedAttrs.has(attrName) || globalAttrs.has(attrName)) {
+      if (allowedAttrs.has(attrName)) {
         cleanAttrs.push(`${attrName}="${escapeHtml(attrValue)}"`);
       }
     }
