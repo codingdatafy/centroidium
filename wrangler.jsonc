@@ -20,7 +20,7 @@
   "r2_buckets": [
     {
       "binding": "CONTENT_BUCKET",
-      "bucket_name": "codingdatafy-content-r2"
+      "bucket_name": "codingdatafy-content"
     }
   ],
   "analytics_engine_datasets": [
