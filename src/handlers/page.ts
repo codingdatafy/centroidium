@@ -1,4 +1,4 @@
-import { RequestContext, ProcessedDocument } from '../types';
+import type { RequestContext, ProcessedDocument } from '../types';
 import { fetchMarkdownFromR2 } from '../services/storage';
 import { getCachedResponse, setCachedResponse } from '../services/cache';
 import { processMarkdown } from '../lib/markdown';
@@ -29,7 +29,7 @@ export async function handlePageRoute(context: RequestContext): Promise<Response
     return null;
   }
 
-  const doc: ProcessedDocument = processMarkdown(contentMarkdown);
+  const doc: ProcessedDocument = await processMarkdown(contentMarkdown);
 
   if (doc.meta.draft && env.ENVIRONMENT === 'production') {
     return null;

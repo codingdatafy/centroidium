@@ -1,9 +1,10 @@
-import { Env, SitemapEntry } from '../types';
+import type { Env, SitemapEntry } from '../types';
 
 /**
  * Renders an XML sitemap dynamically by listing all objects in Cloudflare R2 storage.
  */
-export async function handleSitemapRequest(request: Request, env: Env): Promise<Response> {
+export async function handleSitemapRoute(context: { request: Request; env: Env }): Promise<Response> {
+  const { request, env } = context;
   const siteUrl = env.SITE_URL || new URL(request.url).origin;
   const entries: SitemapEntry[] = [];
 
@@ -12,10 +13,15 @@ export async function handleSitemapRequest(request: Request, env: Env): Promise<
     let cursor: string | undefined = undefined;
 
     while (truncated) {
-      const listResult = await env.CONTENT_BUCKET.list({
+      const listOptions: R2ListOptions = {
         prefix: '',
-        cursor,
-      });
+      };
+
+      if (cursor !== undefined) {
+        listOptions.cursor = cursor;
+      }
+
+      const listResult = await env.CONTENT_BUCKET.list(listOptions);
 
       for (const object of listResult.objects) {
         if (!object.key.endsWith('.md')) {
@@ -27,9 +33,8 @@ export async function handleSitemapRequest(request: Request, env: Env): Promise<
         }
 
         const loc = `${siteUrl}/${path.replace(/^\/+/, '')}`;
-
         let lastmod: string | undefined = undefined;
-        
+
         if (object.uploaded) {
           lastmod = object.uploaded.toISOString().split('T')[0];
         }
@@ -39,17 +44,24 @@ export async function handleSitemapRequest(request: Request, env: Env): Promise<
           lastmod = headObject.customMetadata.updatedAt;
         }
 
-        entries.push({
+        const entry: SitemapEntry = {
           loc,
-          lastmod,
           changefreq: path === '' ? 'daily' : 'weekly',
           priority: path === '' ? 1.0 : 0.8,
-        });
+        };
+
+        if (lastmod !== undefined) {
+          entry.lastmod = lastmod;
+        }
+
+        entries.push(entry);
       }
 
       truncated = listResult.truncated;
-      if (truncated) {
+      if (truncated && 'cursor' in listResult && typeof listResult.cursor === 'string') {
         cursor = listResult.cursor;
+      } else {
+        cursor = undefined;
       }
     }
 

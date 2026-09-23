@@ -50,3 +50,11 @@ export interface SitemapEntry {
   changefreq?: 'always' | 'hourly' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'never';
   priority?: number;
 }
+
+export interface RequestContext {
+  request: Request;
+  env: Env;
+  ctx: ExecutionContext;
+  url: URL;
+  pathname: string;
+}

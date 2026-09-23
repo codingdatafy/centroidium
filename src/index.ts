@@ -1,4 +1,4 @@
-import { Env, RequestContext } from './types';
+import type { Env, RequestContext } from './types';
 import { handleRequest } from './router';
 import { trackEvent } from './services/analytics';
 import { renderError } from './templates/error';
