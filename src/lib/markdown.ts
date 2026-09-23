@@ -120,11 +120,11 @@ function sanitizeHtml(html: string): string {
 }
 
 /**
- * YAML-like Frontmatter parser
+ * Robust YAML-like Frontmatter parser
  */
 function parseFrontmatter(rawMarkdown: string): { meta: DocumentMeta; body: string } {
   const meta: DocumentMeta = {};
-  const frontmatterRegex = /^---\n([\s\S]*?)\n---\n?/;
+  const frontmatterRegex = /^---[\r\n]+([\s\S]*?)[\r\n]+---[\r\n]*/;
   const match = rawMarkdown.match(frontmatterRegex);
 
   if (!match) {
@@ -134,7 +134,7 @@ function parseFrontmatter(rawMarkdown: string): { meta: DocumentMeta; body: stri
   const yamlBlock = match[1] ?? '';
   const body = rawMarkdown.replace(frontmatterRegex, '');
 
-  const lines = yamlBlock.split('\n');
+  const lines = yamlBlock.split(/\r?\n/);
   for (const line of lines) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith('#')) continue;
