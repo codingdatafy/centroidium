@@ -67,8 +67,6 @@ function escapeHtml(str: string): string {
   return str
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
-    .replace(/ architecture>/g, '&gt;')
-    .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 }
@@ -95,10 +93,10 @@ function expandTabs(line: string): string {
 }
 
 function decodeEntities(text: string): string {
-  return text.replace(/&(?:#([0-9]{1,7})|#[xX]([0-9a-fA-F]{1,6})|([a-zA-Z0-9]+));/g, (match, dec, hex, named) => {
+  return text.replace(/&(?:#([0-9]{1,7})|#[xX]([0-9a-fA-F]{1,6})|([a-zA-Z0-9]+));/g, (match: string, dec?: string, hex?: string, named?: string) => {
     if (dec) return String.fromCodePoint(parseInt(dec, 10));
     if (hex) return String.fromCodePoint(parseInt(hex, 16));
-    if (named && HTML_ENTITIES[`&${named};`]) return HTML_ENTITIES[`&${named};`];
+    if (named && HTML_ENTITIES[`&${named};`]) return HTML_ENTITIES[`&${named};`]!;
     return match;
   });
 }

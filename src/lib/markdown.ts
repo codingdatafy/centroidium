@@ -1,4 +1,4 @@
-import { ProcessedDocument, DocumentMeta, TableOfContentsItem } from '../types';
+import type { ProcessedDocument, DocumentMeta, TableOfContentsItem } from '../types';
 import { markdatafy } from './markdatafy';
 
 /**
@@ -102,7 +102,9 @@ function sanitizeHtml(html: string): string {
     let attrMatch: RegExpExecArray | null;
 
     while ((attrMatch = attrRegex.exec(attrString)) !== null) {
-      const attrName = attrMatch[1].toLowerCase();
+      const attrName = attrMatch[1]?.toLowerCase();
+      if (!attrName) continue;
+
       const attrValue = attrMatch[2] ?? attrMatch[3] ?? attrMatch[4] ?? '';
 
       if (allowedAttrs.has(attrName)) {

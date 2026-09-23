@@ -1,4 +1,4 @@
-import { RequestContext } from '../types';
+import type { RequestContext } from '../types';
 
 // ============================================================================
 // CONSTANTS & REGULAR EXPRESSIONS
@@ -202,7 +202,8 @@ export async function handleAnalyticsRoute(context: RequestContext): Promise<Res
     }
 
     // Datacenter Verification
-    const asOrg = typeof request.cf?.asOrganization === 'string' ? request.cf.asOrganization.toLowerCase() : '';
+    const cfOrg = request.cf?.asOrganization;
+    const asOrg = typeof cfOrg === 'string' ? cfOrg.toLowerCase() : '';
     const isOperaProxy = /opera software/i.test(asOrg) || /opera mini|opr\//i.test(userAgent);
 
     if (DATACENTER_REGEX.test(asOrg) && !isOperaProxy) {
@@ -222,7 +223,7 @@ export async function handleAnalyticsRoute(context: RequestContext): Promise<Res
       const eventType = body.event_type;
       const targetValue = typeof body.target === 'string' ? body.target.substring(0, 500) : '';
 
-      if (['copy_code', 'outbound_click', 'site_search'].includes(eventType)) {
+      if (['copy_code', 'outbound_click', 'site_search'].includes(eventType) && env.SITE_ANALYTICS) {
         env.SITE_ANALYTICS.writeDataPoint({
           indexes: [eventType],
           blobs: [
@@ -256,24 +257,26 @@ export async function handleAnalyticsRoute(context: RequestContext): Promise<Res
     const is404Flag = (body.is_404 === true || body.is_404 === 'true') ? 1 : 0;
 
     // Dispatch Data Point to Cloudflare Analytics Engine
-    env.SITE_ANALYTICS.writeDataPoint({
-      indexes: ['pageview'],
-      blobs: [
-        targetPath,              // blob1
-        parsedReferrer,          // blob2
-        country,                 // blob3
-        deviceType,              // blob4
-        browserName,             // blob5
-        browserVersion || '',    // blob6
-        osName,                  // blob7
-        osVersion || '',         // blob8
-        visitorHash              // blob9
-      ],
-      doubles: [
-        is404Flag,               // double1
-        clientTs                 // double2
-      ]
-    });
+    if (env.SITE_ANALYTICS) {
+      env.SITE_ANALYTICS.writeDataPoint({
+        indexes: ['pageview'],
+        blobs: [
+          targetPath,              // blob1
+          parsedReferrer,          // blob2
+          country,                 // blob3
+          deviceType,              // blob4
+          browserName,             // blob5
+          browserVersion || '',    // blob6
+          osName,                  // blob7
+          osVersion || '',         // blob8
+          visitorHash              // blob9
+        ],
+        doubles: [
+          is404Flag,               // double1
+          clientTs                 // double2
+        ]
+      });
+    }
 
     return jsonResponse({ status: 'recorded' }, 200, corsHeaders);
 

@@ -1,4 +1,4 @@
-import { RequestContext } from './types';
+import type { RequestContext } from './types';
 import { handlePageRoute } from './handlers/page';
 import { handleSitemapRoute } from './handlers/sitemap';
 import { handleAnalyticsRoute } from './services/analytics';
