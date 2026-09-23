@@ -8,8 +8,8 @@
   ],
   "routes": [
     {
-      "pattern": "www.codingdatafy.com",
-      "custom_domain": true
+      "pattern": "www.codingdatafy.com/*",
+      "zone_name": "codingdatafy.com"
     }
   ],
   "assets": {
