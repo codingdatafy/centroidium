@@ -41,8 +41,7 @@ jobs:
         run: npm run type-check
 
       - name: Deploy Worker via Wrangler
-        # cloudflare/wrangler-action@v3.14.0
-        uses: cloudflare/wrangler-action@392082e6669911e2f754a10dfa698ed92209d8aa
+        uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
