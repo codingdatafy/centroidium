@@ -28,7 +28,10 @@ function bufferToHex(buffer: ArrayBuffer | Uint8Array, length = 64): string {
   let hex = '';
   const len = Math.min(bytes.length, Math.ceil(length / 2));
   for (let i = 0; i < len; i++) {
-    hex += bytes[i].toString(16).padStart(2, '0');
+    const byte = bytes[i];
+    if (byte !== undefined) {
+      hex += byte.toString(16).padStart(2, '0');
+    }
   }
   return hex.substring(0, length);
 }
@@ -151,7 +154,8 @@ export async function handleAnalyticsRoute(context: RequestContext): Promise<Res
 
     // Path Sanitization
     const rawPath = typeof body.p === 'string' ? body.p : '/';
-    const cleanPath = rawPath.split('?')[0]?.replace(/\/+$/, '') || '/';
+    const splitPath = rawPath.split('?')[0];
+    const cleanPath = (splitPath ?? '/').replace(/\/+$/, '') || '/';
     const targetPath = cleanPath.substring(0, 500);
 
     // Cryptographic Token Validation
