@@ -29,7 +29,10 @@ jobs:
 
       - name: Setup Node.js Environment
         # actions/setup-node@v4.1.0
-        uses: actions/setup-node@39370e3970a6d050c38020d8210e42a58ba91c2b
+        uses: actions/setup-node@8f152de45cc393bb48ce5d89d36b731f54556e65
+        with:
+          node-version: 22
+          cache: npm
 
       - name: Install Build Dependencies
         run: npm ci
@@ -39,7 +42,7 @@ jobs:
 
       - name: Deploy Worker via Wrangler
         # cloudflare/wrangler-action@v3.14.0
-        uses: cloudflare/wrangler-action@39223788755088eb74ed0153f3e160e1d09ecce7
+        uses: cloudflare/wrangler-action@b2e4ec15bc751d3822f36d4bcfa6fa22dd8e81e3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
