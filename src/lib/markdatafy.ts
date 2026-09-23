@@ -56,18 +56,13 @@ interface Delimiter {
 export function markdatafy(markdown: string, _options: MarkdatafyOptions = {}): string {
   if (!markdown) return '';
 
-  // 1. Normalize line endings (\r\n and \r to \n)
   const normalized = markdown.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
   const lines = normalized.split('\n');
 
-  // 2. Pre-pass: Extract link reference definitions
   const refDefs: Record<string, { href: string; title: string }> = {};
   const cleanedLines = collectLinkReferences(lines, refDefs);
 
-  // 3. Phase 1: Block Structure Parsing (AST generation)
   const doc = parseBlocks(cleanedLines);
-
-  // 4. Phase 2: AST Rendering & Inline Evaluation
   return renderBlock(doc, refDefs);
 }
 
@@ -92,7 +87,6 @@ function parseBlocks(lines: string[]): BlockNode {
     const line = expandTabs(rawLine);
     let current: BlockNode = getDeepestOpenBlock(root);
 
-    // ATX Heading (# h1 - ###### h6)
     const atxMatch = line.match(/^ {0,3}(#{1,6})(?:[ \t]+(.*))?$/);
     if (atxMatch) {
       closeUnmatchedBlocks(current, root);
@@ -104,7 +98,6 @@ function parseBlocks(lines: string[]): BlockNode {
       continue;
     }
 
-    // Fenced Code Block (``` or ~~~)
     const fenceMatch = line.match(/^ {0,3}(`{3,}|~{3,})[ \t]*(.*)$/);
     if (current.type === 'code_block' && current.fenced) {
       const closeFenceMatch = line.match(/^ {0,3}(`{3,}|~{3,})[ \t]*$/);
@@ -129,7 +122,6 @@ function parseBlocks(lines: string[]): BlockNode {
       continue;
     }
 
-    // Thematic Break (---, ***, ___)
     if (/^ {0,3}(?:\* *){3,}$|^ {0,3}(?:- *){3,}$|^ {0,3}(?:_ *){3,}$/.test(line)) {
       closeUnmatchedBlocks(current, root);
       const hr = createNode('thematic_break', root);
@@ -138,7 +130,6 @@ function parseBlocks(lines: string[]): BlockNode {
       continue;
     }
 
-    // Blockquote (>)
     const bqMatch = line.match(/^ {0,3}>[ \t]?(.*)$/);
     if (bqMatch) {
       if (current.type !== 'blockquote') {
@@ -153,7 +144,6 @@ function parseBlocks(lines: string[]): BlockNode {
       continue;
     }
 
-    // List Item (*, -, +, 1.)
     const listMatch = line.match(/^ {0,3}(?:([*+-])|(\d{1,9})[\.\)])[ \t]+(.*)$/);
     if (listMatch) {
       const isOrdered = !listMatch[1];
@@ -176,7 +166,6 @@ function parseBlocks(lines: string[]): BlockNode {
       continue;
     }
 
-    // Indented Code Block (4 spaces indentation)
     if (line.startsWith('    ') && current.type !== 'paragraph') {
       if (current.type !== 'code_block') {
         closeUnmatchedBlocks(current, root);
@@ -189,7 +178,6 @@ function parseBlocks(lines: string[]): BlockNode {
       continue;
     }
 
-    // Paragraph accumulation or closing blank lines
     if (line.trim() === '') {
       closeUnmatchedBlocks(current, root);
     } else {
@@ -236,14 +224,12 @@ function parseInline(
   while (i < text.length) {
     const char = text[i];
 
-    // Escaped punctuation (\)
     if (char === '\\' && i + 1 < text.length && /[!"#$%&'()*+,\-./:;<=>?@\[\\\]^_`{|}~]/.test(text[i + 1])) {
       tokens.push({ type: 'text', text: text[i + 1] });
       i += 2;
       continue;
     }
 
-    // Code Spans (`code`)
     if (char === '`') {
       let count = 0;
       while (i + count < text.length && text[i + count] === '`') count++;
@@ -256,7 +242,6 @@ function parseInline(
       }
     }
 
-    // Images (![alt](url)) & Links ([text](url))
     if (char === '!' && text[i + 1] === '[') {
       const linkEnd = parseLinkOrImage(text, i + 1, refDefs, true);
       if (linkEnd) {
@@ -273,7 +258,6 @@ function parseInline(
       }
     }
 
-    // Emphasis Delimiters (* or _)
     if (char === '*' || char === '_') {
       let count = 0;
       while (i + count < text.length && text[i + count] === char) count++;
@@ -291,8 +275,7 @@ function parseInline(
       continue;
     }
 
-    // Plain text chunking
-    const nextSpecial = text.slice(i + 1).search(/[\\`!\[*_]/);     if (nextSpecial === -1) {       tokens.push({ type: 'text', text: text.slice(i) });       break;     } else {       tokens.push({ type: 'text', text: text.slice(i, i + 1 + nextSpecial) });       i += 1 + nextSpecial;     }   }    processEmphasisDelimiters(tokens, delimiters);   return tokens; }  function processEmphasisDelimiters(tokens: InlineToken[], delimiters: Delimiter[]): void {   for (let i = 0; i < delimiters.length; i++) {     const del = delimiters[i];     if (del.canClose) {       for (let j = i - 1; j >= 0; j--) {         const openDel = delimiters[j];         if (openDel.char === del.char && openDel.canOpen) {           const isStrong = openDel.count >= 2 && del.count >= 2;           const tagType = isStrong ? 'strong' : 'em';            const innerTokens = tokens.slice(openDel.nodeIndex + 1, del.nodeIndex);           const wrappedNode: InlineToken = { type: tagType, children: innerTokens };            tokens.splice(openDel.nodeIndex, del.nodeIndex - openDel.nodeIndex + 1, wrappedNode);           break;         }       }     }   } }  function parseLinkOrImage(   text: string,   startIdx: number,   refDefs: Record<string, { href: string; title: string }>,   isImage: boolean ): { token: InlineToken; nextIdx: number } \vert{} null {   const closeBracket = text.indexOf(']', startIdx);   if (closeBracket === -1) return null;    const label = text.slice(startIdx + 1, closeBracket);   const rest = text.slice(closeBracket + 1);    // Inline Link: (url "title")   if (rest.startsWith('(')) {     const closeParen = rest.indexOf(')');     if (closeParen !== -1) {       const linkTarget = rest.slice(1, closeParen).trim();       const parts = linkTarget.split(/\s+"(.*)"$/);       const href = parts[0];       const title = parts[1] \vert{}\vert{} '';        const token: InlineToken = isImage         ? { type: 'image', alt: label, href, title }         : { type: 'link', href, title, children: parseInline(label, refDefs) };        return { token, nextIdx: closeBracket + 1 + closeParen + 1 };     }   }    // Reference Link: [label][ref] or [label][]   const refMatch = rest.match(/^\[([^\]]*)\]/);
+    const nextSpecial = text.slice(i + 1).search(/[\\`!\[*_]/);     if (nextSpecial === -1) {       tokens.push({ type: 'text', text: text.slice(i) });       break;     } else {       tokens.push({ type: 'text', text: text.slice(i, i + 1 + nextSpecial) });       i += 1 + nextSpecial;     }   }    processEmphasisDelimiters(tokens, delimiters);   return tokens; }  function processEmphasisDelimiters(tokens: InlineToken[], delimiters: Delimiter[]): void {   for (let i = 0; i < delimiters.length; i++) {     const del = delimiters[i];     if (del.canClose) {       for (let j = i - 1; j >= 0; j--) {         const openDel = delimiters[j];         if (openDel.char === del.char && openDel.canOpen) {           const isStrong = openDel.count >= 2 && del.count >= 2;           const tagType = isStrong ? 'strong' : 'em';            const innerTokens = tokens.slice(openDel.nodeIndex + 1, del.nodeIndex);           const wrappedNode: InlineToken = { type: tagType, children: innerTokens };            tokens.splice(openDel.nodeIndex, del.nodeIndex - openDel.nodeIndex + 1, wrappedNode);           break;         }       }     }   } }  function parseLinkOrImage(   text: string,   startIdx: number,   refDefs: Record<string, { href: string; title: string }>,   isImage: boolean ): { token: InlineToken; nextIdx: number } \vert{} null {   const closeBracket = text.indexOf(']', startIdx);   if (closeBracket === -1) return null;    const label = text.slice(startIdx + 1, closeBracket);   const rest = text.slice(closeBracket + 1);    if (rest.startsWith('(')) {     const closeParen = rest.indexOf(')');     if (closeParen !== -1) {       const linkTarget = rest.slice(1, closeParen).trim();       const parts = linkTarget.split(/\s+"(.*)"$/);       const href = parts[0];       const title = parts[1] \vert{}\vert{} '';        const token: InlineToken = isImage         ? { type: 'image', alt: label, href, title }         : { type: 'link', href, title, children: parseInline(label, refDefs) };        return { token, nextIdx: closeBracket + 1 + closeParen + 1 };     }   }    const refMatch = rest.match(/^\[([^\]]*)\]/);
   if (refMatch) {
     const refKey = (refMatch[1] || label).toLowerCase().trim();
     if (refDefs[refKey]) {
