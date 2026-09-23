@@ -31,22 +31,25 @@ export async function handlePageRoute(context: RequestContext): Promise<Response
 
   const doc: ProcessedDocument = await processMarkdown(contentMarkdown);
 
-  if (doc.meta.draft && env.ENVIRONMENT === 'production') {
+  if (doc.meta['draft'] && env.ENVIRONMENT === 'production') {
     return null;
   }
+
+  const siteUrl = env.SITE_URL || new URL(request.url).origin;
+  const cacheTtl = env.DEFAULT_CACHE_TTL || '86400';
 
   const html = renderPage({
     doc,
     pathname,
     siteName: env.SITE_NAME,
-    siteUrl: env.SITE_URL,
+    siteUrl,
   });
 
   const response = new Response(html, {
     status: 200,
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
-      'Cache-Control': `public, max-age=${env.DEFAULT_CACHE_TTL}, s-maxage=${env.DEFAULT_CACHE_TTL}`,
+      'Cache-Control': `public, max-age=${cacheTtl}, s-maxage=${cacheTtl}`,
     },
   });
 

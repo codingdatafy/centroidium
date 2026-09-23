@@ -40,19 +40,16 @@ export async function handleSitemapRoute(context: { request: Request; env: Env }
         }
 
         const headObject = await env.CONTENT_BUCKET.head(object.key);
-        if (headObject && headObject.customMetadata && headObject.customMetadata.updatedAt) {
-          lastmod = headObject.customMetadata.updatedAt;
+        if (headObject && headObject.customMetadata && headObject.customMetadata['updatedAt']) {
+          lastmod = headObject.customMetadata['updatedAt'];
         }
 
         const entry: SitemapEntry = {
           loc,
           changefreq: path === '' ? 'daily' : 'weekly',
           priority: path === '' ? 1.0 : 0.8,
+          ...(lastmod !== undefined ? { lastmod } : {}),
         };
-
-        if (lastmod !== undefined) {
-          entry.lastmod = lastmod;
-        }
 
         entries.push(entry);
       }

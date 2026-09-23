@@ -3,8 +3,12 @@
  */
 export interface Env {
   CONTENT_BUCKET: R2Bucket;
+  SITE_ANALYTICS?: AnalyticsEngineDataset;
+  ASSETS: Fetcher;
   ENVIRONMENT?: string;
   SITE_URL?: string;
+  SITE_NAME: string;
+  DEFAULT_CACHE_TTL: string;
 }
 
 /**
@@ -46,9 +50,9 @@ export interface ProcessedDocument {
  */
 export interface SitemapEntry {
   loc: string;
-  lastmod?: string;
-  changefreq?: 'always' | 'hourly' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'never';
-  priority?: number;
+  lastmod?: string | undefined;
+  changefreq?: ('always' | 'hourly' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'never') | undefined;
+  priority?: number | undefined;
 }
 
 export interface RequestContext {

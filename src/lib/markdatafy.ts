@@ -31,19 +31,19 @@ export type InlineType =
 
 export interface ASTNode {
   type: BlockType | InlineType;
-  children?: ASTNode[];
-  literal?: string;
-  level?: number;
-  info?: string;
-  destination?: string;
-  title?: string;
-  listType?: 'bullet' | 'ordered';
-  listStart?: number;
-  tight?: boolean;
+  children?: ASTNode[] | undefined;
+  literal?: string | undefined;
+  level?: number | undefined;
+  info?: string | undefined;
+  destination?: string | undefined;
+  title?: string | undefined;
+  listType?: ('bullet' | 'ordered') | undefined;
+  listStart?: number | undefined;
+  tight?: boolean | undefined;
 }
 
 export interface ParseOptions {
-  sourcepos?: boolean;
+  sourcepos?: boolean | undefined;
 }
 
 // ============================================================================
@@ -66,6 +66,8 @@ const HTML_ENTITIES: Record<string, string> = {
 function escapeHtml(str: string): string {
   return str
     .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/ architecture>/g, '&gt;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
@@ -120,10 +122,10 @@ export class InlineParser {
     let i = 0;
 
     while (i < input.length) {
-      const char = input[i];
+      const char = input[i]!;
 
       // 1. Backslash Escapes
-      if (char === '\\' && i + 1 < input.length && ESCAPABLE_PUNCTUATION.has(input[i + 1])) {
+      if (char === '\\' && i + 1 < input.length && ESCAPABLE_PUNCTUATION.has(input[i + 1]!)) {
         nodes.push({ type: 'text', literal: input[i + 1] });
         i += 2;
         continue;
@@ -164,7 +166,7 @@ export class InlineParser {
       // 4. Autolinks
       if (char === '<') {
         const autolinkMatch = input.slice(i).match(/^<([a-zA-Z][a-zA-Z0-9+.-]{1,31}:[^<>\s]+)>/);
-        if (autolinkMatch) {
+        if (autolinkMatch && autolinkMatch[1]) {
           nodes.push({
             type: 'link',
             destination: autolinkMatch[1],
@@ -182,8 +184,8 @@ export class InlineParser {
           count++;
         }
 
-        const prevChar = i > 0 ? input[i - 1] : ' ';
-        const nextChar = i + count < input.length ? input[i + count] : ' ';
+        const prevChar = i > 0 ? input[i - 1]! : ' ';
+        const nextChar = i + count < input.length ? input[i + count]! : ' ';
         const isLeftFlanking = !/\s/.test(nextChar) && (!ESCAPABLE_PUNCTUATION.has(nextChar) || /\s/.test(prevChar) || ESCAPABLE_PUNCTUATION.has(prevChar));
         const isRightFlanking = !/\s/.test(prevChar) && (!ESCAPABLE_PUNCTUATION.has(prevChar) || /\s/.test(nextChar) || ESCAPABLE_PUNCTUATION.has(nextChar));
 
@@ -205,7 +207,7 @@ export class InlineParser {
       // Text accumulation
       const lastNode = nodes[nodes.length - 1];
       if (lastNode && lastNode.type === 'text') {
-        lastNode.literal += char;
+        lastNode.literal = (lastNode.literal ?? '') + char;
       } else {
         nodes.push({ type: 'text', literal: char });
       }
@@ -237,7 +239,7 @@ export class InlineParser {
     while (stackBottom < delimiters.length) {
       let closerIdx = -1;
       for (let i = stackBottom; i < delimiters.length; i++) {
-        if (delimiters[i].canClose) {
+        if (delimiters[i]!.canClose) {
           closerIdx = i;
           break;
         }
@@ -245,11 +247,11 @@ export class InlineParser {
 
       if (closerIdx === -1) break;
 
-      const closer = delimiters[closerIdx];
+      const closer = delimiters[closerIdx]!;
       let openerIdx = -1;
 
       for (let i = closerIdx - 1; i >= stackBottom; i--) {
-        const opener = delimiters[i];
+        const opener = delimiters[i]!;
         if (opener.char === closer.char && opener.canOpen) {
           openerIdx = i;
           break;
@@ -257,7 +259,7 @@ export class InlineParser {
       }
 
       if (openerIdx !== -1) {
-        const opener = delimiters[openerIdx];
+        const opener = delimiters[openerIdx]!;
         const isStrong = opener.count >= 2 && closer.count >= 2;
         const useCount = isStrong ? 2 : 1;
 
@@ -266,8 +268,8 @@ export class InlineParser {
 
         const openNode = nodes[opener.nodeIndex];
         const closeNode = nodes[closer.nodeIndex];
-        openNode.literal = opener.char.repeat(opener.count);
-        closeNode.literal = closer.char.repeat(closer.count);
+        if (openNode) openNode.literal = opener.char.repeat(opener.count);
+        if (closeNode) closeNode.literal = closer.char.repeat(closer.count);
 
         const wrappedChildren = nodes.splice(opener.nodeIndex + 1, closer.nodeIndex - opener.nodeIndex - 1);
         const formatNode: ASTNode = {
@@ -278,7 +280,7 @@ export class InlineParser {
         nodes.splice(opener.nodeIndex + 1, 0, formatNode);
 
         for (let d = openerIdx + 1; d < delimiters.length; d++) {
-          delimiters[d].nodeIndex -= wrappedChildren.length - 1;
+          delimiters[d]!.nodeIndex -= wrappedChildren.length - 1;
         }
 
         if (opener.count === 0) delimiters.splice(openerIdx, 1);
@@ -305,11 +307,11 @@ export class MarkDatafyParser {
 
     let i = 0;
     while (i < lines.length) {
-      const line = expandTabs(lines[i]);
+      const line = expandTabs(lines[i]!);
 
       // 1. ATX Headings
       const strictAtx = line.match(/^ {0,3}(#{1,6})(?:[ \t]+(.*?))?[\t ]*#*[\t ]*$/);
-      if (strictAtx) {
+      if (strictAtx && strictAtx[1]) {
         root.children!.push({
           type: 'heading',
           level: strictAtx[1].length,
@@ -328,17 +330,17 @@ export class MarkDatafyParser {
 
       // 3. Fenced Code Blocks
       const fenceMatch = line.match(/^ {0,3}(`{3,}|~{3,})[ \t]*(.*)$/);
-      if (fenceMatch) {
+      if (fenceMatch && fenceMatch[1]) {
         const marker = fenceMatch[1][0];
         const fenceLen = fenceMatch[1].length;
-        const info = fenceMatch[2].trim();
+        const info = (fenceMatch[2] || '').trim();
         const codeLines: string[] = [];
         i++;
 
         while (i < lines.length) {
-          const currentLine = lines[i];
+          const currentLine = lines[i]!;
           const closeMatch = currentLine.match(/^ {0,3}(`{3,}|~{3,})[ \t]*$/);
-          if (closeMatch && closeMatch[1][0] === marker && closeMatch[1].length >= fenceLen) {
+          if (closeMatch && closeMatch[1] && closeMatch[1][0] === marker && closeMatch[1].length >= fenceLen) {
             i++;
             break;
           }
@@ -357,8 +359,8 @@ export class MarkDatafyParser {
       // 4. Blockquotes
       if (/^ {0,3}>/.test(line)) {
         const quoteLines: string[] = [];
-        while (i < lines.length && /^ {0,3}>/.test(lines[i])) {
-          quoteLines.push(lines[i].replace(/^ {0,3}>[ \t]?/, ''));
+        while (i < lines.length && /^ {0,3}>/.test(lines[i]!)) {
+          quoteLines.push(lines[i]!.replace(/^ {0,3}>[ \t]?/, ''));
           i++;
         }
         const subParser = new MarkDatafyParser();
@@ -380,10 +382,10 @@ export class MarkDatafyParser {
       const paragraphLines: string[] = [];
       while (
         i < lines.length &&
-        lines[i].trim() !== '' &&
-        !/^ {0,3}(#{1,6}|`{3,}|~{3,}|>|(?:\*[ \t]*){3,}$\vert{}(?:\-[ \t]*){3,}$)/.test(lines[i])
+        lines[i]!.trim() !== '' &&
+        !/^ {0,3}(#{1,6}|`{3,}|~{3,}|>|(?:\*[ \t]*){3,}$\vert{}(?:\-[ \t]*){3,}$)/.test(lines[i]!)
       ) {
-        paragraphLines.push(lines[i].trim());
+        paragraphLines.push(lines[i]!.trim());
         i++;
       }
 
@@ -415,13 +417,13 @@ export class HTMLRenderer {
         return `<p>${this.renderChildren(node)}</p>\n`;
 
       case 'heading':
-        return `<h${node.level}>${this.renderChildren(node)}</h${node.level}>\n`;
+        return `<h${node.level || 1}>${this.renderChildren(node)}</h${node.level || 1}>\n`;
 
       case 'blockquote':
         return `<blockquote>\n${this.renderChildren(node)}</blockquote>\n`;
 
       case 'code_block': {
-        const attr = node.info ? ` class="language-${escapeHtml(node.info.split(/\s+/)[0])}"` : '';
+        const attr = node.info ? ` class="language-${escapeHtml(node.info.split(/\s+/)[0] || '')}"` : '';
         return `<pre><code${attr}>${escapeHtml(node.literal || '')}</code></pre>\n`;
       }
 
@@ -463,11 +465,15 @@ export class HTMLRenderer {
 // 6. EXPORTED API
 // ============================================================================
 
-export function convertMfToMd(markdown: string): string {
+export function markdatafy(markdown: string): string {
   const parser = new MarkDatafyParser();
   const ast = parser.parse(markdown);
   const renderer = new HTMLRenderer();
   return renderer.render(ast);
 }
 
-export default convertMfToMd;
+export function convertMfToMd(markdown: string): string {
+  return markdatafy(markdown);
+}
+
+export default markdatafy;
