@@ -24,10 +24,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Source Code
-        uses: actions/checkout@v4
+        # actions/checkout@v4.2.2
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
       - name: Setup Node.js Environment
-        uses: actions/setup-node@v4
+        # actions/setup-node@v4.2.0
+        uses: actions/setup-node@39370e3970a6d050c38020d8210e42a58ba91c2b
         with:
           node-version: 22
           cache: npm
@@ -39,7 +41,8 @@ jobs:
         run: npm run type-check
 
       - name: Deploy Worker via Wrangler
-        uses: cloudflare/wrangler-action@v3
+        # cloudflare/wrangler-action@v3.14.0
+        uses: cloudflare/wrangler-action@39223788755088eb74ed0153f3e160e1d09ecce7
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
