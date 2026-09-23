@@ -27,21 +27,11 @@ export interface DocumentMeta {
 }
 
 /**
- * Table of Contents heading entry
- */
-export interface TableOfContentsItem {
-  id: string;
-  text: string;
-  level: number;
-}
-
-/**
  * Parsed Markdown document representation
  */
 export interface ProcessedDocument {
   meta: DocumentMeta;
   contentHtml: string;
-  toc: TableOfContentsItem[];
   rawMarkdown: string;
 }
 

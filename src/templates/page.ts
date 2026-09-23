@@ -31,7 +31,7 @@ function formatDate(dateStr: string): { isoDate: string; formattedDate: string }
  * Renders the document/article page content shell and wraps it inside the global layout shell.
  */
 export function renderPage({ doc, pathname, siteName, siteUrl }: RenderPageOptions): string {
-  const { meta, contentHtml, toc } = doc;
+  const { meta, contentHtml } = doc;
 
   const title = meta.title ?? `${siteName} Documentation`;
   const description =
@@ -42,21 +42,7 @@ export function renderPage({ doc, pathname, siteName, siteUrl }: RenderPageOptio
     ? `<link rel="stylesheet" href="/styles/${escapeHtml(String(meta.style))}" />`
     : '';
 
-  const sidebarHtml =
-    toc.length > 0
-      ? `<aside id="sidebar">
-          <nav>
-            <ul>
-              ${toc
-                .map(
-                  (item) =>
-                    `<li class="toc-level-${item.level}"><a href="#${item.id}">${escapeHtml(item.text)}</a></li>`
-                )
-                .join('\n              ')}
-            </ul>
-          </nav>
-        </aside>`
-      : (meta.sidebarHtml as string) ?? '';
+  const sidebarHtml = (meta.sidebarHtml as string) ?? '';
 
   const mainContainerId = meta.id ? ` id="${escapeHtml(String(meta.id))}"` : '';
   

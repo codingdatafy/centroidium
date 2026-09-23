@@ -1,4 +1,4 @@
-import type { ProcessedDocument, DocumentMeta, TableOfContentsItem } from '../types';
+import type { ProcessedDocument, DocumentMeta } from '../types';
 import { markdatafy } from './markdatafy';
 
 /**
@@ -7,7 +7,7 @@ import { markdatafy } from './markdatafy';
 const ALLOWED_TAGS = new Set([
   'div', 'span', 'h2', 'h3', 'h4', 'p', 'a', 'dfn', 'abbr', 
   'em', 'strong', 'mark', 'time', 'ul', 'ol', 'li',
-  'dt', 'dd', 'table', 'caption', 'colgroup', 'col',
+  'dt', 'dd','dl', 'table', 'caption', 'colgroup', 'col',
   'thead', 'tbody', 'tfoot', 'tr', 'th', 'td', 'img'
 ]);
 
@@ -24,7 +24,6 @@ const ALLOWED_ATTRIBUTES: Record<string, Set<string>> = {
  */
 export async function processMarkdown(rawMarkdown: string): Promise<ProcessedDocument> {
   const { meta, body } = parseFrontmatter(rawMarkdown);
-  const toc = extractTableOfContents(body);
   
   const rawHtml = markdatafy(body);
 
@@ -35,7 +34,6 @@ export async function processMarkdown(rawMarkdown: string): Promise<ProcessedDoc
   return {
     meta,
     contentHtml,
-    toc,
     rawMarkdown,
   };
 }
@@ -167,29 +165,6 @@ function parseFrontmatter(rawMarkdown: string): { meta: DocumentMeta; body: stri
   }
 
   return { meta, body };
-}
-
-/**
- * Extracts Table of Contents (h2-h4) directly from raw Markdown headings
- */
-function extractTableOfContents(markdown: string): TableOfContentsItem[] {
-  const toc: TableOfContentsItem[] = [];
-  const headingRegex = /^(#{2,4})\s+(.+)$/gm;
-  let match: RegExpExecArray | null;
-
-  while ((match = headingRegex.exec(markdown)) !== null) {
-    const level = match[1]?.length ?? 2;
-    const text = (match[2] ?? '').trim();
-    const id = text
-      .toLowerCase()
-      .replace(/[^\w\s-]/g, '')
-      .trim()
-      .replace(/\s+/g, '-');
-
-    toc.push({ id, text, level });
-  }
-
-  return toc;
 }
 
 function escapeHtml(str: string): string {
