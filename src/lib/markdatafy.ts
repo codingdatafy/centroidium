@@ -33,13 +33,13 @@ export interface ASTNode {
   type: BlockType | InlineType;
   children?: ASTNode[];
   literal?: string;
-  level?: number; // Heading level (1-6)
-  info?: string; // Fenced code info string
-  destination?: string; // Link/Image destination
-  title?: string; // Link/Image title
+  level?: number;
+  info?: string;
+  destination?: string;
+  title?: string;
   listType?: 'bullet' | 'ordered';
   listStart?: number;
-  tight?: boolean; // List tightness
+  tight?: boolean;
 }
 
 export interface ParseOptions {
@@ -75,9 +75,6 @@ function normalizeLineEndings(input: string): string {
   return input.replace(/\r\n|\r/g, '\n');
 }
 
-/**
- * CommonMark 0.31.2 Sec 2.2: Expand tabs to 4-space stop boundaries.
- */
 function expandTabs(line: string): string {
   let result = '';
   let col = 0;
@@ -164,7 +161,7 @@ export class InlineParser {
         }
       }
 
-      // 4. Autolinks (<http://...> or <email@domain.com>)
+      // 4. Autolinks
       if (char === '<') {
         const autolinkMatch = input.slice(i).match(/^<([a-zA-Z][a-zA-Z0-9+.-]{1,31}:[^<>\s]+)>/);
         if (autolinkMatch) {
@@ -178,7 +175,7 @@ export class InlineParser {
         }
       }
 
-      // 5. Emphasis & Strong Delimiters (* and _)
+      // 5. Emphasis & Strong Delimiters
       if (char === '*' || char === '_') {
         let count = 0;
         while (i + count < input.length && input[i + count] === char) {
@@ -205,7 +202,7 @@ export class InlineParser {
         continue;
       }
 
-      // Default text node accumulation
+      // Text accumulation
       const lastNode = nodes[nodes.length - 1];
       if (lastNode && lastNode.type === 'text') {
         lastNode.literal += char;
@@ -234,9 +231,6 @@ export class InlineParser {
     return -1;
   }
 
-  /**
-   * CommonMark Sec 6.2: Emphasis Delimiter Bottom-Up Stack Resolution
-   */
   private processEmphasis(nodes: ASTNode[], delimiters: Delimiter[]): void {
     let stackBottom = 0;
 
@@ -283,7 +277,6 @@ export class InlineParser {
 
         nodes.splice(opener.nodeIndex + 1, 0, formatNode);
 
-        // Shift matching delimiter tracking indices
         for (let d = openerIdx + 1; d < delimiters.length; d++) {
           delimiters[d].nodeIndex -= wrappedChildren.length - 1;
         }
@@ -314,8 +307,7 @@ export class MarkDatafyParser {
     while (i < lines.length) {
       const line = expandTabs(lines[i]);
 
-      // 1. ATX Headings (# Heading)
-      const atxMatch = line.match(/^(#{1,6})(?:[ \t]+(.* proposed)?)?$/);
+      // 1. ATX Headings
       const strictAtx = line.match(/^ {0,3}(#{1,6})(?:[ \t]+(.*?))?[\t ]*#*[\t ]*$/);
       if (strictAtx) {
         root.children!.push({
@@ -327,14 +319,14 @@ export class MarkDatafyParser {
         continue;
       }
 
-      // 2. Thematic Breaks (***, ---, ___)
-      if (/^ {0,3}(?:\*[ \t]*){3,}$|^ {0,3}(?:-[ \t]*){3,}$\vert{}^ {0,3}(?:_[ \t]*){3,}$/.test(line)) {
+      // 2. Thematic Breaks
+      if (/^ {0,3}(?:\*[ \t]*){3,}$|^ {0,3}(?:-[ \t]*){3,}$|^ {0,3}(?:_[ \t]*){3,}$/.test(line)) {
         root.children!.push({ type: 'thematic_break' });
         i++;
         continue;
       }
 
-      // 3. Fenced Code Blocks (``` or ~~~)
+      // 3. Fenced Code Blocks
       const fenceMatch = line.match(/^ {0,3}(`{3,}|~{3,})[ \t]*(.*)$/);
       if (fenceMatch) {
         const marker = fenceMatch[1][0];
@@ -362,7 +354,7 @@ export class MarkDatafyParser {
         continue;
       }
 
-      // 4. Blockquotes (> text)
+      // 4. Blockquotes
       if (/^ {0,3}>/.test(line)) {
         const quoteLines: string[] = [];
         while (i < lines.length && /^ {0,3}>/.test(lines[i])) {
@@ -384,12 +376,12 @@ export class MarkDatafyParser {
         continue;
       }
 
-      // 6. Paragraph Accumulation (Default Leaf Block)
+      // 6. Paragraph Accumulation
       const paragraphLines: string[] = [];
       while (
         i < lines.length &&
         lines[i].trim() !== '' &&
-        !/^ {0,3}(#{1,6}|`{3,}|~{3,}|>|(?:\*[ \t]*){3,}$|(?:\-[ \t]*){3,}$)/.test(lines[i])
+        !/^ {0,3}(#{1,6}|`{3,}|~{3,}|>|(?:\*[ \t]*){3,}$\vert{}(?:\-[ \t]*){3,}$)/.test(lines[i])
       ) {
         paragraphLines.push(lines[i].trim());
         i++;
@@ -455,7 +447,7 @@ export class HTMLRenderer {
         return '<br />\n';
 
       case 'link':
-        return `<a href="${escapeHtml(node.destination \vert{}\vert{} '')}">${this.renderChildren(node)}</a>`;
+        return `<a href="${escapeHtml(node.destination || '')}">${this.renderChildren(node)}</a>`;
 
       default:
         return this.renderChildren(node);
@@ -468,13 +460,9 @@ export class HTMLRenderer {
 }
 
 // ============================================================================
-// 6. EXPORTED CONVENIENCE API
+// 6. EXPORTED API
 // ============================================================================
 
-/**
- * Converts Markdown String to Spec-Compliant HTML.
- * @param markdown Source CommonMark Markdown string
- */
 export function convertMfToMd(markdown: string): string {
   const parser = new MarkDatafyParser();
   const ast = parser.parse(markdown);
