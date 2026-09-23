@@ -1,4 +1,4 @@
-import { Env } from '../types';
+import type { Env } from '../types';
 
 /**
  * Attempts to retrieve a cached Response object from the Cloudflare Cache API.

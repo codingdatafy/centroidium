@@ -202,7 +202,7 @@ export async function handleAnalyticsRoute(context: RequestContext): Promise<Res
     }
 
     // Datacenter Verification
-    const cfOrg = request.cf?.asOrganization;
+    const cfOrg = (request as Request & { cf?: { asOrganization?: string } }).cf?.asOrganization;
     const asOrg = typeof cfOrg === 'string' ? cfOrg.toLowerCase() : '';
     const isOperaProxy = /opera software/i.test(asOrg) || /opera mini|opr\//i.test(userAgent);
 

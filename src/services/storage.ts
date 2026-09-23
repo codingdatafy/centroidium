@@ -1,5 +1,3 @@
-import { Env } from '../types';
-
 /**
  * Retrieves a raw Markdown document from the Cloudflare R2 bucket.
  * Uses native text decoding without external dependencies.
@@ -33,10 +31,12 @@ export async function listAllContentKeys(bucket: R2Bucket): Promise<string[]> {
 
   try {
     while (truncated) {
-      const listResult: R2Objects = await bucket.list({
+      const listOptions: R2ListOptions = {
         limit: 1000,
-        cursor,
-      });
+        ...(cursor !== undefined ? { cursor } : {}),
+      };
+
+      const listResult: R2Objects = await bucket.list(listOptions);
 
       for (const object of listResult.objects) {
         if (object.key.endsWith('.md')) {
