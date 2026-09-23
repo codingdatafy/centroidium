@@ -30,10 +30,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
 
       - name: Install Build Dependencies
-        run: npm ci
+        run: npm install
 
       - name: Validate TypeScript Build
         run: npm run type-check
