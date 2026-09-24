@@ -108,10 +108,12 @@ function isAllowedAttribute(tag: string, attrName: string): boolean {
  * Strips script tags, unsafe protocols (javascript:), and non-allowlisted tags/attributes.
  */
 function sanitizeHtml(html: string): string {
-  // 1. Decode entities if markdatafy pre-escapes raw tags like &lt;dl&gt;
+  // 1. Decode entities back to raw HTML before attribute parsing
   let clean = html
     .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>');
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'");
 
   // 2. Strip dangerous tag blocks completely
   clean = clean.replace(/<(script|iframe|object|embed|style|form|input|button|select|textarea)[^>]*>[\s\S]*?<\/\1>/gi, '');
