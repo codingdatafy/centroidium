@@ -7,15 +7,51 @@ import { markdatafy } from './markdatafy';
 const ALLOWED_TAGS = new Set([
   'div', 'span', 'h2', 'h3', 'h4', 'p', 'a', 'dfn', 'abbr', 
   'em', 'strong', 'mark', 'time', 'ul', 'ol', 'li',
-  'dt', 'dd','dl', 'table', 'caption', 'colgroup', 'col',
+  'dt', 'dd', 'dl', 'table', 'caption', 'colgroup', 'col',
   'thead', 'tbody', 'tfoot', 'tr', 'th', 'td', 'img'
 ]);
 
+/**
+ * Global HTML Attributes allowed on any permitted tag
+ */
+const GLOBAL_ATTRIBUTES = new Set([
+  'id',
+  'class',
+  'title',
+  'lang',
+  'dir',
+  'hidden',
+  'tabindex',
+  'role'
+]);
+
+/**
+ * Tag-specific HTML Attributes
+ */
 const ALLOWED_ATTRIBUTES: Record<string, Set<string>> = {
-  a: new Set(['href', 'target']),
+  a: new Set(['href', 'target', 'rel']),
   time: new Set(['datetime']),
-  img: new Set(['alt', 'src', 'width', 'height', 'loading'])
+  img: new Set(['alt', 'src', 'width', 'height', 'loading']),
+  th: new Set(['scope', 'colspan', 'rowspan']),
+  td: new Set(['colspan', 'rowspan']),
+  col: new Set(['span']),
+  colgroup: new Set(['span'])
 };
+
+/**
+ * Checks if an attribute is allowed on a specific HTML tag
+ */
+function isAttributeAllowed(tag: string, attrName: string): boolean {
+  // Check exact global attributes
+  if (GLOBAL_ATTRIBUTES.has(attrName)) return true;
+
+  // Allow custom data-* and accessibility aria-* attributes
+  if (attrName.startsWith('data-') || attrName.startsWith('aria-')) return true;
+
+  // Check tag-specific attributes
+  const tagAttrs = ALLOWED_ATTRIBUTES[tag];
+  return tagAttrs ? tagAttrs.has(attrName) : false;
+}
 
 /**
  * Processor for Site Markdown content:
@@ -78,8 +114,10 @@ async function wrapSections(html: string): Promise<string> {
 function sanitizeHtml(html: string): string {
   let clean = html.replace(/<(script|iframe|object|embed|style|form|input)[^>]*>[\s\S]*?<\/\1>/gi, '');
 
+  // Strip inline event handlers (e.g. onclick, onload)
   clean = clean.replace(/\s+on[a-z]+\s*=\s*(?:'[^']*'|"[^"]*"|[^\s>]+)/gi, '');
 
+  // Block inline script execution in URLs
   clean = clean.replace(/(href|src)\s*=\s*["']?\s*(?:javascript|vbscript|data):[^"'>\s]+/gi, '$1="#"');
 
   clean = clean.replace(/<\/?([a-z0-9-]+)([^>]*)>/gi, (match, tagName, attrString) => {
@@ -93,8 +131,6 @@ function sanitizeHtml(html: string): string {
       return `</${tag}>`;
     }
 
-    const allowedAttrs = ALLOWED_ATTRIBUTES[tag] || new Set();
-
     const cleanAttrs: string[] = [];
     const attrRegex = /([a-z0-9-.]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+)))?/gi;
     let attrMatch: RegExpExecArray | null;
@@ -105,7 +141,7 @@ function sanitizeHtml(html: string): string {
 
       const attrValue = attrMatch[2] ?? attrMatch[3] ?? attrMatch[4] ?? '';
 
-      if (allowedAttrs.has(attrName)) {
+      if (isAttributeAllowed(tag, attrName)) {
         cleanAttrs.push(`${attrName}="${escapeHtml(attrValue)}"`);
       }
     }
