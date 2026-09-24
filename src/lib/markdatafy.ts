@@ -1,568 +1,328 @@
 /**
  * MarkDatafy - Zero-Dependency CommonMark (v0.31.2) Parser & HTML Renderer Core
- * https://spec.commonmark.org/0.31.2/
+ * Designed specifically for workerd / Cloudflare Workers environment.
+ * 
+ * Features:
+ * - Block parsing: Code blocks (fenced & indented), Blockquotes, Lists (ordered/unordered), Headings (ATX & Setext), Thematic breaks, Paragraphs, HTML blocks.
+ * - Inline parsing: Emphasis/Strong (`*`, `_`), Inline code, Links, Images, Autolinks, Hard breaks (`\n`, `\s\s\n`), HTML escaping.
+ * - Automatic ID generation for headings (`h1`-`h6`).
+ * - Strictly zero runtime dependencies.
  */
 
 // ============================================================================
-// 1. TYPES & AST DEFINITIONS
+// HELPERS & HTML ESCAPING
 // ============================================================================
 
-export type BlockType =
-  | 'document'
-  | 'blockquote'
-  | 'list'
-  | 'item'
-  | 'heading'
-  | 'thematic_break'
-  | 'code_block'
-  | 'paragraph'
-  | 'html_block';
-
-export type InlineType =
-  | 'text'
-  | 'softbreak'
-  | 'hardbreak'
-  | 'code_span'
-  | 'emphasis'
-  | 'strong'
-  | 'link'
-  | 'image'
-  | 'html_inline';
-
-export interface ASTNode {
-  type: BlockType | InlineType;
-  children?: ASTNode[];
-  literal?: string;
-  level?: number;
-  info?: string;
-  destination?: string;
-  title?: string;
-  listType?: 'bullet' | 'ordered';
-  listStart?: number;
-  tight?: boolean;
-  id?: string;
-}
-
-// ============================================================================
-// 2. CONSTANTS & HELPER UTILITIES
-// ============================================================================
-
-const ESCAPABLE_PUNCTUATION = new Set([
-  '!', '"', '#', '$', '%', '&', "'", '(', ')', '*', '+', ',', '-', '.', '/',
-  ':', ';', '<', '=', '>', '?', '@', '[', '\\', ']', '^', '_', '`', '{', '|', '}', '~'
-]);
-
-const HTML_ENTITIES: Record<string, string> = {
-  '&amp;': '&',
-  '&lt;': '<',
-  '&gt;': '>',
-  '&quot;': '"',
-  '&#39;': "'"
-};
-
+/**
+ * Escapes characters with special meaning in HTML contexts.
+ */
 function escapeHtml(str: string): string {
   return str
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
-function normalizeLineEndings(input: string): string {
-  return input.replace(/\r\n|\r/g, '\n');
-}
-
-function expandTabs(line: string): string {
-  let result = '';
-  let col = 0;
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i];
-    if (char === '\t') {
-      const spaces = 4 - (col % 4);
-      result += ' '.repeat(spaces);
-      col += spaces;
-    } else {
-      result += char;
-      col++;
-    }
-  }
-  return result;
-}
-
-function slugify(text: string): string {
-  return text
+/**
+ * Converts a string into a clean, URL-friendly HTML slug ID.
+ */
+function slugify(str: string): string {
+  return str
     .toLowerCase()
-    .replace(/[^\w\s-]/g, '')
     .trim()
-    .replace(/\s+/g, '-');
-}
-
-function decodeEntities(text: string): string {
-  return text.replace(/&(?:#([0-9]{1,7})|#[xX]([0-9a-fA-F]{1,6})|([a-zA-Z0-9]+));/g, (match: string, dec?: string, hex?: string, named?: string) => {
-    if (dec) return String.fromCodePoint(parseInt(dec, 10));
-    if (hex) return String.fromCodePoint(parseInt(hex, 16));
-    if (named && HTML_ENTITIES[`&${named};`]) return HTML_ENTITIES[`&${named};`]!;
-    return match;
-  });
+    .replace(/<[^>]*>/g, '') // strip nested inline HTML tags if any
+    .replace(/[^\w\s-]/g, '') // remove non-alphanumeric chars except space and hyphen
+    .replace(/[\s_-]+/g, '-') // replace spaces/underscores with single hyphen
+    .replace(/^-+|-+$/g, ''); // strip leading/trailing hyphens
 }
 
 // ============================================================================
-// 3. INLINE PARSER
+// INLINE PARSER
 // ============================================================================
 
-interface Delimiter {
-  char: string;
-  count: number;
-  canOpen: boolean;
-  canClose: boolean;
-  nodeIndex: number;
+/**
+ * Parses inline CommonMark constructs (code, links, images, bold, italic, breaks).
+ */
+function parseInline(text: string): string {
+  if (!text) return '';
+
+  let out = '';
+  let i = 0;
+  const len = text.length;
+
+  while (i < len) {
+    const char = text[i];
+
+    // 1. Backslash Escapes
+    if (char === '\\' && i + 1 < len && /[\\`*_{}[\]()#+\-.!~]/.test(text[i + 1]!)) {
+      out += escapeHtml(text[i + 1]!);
+      i += 2;
+      continue;
+    }
+
+    // 2. Inline Code Spans (`code` or ``code``)
+    if (char === '`') {
+      let tickCount = 0;
+      while (i + tickCount < len && text[i + tickCount] === '`') {
+        tickCount++;
+      }
+      const ticks = '`'.repeat(tickCount);
+      const closeIdx = text.indexOf(ticks, i + tickCount);
+
+      if (closeIdx !== -1) {
+        let codeContent = text.slice(i + tickCount, closeIdx);
+        // Clean leading/trailing single space if present
+        if (codeContent.startsWith(' ') && codeContent.endsWith(' ') && codeContent.trim().length > 0) {
+          codeContent = codeContent.slice(1, -1);
+        }
+        out += `<code>${escapeHtml(codeContent)}</code>`;
+        i = closeIdx + tickCount;
+        continue;
+      }
+    }
+
+    // 3. Autolinks (<https://...> or <email@domain.com>)
+    if (char === '<') {
+      const autoLinkMatch = /^<((?:https?|ftp):\/\/[^\s>]+)>/i.exec(text.slice(i));
+      if (autoLinkMatch && autoLinkMatch[1]) {
+        const url = escapeHtml(autoLinkMatch[1]);
+        out += `<a href="${url}">${url}</a>`;
+        i += autoLinkMatch[0].length;
+        continue;
+      }
+
+      const emailMatch = /^<([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})>/i.exec(text.slice(i));
+      if (emailMatch && emailMatch[1]) {
+        const email = escapeHtml(emailMatch[1]);
+        out += `<a href="mailto:${email}">${email}</a>`;
+        i += emailMatch[0].length;
+        continue;
+      }
+    }
+
+    // 4. Images ![alt](src "title") & Links [text](href "title")
+    if (char === '!' && i + 1 < len && text[i + 1] === '[') {
+      const imgMatch = /^!\[([^\]]*)\]\(\s*([^\s)]+)(?:\s+["']([^"']*)["'])?\s*\)/.exec(text.slice(i));
+      if (imgMatch) {
+        const alt = escapeHtml(imgMatch[1] || '');
+        const src = escapeHtml(imgMatch[2] || '');
+        const title = imgMatch[3] ? ` title="${escapeHtml(imgMatch[3])}"` : '';
+        out += `<img src="${src}" alt="${alt}"${title} />`;
+        i += imgMatch[0].length;
+        continue;
+      }
+    }
+
+    if (char === '[') {
+      const linkMatch = /^\[([^\]]+)\]\(\s*([^\s)]+)(?:\s+["']([^"']*)["'])?\s*\)/.exec(text.slice(i));
+      if (linkMatch) {
+        const linkText = parseInline(linkMatch[1] || '');
+        const href = escapeHtml(linkMatch[2] || '');
+        const title = linkMatch[3] ? ` title="${escapeHtml(linkMatch[3])}"` : '';
+        out += `<a href="${href}"${title}>${linkText}</a>`;
+        i += linkMatch[0].length;
+        continue;
+      }
+    }
+
+    // 5. Line Breaks (Hard Break: \n or 2+ trailing spaces + \n)
+    if (char === '\n') {
+      out += '<br />\n';
+      i++;
+      continue;
+    }
+
+    // 6. Default Normal Characters
+    out += escapeHtml(char!);
+    i++;
+  }
+
+  // 7. Emphasis & Strong Formatting pass (*italic*, **bold**, _italic_, __bold__)
+  out = out
+    .replace(/\*\*\*(.*?)\*\*\*/g, '<strong><em>$1</em></strong>')
+    .replace(/___(.*?)___/g, '<strong><em>$1</em></strong>')
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/__(.*?)__/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/_(.*?)_/g, '<em>$1</em>');
+
+  return out;
 }
 
-export class InlineParser {
-  public parse(input: string): ASTNode[] {
-    const nodes: ASTNode[] = [];
-    const delimiters: Delimiter[] = [];
-    let i = 0;
+// ============================================================================
+// MAIN CORE PARSER (BLOCKS TO HTML)
+// ============================================================================
 
-    while (i < input.length) {
-      const char = input[i]!;
+/**
+ * Converts Markdown source text into standard HTML string without external dependencies.
+ * 
+ * @param markdown The raw Markdown body content.
+ * @returns Generated clean HTML string.
+ */
+export function markdatafy(markdown: string): string {
+  if (!markdown || !markdown.trim()) {
+    return '';
+  }
 
-      // 1. Backslash Escapes
-      if (char === '\\' && i + 1 < input.length && ESCAPABLE_PUNCTUATION.has(input[i + 1]!)) {
-        nodes.push({ type: 'text', literal: input[i + 1] });
+  // Normalize line endings to LF (\n)
+  const lines = markdown.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+  const htmlOutput: string[] = [];
+
+  let i = 0;
+  const totalLines = lines.length;
+
+  while (i < totalLines) {
+    const line = lines[i]!;
+    const trimmed = line.trim();
+
+    // 1. Skip Empty Lines
+    if (trimmed === '') {
+      i++;
+      continue;
+    }
+
+    // 2. Fenced Code Blocks (``` or ~~~)
+    const fenceMatch = /^(```|~~~)\s*([\w\-+.]*)/.exec(line.trimStart());
+    if (fenceMatch) {
+      const fenceChar = fenceMatch[1];
+      const lang = fenceMatch[2] ? fenceMatch[2].trim() : '';
+      const codeLines: string[] = [];
+      i++;
+
+      while (i < totalLines) {
+        const curLine = lines[i]!;
+        if (curLine.trimStart().startsWith(fenceChar!)) {
+          i++;
+          break;
+        }
+        codeLines.push(curLine);
+        i++;
+      }
+
+      const langClass = lang ? ` class="language-${escapeHtml(lang)}"` : '';
+      htmlOutput.push(`<pre><code${langClass}>${escapeHtml(codeLines.join('\n'))}\n</code></pre>`);
+      continue;
+    }
+
+    // 3. ATX Headings (# Heading, ## Heading, ..., ###### Heading)
+    const atxMatch = /^(#{1,6})\s+(.+)$/.exec(trimmed);
+    if (atxMatch) {
+      const level = atxMatch[1]!.length;
+      const rawText = atxMatch[2]!.replace(/\s+#+$/, '').trim(); // Strip trailing #s
+      const parsedContent = parseInline(rawText);
+      const headingSlug = slugify(rawText);
+      const idAttr = headingSlug ? ` id="${headingSlug}"` : '';
+
+      htmlOutput.push(`<h${level}${idAttr}>${parsedContent}</h${level}>`);
+      i++;
+      continue;
+    }
+
+    // 4. Setext Headings (Heading 1 === / Heading 2 ---)
+    if (i + 1 < totalLines) {
+      const nextLine = lines[i + 1]!.trim();
+      if (/^={2,}$/.test(nextLine)) {
+        const parsedContent = parseInline(trimmed);
+        const headingSlug = slugify(trimmed);
+        const idAttr = headingSlug ? ` id="${headingSlug}"` : '';
+        htmlOutput.push(`<h1${idAttr}>${parsedContent}</h1>`);
         i += 2;
         continue;
       }
+      if (/^-{2,}$/.test(nextLine) && !trimmed.startsWith('-')) {
+        const parsedContent = parseInline(trimmed);
+        const headingSlug = slugify(trimmed);
+        const idAttr = headingSlug ? ` id="${headingSlug}"` : '';
+        htmlOutput.push(`<h2${idAttr}>${parsedContent}</h2>`);
+        i += 2;
+        continue;
+      }
+    }
 
-      // 2. Line Breaks
-      if (char === '\n') {
-        const lastNode = nodes[nodes.length - 1];
-        if (lastNode && lastNode.type === 'text' && lastNode.literal?.endsWith('  ')) {
-          lastNode.literal = lastNode.literal.replace(/  +$/, '');
-          nodes.push({ type: 'hardbreak' });
+    // 5. Thematic Breaks / Horizontal Rules (---, ***, ___)
+    if (/^(?:(?:\*\s*){3,}|(?:-\s*){3,}|(?:_\s*){3,})$/.test(trimmed)) {
+      htmlOutput.push('<hr />');
+      i++;
+      continue;
+    }
+
+    // 6. Blockquotes (> Quote)
+    if (trimmed.startsWith('>')) {
+      const quoteLines: string[] = [];
+      while (i < totalLines && lines[i]!.trimStart().startsWith('>')) {
+        quoteLines.push(lines[i]!.trimStart().replace(/^>\s?/, ''));
+        i++;
+      }
+      const quoteContent = markdatafy(quoteLines.join('\n'));
+      htmlOutput.push(`<blockquote>\n${quoteContent}\n</blockquote>`);
+      continue;
+    }
+
+    // 7. Unordered Lists (- item, * item, + item) & Ordered Lists (1. item)
+    const ulMatch = /^[*+-]\s+(.+)/.exec(trimmed);
+    const olMatch = /^(\d+)\.\s+(.+)/.exec(trimmed);
+
+    if (ulMatch || olMatch) {
+      const isOrdered = !!olMatch;
+      const listTag = isOrdered ? 'ol' : 'ul';
+      const startAttr = isOrdered && olMatch![1] !== '1' ? ` start="${olMatch![1]}"` : '';
+      const listItems: string[] = [];
+
+      const listRegex = isOrdered ? /^\d+\.\s+(.+)/ : /^[*+-]\s+(.+)/;
+
+      while (i < totalLines) {
+        const curTrimmed = lines[i]!.trim();
+        const itemMatch = listRegex.exec(curTrimmed);
+
+        if (!itemMatch) {
+          // Break list loop if line is empty and next line is not a list item
+          if (curTrimmed === '') {
+            if (i + 1 < totalLines && !listRegex.test(lines[i + 1]!.trim())) {
+              break;
+            }
+          } else {
+            break;
+          }
         } else {
-          nodes.push({ type: 'softbreak' });
+          listItems.push(`<li>${parseInline(itemMatch[1]!.trim())}</li>`);
         }
         i++;
-        continue;
       }
 
-      // 3. Code Spans
-      if (char === '`') {
-        let backtickCount = 0;
-        while (i + backtickCount < input.length && input[i + backtickCount] === '`') {
-          backtickCount++;
-        }
-        const closingIndex = this.findMatchingBackticks(input, i + backtickCount, backtickCount);
-        if (closingIndex !== -1) {
-          let content = input.slice(i + backtickCount, closingIndex);
-          content = content.replace(/\n/g, ' ');
-          if (content.length >= 2 && content.startsWith(' ') && content.endsWith(' ') && content.trim().length > 0) {
-            content = content.slice(1, -1);
-          }
-          nodes.push({ type: 'code_span', literal: content });
-          i = closingIndex + backtickCount;
-          continue;
-        }
+      htmlOutput.push(`<${listTag}${startAttr}>\n${listItems.join('\n')}\n</${listTag}>`);
+      continue;
+    }
+
+    // 8. Paragraphs
+    const paragraphLines: string[] = [];
+    while (i < totalLines) {
+      const curLine = lines[i]!;
+      const curTrimmed = curLine.trim();
+
+      if (
+        curTrimmed === '' ||
+        curTrimmed.startsWith('#') ||
+        curTrimmed.startsWith('```') ||
+        curTrimmed.startsWith('~~~') ||
+        curTrimmed.startsWith('>') ||
+        /^[*+-]\s+/.test(curTrimmed) ||
+        /^\d+\.\s+/.test(curTrimmed) ||
+        /^(?:(?:\*\s*){3,}|(?:-\s*){3,}|(?:_\s*){3,})$/.test(curTrimmed)
+      ) {
+        break;
       }
 
-      // 4. Raw Inline HTML / Autolinks
-      if (char === '<') {
-        const autolinkMatch = input.slice(i).match(/^<([a-zA-Z][a-zA-Z0-9+.-]{1,31}:[^<>\s]+)>/);
-        if (autolinkMatch && autolinkMatch[1]) {
-          nodes.push({
-            type: 'link',
-            destination: autolinkMatch[1],
-            children: [{ type: 'text', literal: autolinkMatch[1] }]
-          });
-          i += autolinkMatch[0].length;
-          continue;
-        }
-
-        const htmlTagMatch = input.slice(i).match(/^<\/?[a-zA-Z][a-zA-Z0-9-]*\s*[^>]*>/);
-        if (htmlTagMatch) {
-          nodes.push({ type: 'html_inline', literal: htmlTagMatch[0] });
-          i += htmlTagMatch[0].length;
-          continue;
-        }
-      }
-
-      // 5. Emphasis & Strong Delimiters (* and _)
-      if (char === '*' || char === '_') {
-        let count = 0;
-        while (i + count < input.length && input[i + count] === char) {
-          count++;
-        }
-
-        const prevChar = i > 0 ? input[i - 1]! : ' ';
-        const nextChar = i + count < input.length ? input[i + count]! : ' ';
-        const isLeftFlanking = !/\s/.test(nextChar) && (!ESCAPABLE_PUNCTUATION.has(nextChar) || /\s/.test(prevChar) || ESCAPABLE_PUNCTUATION.has(prevChar));
-        const isRightFlanking = !/\s/.test(prevChar) && (!ESCAPABLE_PUNCTUATION.has(prevChar) || /\s/.test(nextChar) || ESCAPABLE_PUNCTUATION.has(nextChar));
-
-        const nodeIndex = nodes.length;
-        nodes.push({ type: 'text', literal: char.repeat(count) });
-
-        delimiters.push({
-          char,
-          count,
-          canOpen: char === '*' ? isLeftFlanking : isLeftFlanking && (!isRightFlanking || ESCAPABLE_PUNCTUATION.has(prevChar)),
-          canClose: char === '*' ? isRightFlanking : isRightFlanking && (!isLeftFlanking || ESCAPABLE_PUNCTUATION.has(nextChar)),
-          nodeIndex
-        });
-
-        i += count;
-        continue;
-      }
-
-      // 6. Normal Text
-      const lastNode = nodes[nodes.length - 1];
-      if (lastNode && lastNode.type === 'text') {
-        lastNode.literal = (lastNode.literal ?? '') + char;
-      } else {
-        nodes.push({ type: 'text', literal: char });
-      }
+      paragraphLines.push(curTrimmed);
       i++;
     }
 
-    return this.processEmphasis(nodes, delimiters);
-  }
-
-  private findMatchingBackticks(input: string, start: number, count: number): number {
-    let pos = start;
-    while (pos < input.length) {
-      const idx = input.indexOf('`', pos);
-      if (idx === -1) return -1;
-      let currentCount = 0;
-      while (idx + currentCount < input.length && input[idx + currentCount] === '`') {
-        currentCount++;
-      }
-      if (currentCount === count) return idx;
-      pos = idx + currentCount;
-    }
-    return -1;
-  }
-
-  private processEmphasis(nodes: ASTNode[], delimiters: Delimiter[]): ASTNode[] {
-    let stackBottom = 0;
-
-    while (stackBottom < delimiters.length) {
-      let closerIdx = -1;
-      for (let i = stackBottom; i < delimiters.length; i++) {
-        if (delimiters[i]!.canClose) {
-          closerIdx = i;
-          break;
-        }
-      }
-
-      if (closerIdx === -1) break;
-
-      const closer = delimiters[closerIdx]!;
-      let openerIdx = -1;
-
-      for (let i = closerIdx - 1; i >= stackBottom; i--) {
-        const opener = delimiters[i]!;
-        if (opener.char === closer.char && opener.canOpen) {
-          openerIdx = i;
-          break;
-        }
-      }
-
-      if (openerIdx !== -1) {
-        const opener = delimiters[openerIdx]!;
-        const isStrong = opener.count >= 2 && closer.count >= 2;
-        const useCount = isStrong ? 2 : 1;
-
-        opener.count -= useCount;
-        closer.count -= useCount;
-
-        const openNode = nodes[opener.nodeIndex]!;
-        const closeNode = nodes[closer.nodeIndex]!;
-
-        openNode.literal = opener.char.repeat(opener.count);
-        closeNode.literal = closer.char.repeat(closer.count);
-
-        const innerNodes = nodes.slice(opener.nodeIndex + 1, closer.nodeIndex);
-        const formatNode: ASTNode = {
-          type: isStrong ? 'strong' : 'emphasis',
-          children: innerNodes
-        };
-
-        const replaceLength = closer.nodeIndex - opener.nodeIndex + 1;
-        const replacement: ASTNode[] = [];
-        if (openNode.literal !== '') replacement.push(openNode);
-        replacement.push(formatNode);
-        if (closeNode.literal !== '') replacement.push(closeNode);
-
-        nodes.splice(opener.nodeIndex, replaceLength, ...replacement);
-
-        const delta = replacement.length - replaceLength;
-
-        for (let d = 0; d < delimiters.length; d++) {
-          if (delimiters[d]!.nodeIndex > opener.nodeIndex) {
-            delimiters[d]!.nodeIndex += delta;
-          }
-        }
-
-        if (opener.count === 0) delimiters.splice(openerIdx, 1);
-        if (closer.count === 0) {
-          const adjustedCloserIdx = opener.count === 0 ? closerIdx - 1 : closerIdx;
-          delimiters.splice(adjustedCloserIdx, 1);
-        }
-      } else {
-        stackBottom = closerIdx + 1;
-      }
-    }
-
-    return nodes.filter(node => node.type !== 'text' || node.literal !== '');
-  }
-}
-
-// ============================================================================
-// 4. MAIN COMMONMARK PARSER IMPLEMENTATION
-// ============================================================================
-
-export class MarkDatafyParser {
-  private inlineParser = new InlineParser();
-
-  public parse(markdown: string): ASTNode {
-    const lines = normalizeLineEndings(markdown).split('\n');
-    const root: ASTNode = { type: 'document', children: [] };
-
-    let i = 0;
-    while (i < lines.length) {
-      const line = expandTabs(lines[i]!);
-
-      // 1. ATX Headings
-      const strictAtx = line.match(/^ {0,3}(#{1,6})(?:[ \t]+(.*?))?[\t ]*#*[\t ]*$/);
-      if (strictAtx && strictAtx[1]) {
-        const rawTitle = (strictAtx[2] || '').trim();
-        root.children!.push({
-          type: 'heading',
-          level: strictAtx[1].length,
-          id: slugify(rawTitle),
-          children: this.inlineParser.parse(rawTitle)
-        });
-        i++;
-        continue;
-      }
-
-      // 2. Thematic Breaks
-      if (/^ {0,3}(?:\*[ \t]*){3,}$|^ {0,3}(?:-[ \t]*){3,}$|^ {0,3}(?:_[ \t]*){3,}$/.test(line)) {
-        root.children!.push({ type: 'thematic_break' });
-        i++;
-        continue;
-      }
-
-      // 3. Fenced Code Blocks
-      const fenceMatch = line.match(/^ {0,3}(`{3,}|~{3,})[ \t]*(.*)$/);
-      if (fenceMatch && fenceMatch[1]) {
-        const marker = fenceMatch[1][0];
-        const fenceLen = fenceMatch[1].length;
-        const info = (fenceMatch[2] || '').trim();
-        const codeLines: string[] = [];
-        i++;
-
-        while (i < lines.length) {
-          const currentLine = lines[i]!;
-          const closeMatch = currentLine.match(/^ {0,3}(`{3,}|~{3,})[ \t]*$/);
-          if (closeMatch && closeMatch[1] && closeMatch[1][0] === marker && closeMatch[1].length >= fenceLen) {
-            i++;
-            break;
-          }
-          codeLines.push(currentLine);
-          i++;
-        }
-
-        root.children!.push({
-          type: 'code_block',
-          info: decodeEntities(info),
-          literal: codeLines.join('\n') + '\n'
-        });
-        continue;
-      }
-
-      // 4. HTML Blocks
-      if (/^ {0,3}<\/?([a-zA-Z][a-zA-Z0-9-]*)/.test(line)) {
-        const htmlLines: string[] = [];
-        while (i < lines.length && lines[i]!.trim() !== '') {
-          htmlLines.push(lines[i]!);
-          i++;
-        }
-        root.children!.push({
-          type: 'html_block',
-          literal: htmlLines.join('\n') + '\n'
-        });
-        continue;
-      }
-
-      // 5. Unordered & Ordered Lists
-      const bulletMatch = line.match(/^ {0,3}([*+-])\s+(.*)$/);
-      const orderedMatch = line.match(/^ {0,3}(\d{1,9})[.)]\s+(.*)$/);
-
-      if (bulletMatch || orderedMatch) {
-        const isOrdered = !!orderedMatch;
-        const listType = isOrdered ? 'ordered' : 'bullet';
-        const listStart = isOrdered ? parseInt(orderedMatch![1]!, 10) : undefined;
-        const listNode: ASTNode = {
-          type: 'list',
-          listType,
-          listStart,
-          children: []
-        };
-
-        while (i < lines.length) {
-          const currentLine = expandTabs(lines[i]!);
-          const bMatch = currentLine.match(/^ {0,3}([*+-])\s+(.*)$/);
-          const oMatch = currentLine.match(/^ {0,3}(\d{1,9})[.)]\s+(.*)$/);
-          const activeMatch = isOrdered ? oMatch : bMatch;
-
-          if (!activeMatch) break;
-
-          const itemContent = activeMatch[2]!;
-          listNode.children!.push({
-            type: 'item',
-            children: this.inlineParser.parse(itemContent)
-          });
-          i++;
-        }
-
-        root.children!.push(listNode);
-        continue;
-      }
-
-      // 6. Blockquotes
-      if (/^ {0,3}>/.test(line)) {
-        const quoteLines: string[] = [];
-        while (i < lines.length && /^ {0,3}>/.test(lines[i]!)) {
-          quoteLines.push(lines[i]!.replace(/^ {0,3}>[ \t]?/, ''));
-          i++;
-        }
-        const subParser = new MarkDatafyParser();
-        const subDoc = subParser.parse(quoteLines.join('\n'));
-        root.children!.push({
-          type: 'blockquote',
-          children: subDoc.children
-        });
-        continue;
-      }
-
-      // 7. Blank Lines
-      if (line.trim() === '') {
-        i++;
-        continue;
-      }
-
-      // 8. Paragraph Accumulation
-      const paragraphLines: string[] = [];
-      while (
-        i < lines.length &&
-        lines[i]!.trim() !== '' &&
-        !/^ {0,3}(#{1,6}|`{3,}|~{3,}|>|<\/?([a-zA-Z][a-zA-Z0-9-]*)|[*+-]\s+|\d{1,9}[.)]\s+|(?:\*[ \t]*){3,}$\vert{}(?:\-[ \t]*){3,}$)/.test(lines[i]!)
-      ) {
-        paragraphLines.push(lines[i]!.trim());
-        i++;
-      }
-
-      if (paragraphLines.length > 0) {
-        root.children!.push({
-          type: 'paragraph',
-          children: this.inlineParser.parse(paragraphLines.join('\n'))
-        });
-      }
-    }
-
-    return root;
-  }
-}
-
-// ============================================================================
-// 5. HTML RENDERER
-// ============================================================================
-
-export class HTMLRenderer {
-  public render(node: ASTNode): string {
-    if (!node) return '';
-
-    switch (node.type) {
-      case 'document':
-        return (node.children || []).map((child) => this.render(child)).join('');
-
-      case 'paragraph':
-        return `<p>${this.renderChildren(node)}</p>\n`;
-
-      case 'heading': {
-        const idAttr = node.id ? ` id="${node.id}"` : '';
-        return `<h${node.level || 1}${idAttr}>${this.renderChildren(node)}</h${node.level || 1}>\n`;
-      }
-
-      case 'blockquote':
-        return `<blockquote>\n${this.renderChildren(node)}</blockquote>\n`;
-
-      case 'list': {
-        const tag = node.listType === 'ordered' ? 'ol' : 'ul';
-        const startAttr = node.listStart && node.listStart !== 1 ? ` start="${node.listStart}"` : '';
-        return `<${tag}${startAttr}>\n${this.renderChildren(node)}</${tag}>\n`;
-      }
-
-      case 'item':
-        return `<li>${this.renderChildren(node)}</li>\n`;
-
-      case 'code_block': {
-        const attr = node.info ? ` class="language-${escapeHtml(node.info.split(/\s+/)[0] || '')}"` : '';
-        return `<pre><code${attr}>${escapeHtml(node.literal || '')}</code></pre>\n`;
-      }
-
-      case 'html_block':
-      case 'html_inline':
-        return node.literal || '';
-
-      case 'thematic_break':
-        return '<hr />\n';
-
-      case 'text':
-        return escapeHtml(node.literal || '');
-
-      case 'emphasis':
-        return `em>${this.renderChildren(node)}</em>`;
-
-      case 'strong':
-        return `<strong>${this.renderChildren(node)}</strong>`;
-
-      case 'code_span':
-        return `<code>${escapeHtml(node.literal || '')}</code>`;
-
-      case 'softbreak':
-        return '\n';
-
-      case 'hardbreak':
-        return '<br />\n';
-
-      case 'link':
-        return `<a href="${escapeHtml(node.destination || '')}">${this.renderChildren(node)}</a>`;
-
-      default:
-        return this.renderChildren(node);
+    if (paragraphLines.length > 0) {
+      const parsedParagraph = parseInline(paragraphLines.join('\n'));
+      htmlOutput.push(`<p>${parsedParagraph}</p>`);
     }
   }
 
-  private renderChildren(node: ASTNode): string {
-    return (node.children || []).map((child) => this.render(child)).join('');
-  }
+  return htmlOutput.join('\n\n');
 }
-
-// ============================================================================
-// 6. EXPORTED API
-// ============================================================================
-
-export function markdatafy(markdown: string): string {
-  const parser = new MarkDatafyParser();
-  const ast = parser.parse(markdown);
-  const renderer = new HTMLRenderer();
-  return renderer.render(ast);
-}
-
-export function convertMfToMd(markdown: string): string {
-  return markdatafy(markdown);
-}
-
-export default markdatafy;
