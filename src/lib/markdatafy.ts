@@ -31,20 +31,16 @@ export type InlineType =
 
 export interface ASTNode {
   type: BlockType | InlineType;
-  children?: ASTNode[] | undefined;
-  literal?: string | undefined;
-  level?: number | undefined;
-  info?: string | undefined;
-  destination?: string | undefined;
-  title?: string | undefined;
-  listType?: ('bullet' | 'ordered') | undefined;
-  listStart?: number | undefined;
-  tight?: boolean | undefined;
-  id?: string | undefined;
-}
-
-export interface ParseOptions {
-  sourcepos?: boolean | undefined;
+  children?: ASTNode[];
+  literal?: string;
+  level?: number;
+  info?: string;
+  destination?: string;
+  title?: string;
+  listType?: 'bullet' | 'ordered';
+  listStart?: number;
+  tight?: boolean;
+  id?: string;
 }
 
 // ============================================================================
@@ -191,7 +187,7 @@ export class InlineParser {
         }
       }
 
-      // 5. Emphasis & Strong Delimiters
+      // 5. Emphasis & Strong Delimiters (* and _)
       if (char === '*' || char === '_') {
         let count = 0;
         while (i + count < input.length && input[i + count] === char) {
@@ -218,7 +214,7 @@ export class InlineParser {
         continue;
       }
 
-      // Text accumulation
+      // 6. Normal Text
       const lastNode = nodes[nodes.length - 1];
       if (lastNode && lastNode.type === 'text') {
         lastNode.literal = (lastNode.literal ?? '') + char;
@@ -228,8 +224,7 @@ export class InlineParser {
       i++;
     }
 
-    this.processEmphasis(nodes, delimiters);
-    return nodes;
+    return this.processEmphasis(nodes, delimiters);
   }
 
   private findMatchingBackticks(input: string, start: number, count: number): number {
@@ -247,7 +242,7 @@ export class InlineParser {
     return -1;
   }
 
-  private processEmphasis(nodes: ASTNode[], delimiters: Delimiter[]): void {
+  private processEmphasis(nodes: ASTNode[], delimiters: Delimiter[]): ASTNode[] {
     let stackBottom = 0;
 
     while (stackBottom < delimiters.length) {
@@ -280,47 +275,45 @@ export class InlineParser {
         opener.count -= useCount;
         closer.count -= useCount;
 
-        const openNode = nodes[opener.nodeIndex];
-        const closeNode = nodes[closer.nodeIndex];
-        if (openNode) openNode.literal = opener.char.repeat(opener.count);
-        if (closeNode) closeNode.literal = closer.char.repeat(closer.count);
+        const openNode = nodes[opener.nodeIndex]!;
+        const closeNode = nodes[closer.nodeIndex]!;
 
-        const wrappedChildren = nodes.splice(opener.nodeIndex + 1, closer.nodeIndex - opener.nodeIndex - 1);
-        const cleanedChildren = wrappedChildren.filter(child => child.type !== 'text' || child.literal !== '');
+        openNode.literal = opener.char.repeat(opener.count);
+        closeNode.literal = closer.char.repeat(closer.count);
 
+        const innerNodes = nodes.slice(opener.nodeIndex + 1, closer.nodeIndex);
         const formatNode: ASTNode = {
           type: isStrong ? 'strong' : 'emphasis',
-          children: cleanedChildren
+          children: innerNodes
         };
 
-        nodes.splice(opener.nodeIndex + 1, 0, formatNode);
+        const replaceLength = closer.nodeIndex - opener.nodeIndex + 1;
+        const replacement: ASTNode[] = [];
+        if (openNode.literal !== '') replacement.push(openNode);
+        replacement.push(formatNode);
+        if (closeNode.literal !== '') replacement.push(closeNode);
 
-        const nodeShift = wrappedChildren.length - 1;
+        nodes.splice(opener.nodeIndex, replaceLength, ...replacement);
+
+        const delta = replacement.length - replaceLength;
 
         for (let d = 0; d < delimiters.length; d++) {
-          if (delimiters[d]!.nodeIndex > opener.nodeIndex && delimiters[d]!.nodeIndex < closer.nodeIndex) {
-            delimiters[d]!.nodeIndex = opener.nodeIndex + 1;
-          } else if (delimiters[d]!.nodeIndex >= closer.nodeIndex) {
-            delimiters[d]!.nodeIndex -= nodeShift;
+          if (delimiters[d]!.nodeIndex > opener.nodeIndex) {
+            delimiters[d]!.nodeIndex += delta;
           }
         }
 
+        if (opener.count === 0) delimiters.splice(openerIdx, 1);
         if (closer.count === 0) {
-          delimiters.splice(closerIdx, 1);
-        }
-        if (opener.count === 0) {
-          delimiters.splice(openerIdx, 1);
+          const adjustedCloserIdx = opener.count === 0 ? closerIdx - 1 : closerIdx;
+          delimiters.splice(adjustedCloserIdx, 1);
         }
       } else {
         stackBottom = closerIdx + 1;
       }
     }
 
-    for (let i = nodes.length - 1; i >= 0; i--) {
-      if (nodes[i]!.type === 'text' && nodes[i]!.literal === '') {
-        nodes.splice(i, 1);
-      }
-    }
+    return nodes.filter(node => node.type !== 'text' || node.literal !== '');
   }
 }
 
@@ -403,8 +396,8 @@ export class MarkDatafyParser {
       }
 
       // 5. Unordered & Ordered Lists
-      const bulletMatch = line.match(/^ {0,3}([*+-])\s+([\s\S]*)$/);
-      const orderedMatch = line.match(/^ {0,3}(\d{1,9})[.)]\s+([\s\S]*)$/);
+      const bulletMatch = line.match(/^ {0,3}([*+-])\s+(.*)$/);
+      const orderedMatch = line.match(/^ {0,3}(\d{1,9})[.)]\s+(.*)$/);
 
       if (bulletMatch || orderedMatch) {
         const isOrdered = !!orderedMatch;
@@ -530,7 +523,7 @@ export class HTMLRenderer {
         return escapeHtml(node.literal || '');
 
       case 'emphasis':
-        return `<em>${this.renderChildren(node)}</em>`;
+        return `em>${this.renderChildren(node)}</em>`;
 
       case 'strong':
         return `<strong>${this.renderChildren(node)}</strong>`;
