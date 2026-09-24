@@ -161,8 +161,9 @@ export class InlineParser {
         }
       }
 
-      // 4. Autolinks
+      // 4. Raw Inline HTML / Autolinks
       if (char === '<') {
+        // Autolinks
         const autolinkMatch = input.slice(i).match(/^<([a-zA-Z][a-zA-Z0-9+.-]{1,31}:[^<>\s]+)>/);
         if (autolinkMatch && autolinkMatch[1]) {
           nodes.push({
@@ -171,6 +172,14 @@ export class InlineParser {
             children: [{ type: 'text', literal: autolinkMatch[1] }]
           });
           i += autolinkMatch[0].length;
+          continue;
+        }
+
+        // Inline HTML tag matching
+        const htmlTagMatch = input.slice(i).match(/^<\/?[a-zA-Z][a-zA-Z0-9-]*\s*[^>]*>/);
+        if (htmlTagMatch) {
+          nodes.push({ type: 'html_inline', literal: htmlTagMatch[0] });
+          i += htmlTagMatch[0].length;
           continue;
         }
       }
@@ -354,7 +363,21 @@ export class MarkDatafyParser {
         continue;
       }
 
-      // 4. Blockquotes
+      // 4. HTML Blocks
+      if (/^ {0,3}<\/?([a-zA-Z][a-zA-Z0-9-]*)/.test(line)) {
+        const htmlLines: string[] = [];
+        while (i < lines.length && lines[i]!.trim() !== '') {
+          htmlLines.push(lines[i]!);
+          i++;
+        }
+        root.children!.push({
+          type: 'html_block',
+          literal: htmlLines.join('\n') + '\n'
+        });
+        continue;
+      }
+
+      // 5. Blockquotes
       if (/^ {0,3}>/.test(line)) {
         const quoteLines: string[] = [];
         while (i < lines.length && /^ {0,3}>/.test(lines[i]!)) {
@@ -370,18 +393,18 @@ export class MarkDatafyParser {
         continue;
       }
 
-      // 5. Blank Lines
+      // 6. Blank Lines
       if (line.trim() === '') {
         i++;
         continue;
       }
 
-      // 6. Paragraph Accumulation
+      // 7. Paragraph Accumulation
       const paragraphLines: string[] = [];
       while (
         i < lines.length &&
         lines[i]!.trim() !== '' &&
-        !/^ {0,3}(#{1,6}|`{3,}|~{3,}|>|(?:\*[ \t]*){3,}$\vert{}(?:\-[ \t]*){3,}$)/.test(lines[i]!)
+        !/^ {0,3}(#{1,6}|`{3,}|~{3,}|>|<\/?([a-zA-Z][a-zA-Z0-9-]*)|(?:\*[ \t]*){3,}$\vert{}(?:\-[ \t]*){3,}$)/.test(lines[i]!)
       ) {
         paragraphLines.push(lines[i]!.trim());
         i++;
@@ -424,6 +447,10 @@ export class HTMLRenderer {
         const attr = node.info ? ` class="language-${escapeHtml(node.info.split(/\s+/)[0] || '')}"` : '';
         return `<pre><code${attr}>${escapeHtml(node.literal || '')}</code></pre>\n`;
       }
+
+      case 'html_block':
+      case 'html_inline':
+        return node.literal || '';
 
       case 'thematic_break':
         return '<hr />\n';
