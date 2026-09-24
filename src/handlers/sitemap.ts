@@ -1,12 +1,23 @@
 import type { Env, SitemapEntry } from '../types';
 
+// List of footer pages that get 0.5 priority and monthly changefreq
+const FOOTER_PAGES = new Set([
+  'about',
+  'contact',
+  'terms-of-use',
+  'privacy-policy',
+  'faq',
+  'contribute',
+  'sponsors',
+]);
+
 /**
  * Renders an XML sitemap dynamically by listing all objects in Cloudflare R2 storage.
- * Extracts the accurate last modification date directly from Markdown frontmatter.
+ * Formats paths, determines priorities, and extracts frontmatter updatedAt dates.
  */
 export async function handleSitemapRoute(context: { request: Request; env: Env }): Promise<Response> {
   const { request, env } = context;
-  const siteUrl = env.SITE_URL || new URL(request.url).origin;
+  const siteUrl = (env.SITE_URL || new URL(request.url).origin).replace(/\/+$/, '');
   const entries: SitemapEntry[] = [];
 
   try {
@@ -29,20 +40,52 @@ export async function handleSitemapRoute(context: { request: Request; env: Env }
           continue;
         }
 
-        let path = object.key.replace(/\.md$/, '');
-        if (path.endsWith('/index')) {
-          path = path.slice(0, -5);
+        // Clean up file extension
+        let cleanPath = object.key.replace(/\.md$/, '').replace(/^\/+/, '');
+
+        // Normalize index routes
+        if (cleanPath === 'index') {
+          cleanPath = '';
+        } else if (cleanPath.endsWith('/index')) {
+          cleanPath = cleanPath.slice(0, -6);
         }
 
-        const loc = `${siteUrl}/${path.replace(/^\/+/, '')}`;
+        // Format absolute URL
+        const loc = cleanPath === '' ? `${siteUrl}/` : `${siteUrl}/${cleanPath}`;
+
+        // Determine Priority and Change Frequency based on path depth and type
+        const segments = cleanPath ? cleanPath.split('/') : [];
+        let priority = 0.8;
+        let changefreq = 'weekly';
+
+        if (segments.length === 0) {
+          // Root homepage (/)
+          priority = 1.0;
+          changefreq = 'monthly';
+        } else if (segments.length === 1) {
+          if (FOOTER_PAGES.has(segments[0].toLowerCase())) {
+            // Footer page (/about, /contact, etc.)
+            priority = 0.5;
+            changefreq = 'monthly';
+          } else {
+            // Header page (/languages, /frameworks, etc.)
+            priority = 0.9;
+            changefreq = 'weekly';
+          }
+        } else {
+          // 3rd Level or deeper subpages (/languages/javascript, etc.)
+          priority = 0.8;
+          changefreq = 'weekly';
+        }
+
         let lastmod: string | undefined = undefined;
 
-        // 1. Check custom metadata header first
+        // 1. Check custom metadata header
         if (object.customMetadata && object.customMetadata['updatedAt']) {
           lastmod = object.customMetadata['updatedAt'];
         }
 
-        // 2. Fallback: Read file from R2 and parse frontmatter directly
+        // 2. Read file from R2 and parse frontmatter directly
         if (!lastmod) {
           const contentObject = await env.CONTENT_BUCKET.get(object.key);
           if (contentObject) {
@@ -59,19 +102,17 @@ export async function handleSitemapRoute(context: { request: Request; env: Env }
           }
         }
 
-        // 3. Final fallback: Use object upload timestamp
+        // 3. Fallback to R2 upload timestamp
         if (!lastmod && object.uploaded) {
           lastmod = object.uploaded.toISOString().split('T')[0];
         }
 
-        const entry: SitemapEntry = {
+        entries.push({
           loc,
-          changefreq: path === '' ? 'daily' : 'weekly',
-          priority: path === '' ? 1.0 : 0.8,
+          changefreq,
+          priority,
           ...(lastmod !== undefined ? { lastmod } : {}),
-        };
-
-        entries.push(entry);
+        });
       }
 
       truncated = listResult.truncated;
@@ -94,9 +135,9 @@ export async function handleSitemapRoute(context: { request: Request; env: Env }
   } catch (error) {
     const fallbackXml = buildSitemapXml([
       {
-        loc: siteUrl,
+        loc: `${siteUrl}/`,
         lastmod: new Date().toISOString().split('T')[0],
-        changefreq: 'daily',
+        changefreq: 'monthly',
         priority: 1.0,
       },
     ]);
