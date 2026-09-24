@@ -2,6 +2,7 @@ import type { Env, SitemapEntry } from '../types';
 
 /**
  * Renders an XML sitemap dynamically by listing all objects in Cloudflare R2 storage.
+ * Extracts the accurate last modification date directly from Markdown frontmatter.
  */
 export async function handleSitemapRoute(context: { request: Request; env: Env }): Promise<Response> {
   const { request, env } = context;
@@ -27,6 +28,7 @@ export async function handleSitemapRoute(context: { request: Request; env: Env }
         if (!object.key.endsWith('.md')) {
           continue;
         }
+
         let path = object.key.replace(/\.md$/, '');
         if (path.endsWith('/index')) {
           path = path.slice(0, -5);
@@ -35,13 +37,31 @@ export async function handleSitemapRoute(context: { request: Request; env: Env }
         const loc = `${siteUrl}/${path.replace(/^\/+/, '')}`;
         let lastmod: string | undefined = undefined;
 
-        if (object.uploaded) {
-          lastmod = object.uploaded.toISOString().split('T')[0];
+        // 1. Check custom metadata header first
+        if (object.customMetadata && object.customMetadata['updatedAt']) {
+          lastmod = object.customMetadata['updatedAt'];
         }
 
-        const headObject = await env.CONTENT_BUCKET.head(object.key);
-        if (headObject && headObject.customMetadata && headObject.customMetadata['updatedAt']) {
-          lastmod = headObject.customMetadata['updatedAt'];
+        // 2. Fallback: Read file from R2 and parse frontmatter directly
+        if (!lastmod) {
+          const contentObject = await env.CONTENT_BUCKET.get(object.key);
+          if (contentObject) {
+            const rawText = await contentObject.text();
+            const frontmatterMatch = rawText.match(/^---[\r\n]+([\s\S]*?)[\r\n]+---/);
+
+            if (frontmatterMatch && frontmatterMatch[1]) {
+              const yamlBlock = frontmatterMatch[1];
+              const dateMatch = yamlBlock.match(/^updatedAt:\s*["']?([^"'\r\n]+)["']?/m);
+              if (dateMatch && dateMatch[1]) {
+                lastmod = dateMatch[1].trim();
+              }
+            }
+          }
+        }
+
+        // 3. Final fallback: Use object upload timestamp
+        if (!lastmod && object.uploaded) {
+          lastmod = object.uploaded.toISOString().split('T')[0];
         }
 
         const entry: SitemapEntry = {
@@ -121,5 +141,5 @@ function escapeXml(str: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
+    .replace(/'/g, '&#039;');
 }
