@@ -36,7 +36,7 @@ export async function handleSitemapRoute(context: { request: Request; env: Env }
       const listResult = await env.CONTENT_BUCKET.list(listOptions);
 
       for (const object of listResult.objects) {
-        if (!object.key.endsWith('.md')) {
+        if (!object || !object.key.endsWith('.md')) {
           continue;
         }
 
@@ -56,7 +56,7 @@ export async function handleSitemapRoute(context: { request: Request; env: Env }
         // Determine Priority and Change Frequency based on path depth and type
         const segments = cleanPath ? cleanPath.split('/') : [];
         let priority = 0.8;
-        let changefreq = 'weekly';
+        let changefreq: SitemapEntry['changefreq'] = 'weekly';
 
         if (segments.length === 0) {
           // Root homepage (/)
