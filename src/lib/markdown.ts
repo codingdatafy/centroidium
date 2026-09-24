@@ -108,16 +108,21 @@ function isAllowedAttribute(tag: string, attrName: string): boolean {
  * Strips script tags, unsafe protocols (javascript:), and non-allowlisted tags/attributes.
  */
 function sanitizeHtml(html: string): string {
-  // Strip dangerous tag blocks completely
-  let clean = html.replace(/<(script|iframe|object|embed|style|form|input|button|select|textarea)[^>]*>[\s\S]*?<\/\1>/gi, '');
+  // 1. Decode entities if markdatafy pre-escapes raw tags like &lt;dl&gt;
+  let clean = html
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>');
 
-  // Strip inline JavaScript event handlers (e.g. onclick=..., onload=...)
+  // 2. Strip dangerous tag blocks completely
+  clean = clean.replace(/<(script|iframe|object|embed|style|form|input|button|select|textarea)[^>]*>[\s\S]*?<\/\1>/gi, '');
+
+  // 3. Strip inline JavaScript event handlers (e.g. onclick=..., onload=...)
   clean = clean.replace(/\s+on[a-z]+\s*=\s*(?:'[^']*'|"[^"]*"|[^\s>]+)/gi, '');
 
-  // Strip unsafe URI protocols in href and src
+  // 4. Strip unsafe URI protocols in href and src
   clean = clean.replace(/(href|src)\s*=\s*["']?\s*(?:javascript|vbscript|data):[^"'>\s]+/gi, '$1="#"');
 
-  // Filter allowed tags and allowed attributes
+  // 5. Filter allowed tags and allowed attributes
   clean = clean.replace(/<\/?([a-z0-9-]+)([^>]*)>/gi, (match, tagName, attrString) => {
     const tag = tagName.toLowerCase();
 
