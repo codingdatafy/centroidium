@@ -40,6 +40,7 @@ export interface ASTNode {
   listType?: ('bullet' | 'ordered') | undefined;
   listStart?: number | undefined;
   tight?: boolean | undefined;
+  id?: string | undefined;
 }
 
 export interface ParseOptions {
@@ -90,6 +91,14 @@ function expandTabs(line: string): string {
     }
   }
   return result;
+}
+
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^\w\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '-');
 }
 
 function decodeEntities(text: string): string {
@@ -163,7 +172,6 @@ export class InlineParser {
 
       // 4. Raw Inline HTML / Autolinks
       if (char === '<') {
-        // Autolinks
         const autolinkMatch = input.slice(i).match(/^<([a-zA-Z][a-zA-Z0-9+.-]{1,31}:[^<>\s]+)>/);
         if (autolinkMatch && autolinkMatch[1]) {
           nodes.push({
@@ -175,7 +183,6 @@ export class InlineParser {
           continue;
         }
 
-        // Inline HTML tag matching
         const htmlTagMatch = input.slice(i).match(/^<\/?[a-zA-Z][a-zA-Z0-9-]*\s*[^>]*>/);
         if (htmlTagMatch) {
           nodes.push({ type: 'html_inline', literal: htmlTagMatch[0] });
@@ -319,10 +326,12 @@ export class MarkDatafyParser {
       // 1. ATX Headings
       const strictAtx = line.match(/^ {0,3}(#{1,6})(?:[ \t]+(.*?))?[\t ]*#*[\t ]*$/);
       if (strictAtx && strictAtx[1]) {
+        const rawTitle = (strictAtx[2] || '').trim();
         root.children!.push({
           type: 'heading',
           level: strictAtx[1].length,
-          children: this.inlineParser.parse(strictAtx[2] || '')
+          id: slugify(rawTitle),
+          children: this.inlineParser.parse(rawTitle)
         });
         i++;
         continue;
@@ -377,7 +386,42 @@ export class MarkDatafyParser {
         continue;
       }
 
-      // 5. Blockquotes
+      // 5. Unordered & Ordered Lists
+      const bulletMatch = line.match(/^ {0,3}([*+-])\s+(.*)$/);
+      const orderedMatch = line.match(/^ {0,3}(\d{1,9})[.)]\s+(.*)$/);
+
+      if (bulletMatch || orderedMatch) {
+        const isOrdered = !!orderedMatch;
+        const listType = isOrdered ? 'ordered' : 'bullet';
+        const listStart = isOrdered ? parseInt(orderedMatch![1]!, 10) : undefined;
+        const listNode: ASTNode = {
+          type: 'list',
+          listType,
+          listStart,
+          children: []
+        };
+
+        while (i < lines.length) {
+          const currentLine = expandTabs(lines[i]!);
+          const bMatch = currentLine.match(/^ {0,3}([*+-])\s+(.*)$/);
+          const oMatch = currentLine.match(/^ {0,3}(\d{1,9})[.)]\s+(.*)$/);
+          const activeMatch = isOrdered ? oMatch : bMatch;
+
+          if (!activeMatch) break;
+
+          const itemContent = activeMatch[2]!;
+          listNode.children!.push({
+            type: 'item',
+            children: this.inlineParser.parse(itemContent)
+          });
+          i++;
+        }
+
+        root.children!.push(listNode);
+        continue;
+      }
+
+      // 6. Blockquotes
       if (/^ {0,3}>/.test(line)) {
         const quoteLines: string[] = [];
         while (i < lines.length && /^ {0,3}>/.test(lines[i]!)) {
@@ -393,18 +437,18 @@ export class MarkDatafyParser {
         continue;
       }
 
-      // 6. Blank Lines
+      // 7. Blank Lines
       if (line.trim() === '') {
         i++;
         continue;
       }
 
-      // 7. Paragraph Accumulation
+      // 8. Paragraph Accumulation
       const paragraphLines: string[] = [];
       while (
         i < lines.length &&
         lines[i]!.trim() !== '' &&
-        !/^ {0,3}(#{1,6}|`{3,}|~{3,}|>|<\/?([a-zA-Z][a-zA-Z0-9-]*)|(?:\*[ \t]*){3,}$\vert{}(?:\-[ \t]*){3,}$)/.test(lines[i]!)
+        !/^ {0,3}(#{1,6}|`{3,}|~{3,}|>|<\/?([a-zA-Z][a-zA-Z0-9-]*)|[*+-]\s+|\d{1,9}[.)]\s+|(?:\*[ \t]*){3,}$\vert{}(?:\-[ \t]*){3,}$)/.test(lines[i]!)
       ) {
         paragraphLines.push(lines[i]!.trim());
         i++;
@@ -437,11 +481,22 @@ export class HTMLRenderer {
       case 'paragraph':
         return `<p>${this.renderChildren(node)}</p>\n`;
 
-      case 'heading':
-        return `<h${node.level || 1}>${this.renderChildren(node)}</h${node.level || 1}>\n`;
+      case 'heading': {
+        const idAttr = node.id ? ` id="${node.id}"` : '';
+        return `<h${node.level || 1}${idAttr}>${this.renderChildren(node)}</h${node.level || 1}>\n`;
+      }
 
       case 'blockquote':
         return `<blockquote>\n${this.renderChildren(node)}</blockquote>\n`;
+
+      case 'list': {
+        const tag = node.listType === 'ordered' ? 'ol' : 'ul';
+        const startAttr = node.listStart && node.listStart !== 1 ? ` start="${node.listStart}"` : '';
+        return `<${tag}${startAttr}>\n${this.renderChildren(node)}</${tag}>\n`;
+      }
+
+      case 'item':
+        return `<li>${this.renderChildren(node)}</li>\n`;
 
       case 'code_block': {
         const attr = node.info ? ` class="language-${escapeHtml(node.info.split(/\s+/)[0] || '')}"` : '';
