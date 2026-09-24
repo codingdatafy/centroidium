@@ -36,7 +36,8 @@ export async function handleSitemapRoute(context: { request: Request; env: Env }
       const listResult = await env.CONTENT_BUCKET.list(listOptions);
 
       for (const object of listResult.objects) {
-        if (!object || !object.key.endsWith('.md')) {
+        // Guard against noUncheckedIndexedAccess undefined objects
+        if (!object || typeof object.key !== 'string' || !object.key.endsWith('.md')) {
           continue;
         }
 
@@ -63,7 +64,7 @@ export async function handleSitemapRoute(context: { request: Request; env: Env }
           priority = 1.0;
           changefreq = 'monthly';
         } else if (segments.length === 1) {
-          if (FOOTER_PAGES.has(segments[0].toLowerCase())) {
+          if (FOOTER_PAGES.has((segments[0] ?? '').toLowerCase())) {
             // Footer page (/about, /contact, etc.)
             priority = 0.5;
             changefreq = 'monthly';
