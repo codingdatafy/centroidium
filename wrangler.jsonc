@@ -10,6 +10,10 @@
     {
       "pattern": "www.codingdatafy.com",
       "custom_domain": true
+    },
+    {
+      "pattern": "codingdatafy.com",
+      "custom_domain": true
     }
   ],
   "assets": {
