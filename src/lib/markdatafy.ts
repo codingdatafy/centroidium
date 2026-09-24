@@ -403,8 +403,8 @@ export class MarkDatafyParser {
       }
 
       // 5. Unordered & Ordered Lists
-      const bulletMatch = line.match(/^ {0,3}([*+-])\s+(.*)$/);
-      const orderedMatch = line.match(/^ {0,3}(\d{1,9})[.)]\s+(.*)$/);
+      const bulletMatch = line.match(/^ {0,3}([*+-])\s+([\s\S]*)$/);
+      const orderedMatch = line.match(/^ {0,3}(\d{1,9})[.)]\s+([\s\S]*)$/);
 
       if (bulletMatch || orderedMatch) {
         const isOrdered = !!orderedMatch;
@@ -425,7 +425,7 @@ export class MarkDatafyParser {
 
           if (!activeMatch) break;
 
-          const itemContent = activeMatch[2]!.trim();
+          const itemContent = activeMatch[2]!;
           listNode.children!.push({
             type: 'item',
             children: this.inlineParser.parse(itemContent)
@@ -464,7 +464,7 @@ export class MarkDatafyParser {
       while (
         i < lines.length &&
         lines[i]!.trim() !== '' &&
-        !/^ {0,3}(#{1,6}|`{3,}|~{3,}|>|<\/?([a-zA-Z][a-zA-Z0-9-]*)|[*+-]\s+|\d{1,9}[.)]\s+)/.test(lines[i]!)
+        !/^ {0,3}(#{1,6}|`{3,}|~{3,}|>|<\/?([a-zA-Z][a-zA-Z0-9-]*)|[*+-]\s+|\d{1,9}[.)]\s+|(?:\*[ \t]*){3,}$\vert{}(?:\-[ \t]*){3,}$)/.test(lines[i]!)
       ) {
         paragraphLines.push(lines[i]!.trim());
         i++;

@@ -53,7 +53,7 @@ export function renderPage({ doc, pathname, siteName, siteUrl }: RenderPageOptio
     <footer id="article-footer">
       ${
         parsedDate
-          ? `<p>(Last Updated: <time datetime="${escapeHtml(parsedDate.isoDate)}">${escapeHtml(parsedDate.formattedDate)}</time>)</p>`
+          ? `<p>Last Updated: <time datetime="${escapeHtml(parsedDate.isoDate)}">${escapeHtml(parsedDate.formattedDate)}</time></p>`
           : ''
       }
       <p>
