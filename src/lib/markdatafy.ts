@@ -191,7 +191,7 @@ export class InlineParser {
         }
       }
 
-      // 5. Emphasis & Strong Delimiters
+      // 5. Emphasis & Strong Delimiters (* or _)
       if (char === '*' || char === '_') {
         let count = 0;
         while (i + count < input.length && input[i + count] === char) {
@@ -288,10 +288,20 @@ export class InlineParser {
         const wrappedChildren = nodes.splice(opener.nodeIndex + 1, closer.nodeIndex - opener.nodeIndex - 1);
         const cleanedChildren = wrappedChildren.filter(child => child.type !== 'text' || child.literal !== '');
 
-        const formatNode: ASTNode = {
-          type: isStrong ? 'strong' : 'emphasis',
-          children: cleanedChildren
-        };
+        let formatNode: ASTNode;
+        
+        // Handle triple-delimiter case (bold + italic ***)
+        if (isStrong && (opener.count > 0 || closer.count > 0)) {
+          formatNode = {
+            type: 'strong',
+            children: [{ type: 'emphasis', children: cleanedChildren }]
+          };
+        } else {
+          formatNode = {
+            type: isStrong ? 'strong' : 'emphasis',
+            children: cleanedChildren
+          };
+        }
 
         nodes.splice(opener.nodeIndex + 1, 0, formatNode);
 
@@ -360,7 +370,7 @@ export class MarkDatafyParser {
         continue;
       }
 
-      // 3. Fenced Code Blocks
+      // 3. Fenced Code Blocks (Checked BEFORE generic HTML blocks and paragraphs)
       const fenceMatch = line.match(/^ {0,3}(`{3,}|~{3,})[ \t]*(.*)$/);
       if (fenceMatch && fenceMatch[1]) {
         const marker = fenceMatch[1][0];
@@ -464,7 +474,7 @@ export class MarkDatafyParser {
       while (
         i < lines.length &&
         lines[i]!.trim() !== '' &&
-        !/^ {0,3}(#{1,6}|`{3,}|~{3,}|>|<\/?([a-zA-Z][a-zA-Z0-9-]*)|[*+-]\s+|\d{1,9}[.)]\s+|(?:\*[ \t]*){3,}$\vert{}(?:\-[ \t]*){3,}$)/.test(lines[i]!)
+        !/^ {0,3}(#{1,6}|`{3,}|~{3,}|>|<\/?([a-zA-Z][a-zA-Z0-9-]*)|[*+-]\s+|\d{1,9}[.)]\s+)/.test(lines[i]!)
       ) {
         paragraphLines.push(lines[i]!.trim());
         i++;
