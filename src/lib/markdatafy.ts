@@ -286,23 +286,39 @@ export class InlineParser {
         if (closeNode) closeNode.literal = closer.char.repeat(closer.count);
 
         const wrappedChildren = nodes.splice(opener.nodeIndex + 1, closer.nodeIndex - opener.nodeIndex - 1);
+        const cleanedChildren = wrappedChildren.filter(child => child.type !== 'text' || child.literal !== '');
+
         const formatNode: ASTNode = {
           type: isStrong ? 'strong' : 'emphasis',
-          children: wrappedChildren
+          children: cleanedChildren
         };
 
         nodes.splice(opener.nodeIndex + 1, 0, formatNode);
 
-        for (let d = openerIdx + 1; d < delimiters.length; d++) {
-          delimiters[d]!.nodeIndex -= wrappedChildren.length - 1;
+        const nodeShift = wrappedChildren.length - 1;
+
+        for (let d = 0; d < delimiters.length; d++) {
+          if (delimiters[d]!.nodeIndex > opener.nodeIndex && delimiters[d]!.nodeIndex < closer.nodeIndex) {
+            delimiters[d]!.nodeIndex = opener.nodeIndex + 1;
+          } else if (delimiters[d]!.nodeIndex >= closer.nodeIndex) {
+            delimiters[d]!.nodeIndex -= nodeShift;
+          }
         }
 
-        if (opener.count === 0) delimiters.splice(openerIdx, 1);
         if (closer.count === 0) {
-          delimiters.splice(closerIdx - (opener.count === 0 ? 1 : 0), 1);
+          delimiters.splice(closerIdx, 1);
+        }
+        if (opener.count === 0) {
+          delimiters.splice(openerIdx, 1);
         }
       } else {
         stackBottom = closerIdx + 1;
+      }
+    }
+
+    for (let i = nodes.length - 1; i >= 0; i--) {
+      if (nodes[i]!.type === 'text' && nodes[i]!.literal === '') {
+        nodes.splice(i, 1);
       }
     }
   }
