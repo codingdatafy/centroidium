@@ -3,10 +3,9 @@
  * Designed specifically for workerd / Cloudflare Workers environment.
  * 
  * Features:
- * - Block parsing: Code blocks (fenced & indented), Blockquotes, Lists (ordered/unordered), Headings (ATX & Setext), Thematic breaks, Paragraphs.
- * - Inline parsing: Emphasis/Strong (`*`, `_`), Inline code, Links, Images, Autolinks, Hard breaks (`\n`, `\s\s\n`), HTML escaping.
+ * - Block parsing: Code blocks (fenced & indented), Blockquotes, Lists (ordered/unordered with nesting), Headings (ATX & Setext), Thematic breaks, Paragraphs, HTML blocks.
+ * - Inline parsing: Raw HTML elements, Emphasis/Strong (`*`, `_`), Inline code, Links, Images, Autolinks, Hard breaks (`\n`, `\s\s\n`), HTML escaping.
  * - Automatic ID generation for headings (`h1`-`h6`).
- * - Escapes raw HTML tags (e.g. `<head>` -> `&lt;head&gt;`) safely into plain text.
  * - Strictly zero runtime dependencies.
  */
 
@@ -44,7 +43,7 @@ function slugify(str: string): string {
 // ============================================================================
 
 /**
- * Parses inline CommonMark constructs (autolinks, code, links, images, bold, italic, breaks).
+ * Parses inline CommonMark constructs (raw HTML tags, code, links, images, bold, italic, breaks).
  */
 function parseInline(text: string): string {
   if (!text) return '';
@@ -84,7 +83,7 @@ function parseInline(text: string): string {
       }
     }
 
-    // 3. Autolinks (<https://...>, <email@domain.com>)
+    // 3. Raw HTML Tags & Autolinks (<tag attrs...>, </tag>, <https://...>, <email@domain.com>)
     if (char === '<') {
       const autoLinkMatch = /^<((?:https?|ftp):\/\/[^\s>]+)>/i.exec(text.slice(i));
       if (autoLinkMatch && autoLinkMatch[1]) {
@@ -99,6 +98,14 @@ function parseInline(text: string): string {
         const email = escapeHtml(emailMatch[1]);
         out += `<a href="mailto:${email}">${email}</a>`;
         i += emailMatch[0].length;
+        continue;
+      }
+
+      // Inline Raw HTML Matcher (preserves raw inline HTML tags & attributes)
+      const rawHtmlMatch = /^<\/?([a-z0-9-]+)(?:\s+[^>]*|\s*)\/?>/i.exec(text.slice(i));
+      if (rawHtmlMatch) {
+        out += rawHtmlMatch[0];
+        i += rawHtmlMatch[0].length;
         continue;
       }
     }
@@ -135,7 +142,7 @@ function parseInline(text: string): string {
       continue;
     }
 
-    // 6. Default Normal Characters (All unhandled < and > are safely escaped here)
+    // 6. Default Normal Characters
     out += escapeHtml(char!);
     i++;
   }
@@ -147,7 +154,7 @@ function parseInline(text: string): string {
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/__(.*?)__/g, '<strong>$1</strong>')
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
-    .replace(/_(.*?)/g, '<em>$1</em>');
+    .replace(/_(.*?)_/g, '<em>$1</em>');
 
   return out;
 }
@@ -207,7 +214,23 @@ export function markdatafy(markdown: string): string {
       continue;
     }
 
-    // 3. ATX Headings (# Heading, ## Heading, ..., ###### Heading)
+    // 3. Raw Block-Level HTML Blocks (e.g., <div class="...">, <table>, <dl>)
+    const htmlBlockMatch = /^<\/?[a-z0-9-]+(?:\s+[^>]*|\s*)\/?>/i.exec(trimmed);
+    if (htmlBlockMatch) {
+      const htmlLines: string[] = [];
+      while (i < totalLines) {
+        const curLine = lines[i]!;
+        htmlLines.push(curLine);
+        i++;
+        if (curLine.trim() === '' && htmlLines.length > 1) {
+          break;
+        }
+      }
+      htmlOutput.push(htmlLines.join('\n'));
+      continue;
+    }
+
+    // 4. ATX Headings (# Heading, ## Heading, ..., ###### Heading)
     const atxMatch = /^(#{1,6})\s+(.+)$/.exec(trimmed);
     if (atxMatch) {
       const level = atxMatch[1]!.length;
@@ -221,7 +244,7 @@ export function markdatafy(markdown: string): string {
       continue;
     }
 
-    // 4. Setext Headings (Heading 1 === / Heading 2 ---)
+    // 5. Setext Headings (Heading 1 === / Heading 2 ---)
     if (i + 1 < totalLines) {
       const nextLine = lines[i + 1]!.trim();
       if (/^={2,}$/.test(nextLine)) {
@@ -242,14 +265,14 @@ export function markdatafy(markdown: string): string {
       }
     }
 
-    // 5. Thematic Breaks / Horizontal Rules (---, ***, ___)
+    // 6. Thematic Breaks / Horizontal Rules (---, ***, ___)
     if (/^(?:(?:\*\s*){3,}|(?:-\s*){3,}|(?:_\s*){3,})$/.test(trimmed)) {
       htmlOutput.push('<hr />');
       i++;
       continue;
     }
 
-    // 6. Blockquotes (> Quote)
+    // 7. Blockquotes (> Quote)
     if (trimmed.startsWith('>')) {
       const quoteLines: string[] = [];
       while (i < totalLines && lines[i]!.trimStart().startsWith('>')) {
@@ -261,42 +284,70 @@ export function markdatafy(markdown: string): string {
       continue;
     }
 
-    // 7. Unordered Lists (- item, * item, + item) & Ordered Lists (1. item)
-    const ulMatch = /^[*+-]\s+(.+)/.exec(trimmed);
-    const olMatch = /^(\d+)\.\s+(.+)/.exec(trimmed);
-
-    if (ulMatch || olMatch) {
-      const isOrdered = !!olMatch;
+    // 8. Unordered Lists (- item, * item, + item) & Ordered Lists (1. item) with Nested Sublist Support
+    const listMatch = /^(\s*)([*+-]|\d+\.)\s+(.+)$/.exec(line);
+    if (listMatch) {
+      const baseIndent = listMatch[1]!.length;
+      const isOrdered = /^\d+\./.test(listMatch[2]!);
       const listTag = isOrdered ? 'ol' : 'ul';
-      const startAttr = isOrdered && olMatch![1] !== '1' ? ` start="${olMatch![1]}"` : '';
-      const listItems: string[] = [];
+      const startNum = isOrdered ? listMatch[2]!.replace('.', '') : null;
+      const startAttr = isOrdered && startNum !== '1' ? ` start="${startNum}"` : '';
 
-      const listRegex = isOrdered ? /^\d+\.\s+(.+)/ : /^[*+-]\s+(.+)/;
+      const items: string[] = [];
 
       while (i < totalLines) {
-        const curTrimmed = lines[i]!.trim();
-        const itemMatch = listRegex.exec(curTrimmed);
+        const curLine = lines[i]!;
+        const curTrimmed = curLine.trim();
 
-        if (!itemMatch) {
-          // Break list loop if line is empty and next line is not a list item
-          if (curTrimmed === '') {
-            if (i + 1 < totalLines && !listRegex.test(lines[i + 1]!.trim())) {
+        if (curTrimmed === '') {
+          i++;
+          continue;
+        }
+
+        const curMatch = /^(\s*)([*+-]|\d+\.)\s+(.+)$/.exec(curLine);
+        const curIndent = curMatch ? curMatch[1]!.length : 0;
+
+        if (curMatch && curIndent < baseIndent) {
+          break;
+        }
+
+        if (curMatch && curIndent === baseIndent) {
+          let itemContent = curMatch[3]!;
+          const subLines: string[] = [];
+          i++;
+
+          while (i < totalLines) {
+            const nextLine = lines[i]!;
+            const nextTrimmed = nextLine.trim();
+
+            if (nextTrimmed === '') {
+              i++;
+              continue;
+            }
+
+            const nextIndent = nextLine.search(/\S/);
+
+            if (nextIndent > baseIndent) {
+              subLines.push(nextLine);
+              i++;
+            } else {
               break;
             }
-          } else {
-            break;
           }
+
+          const inlineText = parseInline(itemContent);
+          const nestedHtml = subLines.length > 0 ? `\n${markdatafy(subLines.join('\n'))}` : '';
+          items.push(`<li>${inlineText}${nestedHtml}</li>`);
         } else {
-          listItems.push(`<li>${parseInline(itemMatch[1]!.trim())}</li>`);
+          break;
         }
-        i++;
       }
 
-      htmlOutput.push(`<${listTag}${startAttr}>\n${listItems.join('\n')}\n</${listTag}>`);
+      htmlOutput.push(`<${listTag}${startAttr}>\n${items.join('\n')}\n</${listTag}>`);
       continue;
     }
 
-    // 8. Paragraphs
+    // 9. Paragraphs
     const paragraphLines: string[] = [];
     while (i < totalLines) {
       const curLine = lines[i]!;
@@ -308,6 +359,7 @@ export function markdatafy(markdown: string): string {
         curTrimmed.startsWith('```') ||
         curTrimmed.startsWith('~~~') ||
         curTrimmed.startsWith('>') ||
+        /^<\/?[a-z0-9-]+/i.test(curTrimmed) ||
         /^[*+-]\s+/.test(curTrimmed) ||
         /^\d+\.\s+/.test(curTrimmed) ||
         /^(?:(?:\*\s*){3,}|(?:-\s*){3,}|(?:_\s*){3,})$/.test(curTrimmed)

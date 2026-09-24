@@ -106,12 +106,12 @@ function isAllowedAttribute(tag: string, attrName: string): boolean {
 
 /**
  * Strips script tags, unsafe protocols (javascript:), and non-allowlisted tags/attributes
- * while preserving safe escaping inside pre/code blocks.
+ * while preserving safe escaping inside pre and inline code blocks.
  */
 function sanitizeHtml(html: string): string {
-  // 0. Extract <pre><code> blocks to prevent unescaping or tag-stripping code samples
+  // 0. Extract <pre> and <code> blocks to prevent unescaping or tag-stripping code samples
   const codeBlocks: string[] = [];
-  let clean = html.replace(/<pre\b[^>]*>[\s\S]*?<\/pre>/gi, (match) => {
+  let clean = html.replace(/<(pre|code)\b[^>]*>[\s\S]*?<\/\1>/gi, (match) => {
     codeBlocks.push(match);
     return `__CODE_BLOCK_${codeBlocks.length - 1}__`;
   });
@@ -165,7 +165,7 @@ function sanitizeHtml(html: string): string {
     return `<${tag}${attrsFormatted}${isSelfClosing}>`;
   });
 
-  // 6. Re-inject preserved <pre><code> blocks
+  // 6. Re-inject preserved <pre> and <code> blocks
   clean = clean.replace(/__CODE_BLOCK_(\d+)__/g, (_, index) => {
     return codeBlocks[Number(index)] ?? '';
   });
