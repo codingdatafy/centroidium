@@ -2,56 +2,36 @@ import type { ProcessedDocument, DocumentMeta } from '../types';
 import { markdatafy } from './markdatafy';
 
 /**
- * Safe HTML Allowlist against XSS
+ * Safe HTML Tag Allowlist against XSS
  */
 const ALLOWED_TAGS = new Set([
   'div', 'span', 'h2', 'h3', 'h4', 'p', 'a', 'dfn', 'abbr', 
   'em', 'strong', 'mark', 'time', 'ul', 'ol', 'li',
   'dt', 'dd', 'dl', 'table', 'caption', 'colgroup', 'col',
-  'thead', 'tbody', 'tfoot', 'tr', 'th', 'td', 'img'
+  'thead', 'tbody', 'tfoot', 'tr', 'th', 'td', 'img', 'blockquote',
+  'pre', 'code', 'hr', 'br', 'sub', 'sup', 'small', 'kbd'
 ]);
 
 /**
- * Global HTML Attributes allowed on any permitted tag
+ * Global HTML Attributes allowed on any tag in ALLOWED_TAGS
  */
-const GLOBAL_ATTRIBUTES = new Set([
-  'id',
-  'class',
-  'title',
-  'lang',
-  'dir',
-  'hidden',
-  'tabindex',
-  'role'
+const GLOBAL_ALLOWED_ATTRIBUTES = new Set([
+  'class', 'id', 'title', 'lang', 'dir', 'role', 'hidden', 'tabindex'
 ]);
 
 /**
- * Tag-specific HTML Attributes
+ * Tag-Specific Attribute Allowlist
  */
-const ALLOWED_ATTRIBUTES: Record<string, Set<string>> = {
-  a: new Set(['href', 'target', 'rel']),
+const TAG_SPECIFIC_ATTRIBUTES: Record<string, Set<string>> = {
+  a: new Set(['href', 'target', 'rel', 'download']),
   time: new Set(['datetime']),
-  img: new Set(['alt', 'src', 'width', 'height', 'loading']),
-  th: new Set(['scope', 'colspan', 'rowspan']),
-  td: new Set(['colspan', 'rowspan']),
+  img: new Set(['alt', 'src', 'width', 'height', 'loading', 'decoding']),
   col: new Set(['span']),
-  colgroup: new Set(['span'])
+  colgroup: new Set(['span']),
+  td: new Set(['colspan', 'rowspan', 'headers']),
+  th: new Set(['colspan', 'rowspan', 'headers', 'scope']),
+  ol: new Set(['start', 'reversed', 'type']),
 };
-
-/**
- * Checks if an attribute is allowed on a specific HTML tag
- */
-function isAttributeAllowed(tag: string, attrName: string): boolean {
-  // Check exact global attributes
-  if (GLOBAL_ATTRIBUTES.has(attrName)) return true;
-
-  // Allow custom data-* and accessibility aria-* attributes
-  if (attrName.startsWith('data-') || attrName.startsWith('aria-')) return true;
-
-  // Check tag-specific attributes
-  const tagAttrs = ALLOWED_ATTRIBUTES[tag];
-  return tagAttrs ? tagAttrs.has(attrName) : false;
-}
 
 /**
  * Processor for Site Markdown content:
@@ -109,17 +89,35 @@ async function wrapSections(html: string): Promise<string> {
 }
 
 /**
- * Strips script tags, unsafe protocols (javascript:), and unallowed tags/attributes.
+ * Validates whether an attribute name is safe to allow
+ */
+function isAllowedAttribute(tag: string, attrName: string): boolean {
+  if (GLOBAL_ALLOWED_ATTRIBUTES.has(attrName)) {
+    return true;
+  }
+
+  if (attrName.startsWith('aria-') || attrName.startsWith('data-')) {
+    return true;
+  }
+
+  const tagAttrs = TAG_SPECIFIC_ATTRIBUTES[tag];
+  return tagAttrs ? tagAttrs.has(attrName) : false;
+}
+
+/**
+ * Strips script tags, unsafe protocols (javascript:), and non-allowlisted tags/attributes.
  */
 function sanitizeHtml(html: string): string {
-  let clean = html.replace(/<(script|iframe|object|embed|style|form|input)[^>]*>[\s\S]*?<\/\1>/gi, '');
+  // Strip dangerous tag blocks completely
+  let clean = html.replace(/<(script|iframe|object|embed|style|form|input|button|select|textarea)[^>]*>[\s\S]*?<\/\1>/gi, '');
 
-  // Strip inline event handlers (e.g. onclick, onload)
+  // Strip inline JavaScript event handlers (e.g. onclick=..., onload=...)
   clean = clean.replace(/\s+on[a-z]+\s*=\s*(?:'[^']*'|"[^"]*"|[^\s>]+)/gi, '');
 
-  // Block inline script execution in URLs
+  // Strip unsafe URI protocols in href and src
   clean = clean.replace(/(href|src)\s*=\s*["']?\s*(?:javascript|vbscript|data):[^"'>\s]+/gi, '$1="#"');
 
+  // Filter allowed tags and allowed attributes
   clean = clean.replace(/<\/?([a-z0-9-]+)([^>]*)>/gi, (match, tagName, attrString) => {
     const tag = tagName.toLowerCase();
 
@@ -141,7 +139,7 @@ function sanitizeHtml(html: string): string {
 
       const attrValue = attrMatch[2] ?? attrMatch[3] ?? attrMatch[4] ?? '';
 
-      if (isAttributeAllowed(tag, attrName)) {
+      if (isAllowedAttribute(tag, attrName)) {
         cleanAttrs.push(`${attrName}="${escapeHtml(attrValue)}"`);
       }
     }
@@ -156,11 +154,11 @@ function sanitizeHtml(html: string): string {
 }
 
 /**
- * Robust YAML-like Frontmatter parser
+ * YAML-like Frontmatter parser
  */
 function parseFrontmatter(rawMarkdown: string): { meta: DocumentMeta; body: string } {
   const meta: DocumentMeta = {};
-  const frontmatterRegex = /^---[\r\n]+([\s\S]*?)[\r\n]+---[\r\n]*/;
+  const frontmatterRegex = /^---\n([\s\S]*?)\n---\n?/;
   const match = rawMarkdown.match(frontmatterRegex);
 
   if (!match) {
@@ -170,7 +168,7 @@ function parseFrontmatter(rawMarkdown: string): { meta: DocumentMeta; body: stri
   const yamlBlock = match[1] ?? '';
   const body = rawMarkdown.replace(frontmatterRegex, '');
 
-  const lines = yamlBlock.split(/\r?\n/);
+  const lines = yamlBlock.split('\n');
   for (const line of lines) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith('#')) continue;
