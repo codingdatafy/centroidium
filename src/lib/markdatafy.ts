@@ -31,20 +31,20 @@ export type InlineType =
 
 export interface ASTNode {
   type: BlockType | InlineType;
-  children?: ASTNode[];
-  literal?: string;
-  level?: number;
-  info?: string;
-  destination?: string;
-  title?: string;
-  listType?: 'bullet' | 'ordered';
-  listStart?: number;
-  tight?: boolean;
-  id?: string;
+  children?: ASTNode[] | undefined;
+  literal?: string | undefined;
+  level?: number | undefined;
+  info?: string | undefined;
+  destination?: string | undefined;
+  title?: string | undefined;
+  listType?: ('bullet' | 'ordered') | undefined;
+  listStart?: number | undefined;
+  tight?: boolean | undefined;
+  id?: string | undefined;
 }
 
 export interface ParseOptions {
-  sourcepos?: boolean;
+  sourcepos?: boolean | undefined;
 }
 
 // ============================================================================
@@ -114,9 +114,18 @@ function decodeEntities(text: string): string {
 // 3. INLINE PARSER
 // ============================================================================
 
+interface Delimiter {
+  char: string;
+  count: number;
+  canOpen: boolean;
+  canClose: boolean;
+  nodeIndex: number;
+}
+
 export class InlineParser {
   public parse(input: string): ASTNode[] {
     const nodes: ASTNode[] = [];
+    const delimiters: Delimiter[] = [];
     let i = 0;
 
     while (i < input.length) {
@@ -129,7 +138,7 @@ export class InlineParser {
         continue;
       }
 
-      // 2. Line Breaks (Hard / Soft)
+      // 2. Line Breaks
       if (char === '\n') {
         const lastNode = nodes[nodes.length - 1];
         if (lastNode && lastNode.type === 'text' && lastNode.literal?.endsWith('  ')) {
@@ -161,7 +170,7 @@ export class InlineParser {
         }
       }
 
-      // 4. Raw Inline HTML / Links / Autolinks
+      // 4. Raw Inline HTML / Autolinks
       if (char === '<') {
         const autolinkMatch = input.slice(i).match(/^<([a-zA-Z][a-zA-Z0-9+.-]{1,31}:[^<>\s]+)>/);
         if (autolinkMatch && autolinkMatch[1]) {
@@ -182,49 +191,34 @@ export class InlineParser {
         }
       }
 
-      // 5. Explicit Markdown Links: [text](url)
-      if (char === '[') {
-        const linkMatch = input.slice(i).match(/^\[([^\]]+)\]\(([^)]+)\)/);
-        if (linkMatch && linkMatch[1] && linkMatch[2]) {
-          nodes.push({
-            type: 'link',
-            destination: linkMatch[2],
-            children: this.parse(linkMatch[1])
-          });
-          i += linkMatch[0].length;
-          continue;
-        }
-      }
-
-      // 6. Inline Emphasis & Strong Delimiters
+      // 5. Emphasis & Strong Delimiters
       if (char === '*' || char === '_') {
-        const doubleChar = char + char;
-        if (input.startsWith(doubleChar, i)) {
-          const endIdx = input.indexOf(doubleChar, i + 2);
-          if (endIdx !== -1) {
-            const innerText = input.slice(i + 2, endIdx);
-            nodes.push({
-              type: 'strong',
-              children: this.parse(innerText)
-            });
-            i = endIdx + 2;
-            continue;
-          }
-        } else {
-          const endIdx = input.indexOf(char, i + 1);
-          if (endIdx !== -1) {
-            const innerText = input.slice(i + 1, endIdx);
-            nodes.push({
-              type: 'emphasis',
-              children: this.parse(innerText)
-            });
-            i = endIdx + 1;
-            continue;
-          }
+        let count = 0;
+        while (i + count < input.length && input[i + count] === char) {
+          count++;
         }
+
+        const prevChar = i > 0 ? input[i - 1]! : ' ';
+        const nextChar = i + count < input.length ? input[i + count]! : ' ';
+        const isLeftFlanking = !/\s/.test(nextChar) && (!ESCAPABLE_PUNCTUATION.has(nextChar) || /\s/.test(prevChar) || ESCAPABLE_PUNCTUATION.has(prevChar));
+        const isRightFlanking = !/\s/.test(prevChar) && (!ESCAPABLE_PUNCTUATION.has(prevChar) || /\s/.test(nextChar) || ESCAPABLE_PUNCTUATION.has(nextChar));
+
+        const nodeIndex = nodes.length;
+        nodes.push({ type: 'text', literal: char.repeat(count) });
+
+        delimiters.push({
+          char,
+          count,
+          canOpen: char === '*' ? isLeftFlanking : isLeftFlanking && (!isRightFlanking || ESCAPABLE_PUNCTUATION.has(prevChar)),
+          canClose: char === '*' ? isRightFlanking : isRightFlanking && (!isLeftFlanking || ESCAPABLE_PUNCTUATION.has(nextChar)),
+          nodeIndex
+        });
+
+        i += count;
+        continue;
       }
 
-      // Accumulate Plain Text
+      // Text accumulation
       const lastNode = nodes[nodes.length - 1];
       if (lastNode && lastNode.type === 'text') {
         lastNode.literal = (lastNode.literal ?? '') + char;
@@ -234,6 +228,7 @@ export class InlineParser {
       i++;
     }
 
+    this.processEmphasis(nodes, delimiters);
     return nodes;
   }
 
@@ -250,6 +245,82 @@ export class InlineParser {
       pos = idx + currentCount;
     }
     return -1;
+  }
+
+  private processEmphasis(nodes: ASTNode[], delimiters: Delimiter[]): void {
+    let stackBottom = 0;
+
+    while (stackBottom < delimiters.length) {
+      let closerIdx = -1;
+      for (let i = stackBottom; i < delimiters.length; i++) {
+        if (delimiters[i]!.canClose) {
+          closerIdx = i;
+          break;
+        }
+      }
+
+      if (closerIdx === -1) break;
+
+      const closer = delimiters[closerIdx]!;
+      let openerIdx = -1;
+
+      for (let i = closerIdx - 1; i >= stackBottom; i--) {
+        const opener = delimiters[i]!;
+        if (opener.char === closer.char && opener.canOpen) {
+          openerIdx = i;
+          break;
+        }
+      }
+
+      if (openerIdx !== -1) {
+        const opener = delimiters[openerIdx]!;
+        const isStrong = opener.count >= 2 && closer.count >= 2;
+        const useCount = isStrong ? 2 : 1;
+
+        opener.count -= useCount;
+        closer.count -= useCount;
+
+        const openNode = nodes[opener.nodeIndex];
+        const closeNode = nodes[closer.nodeIndex];
+        if (openNode) openNode.literal = opener.char.repeat(opener.count);
+        if (closeNode) closeNode.literal = closer.char.repeat(closer.count);
+
+        const wrappedChildren = nodes.splice(opener.nodeIndex + 1, closer.nodeIndex - opener.nodeIndex - 1);
+        const cleanedChildren = wrappedChildren.filter(child => child.type !== 'text' || child.literal !== '');
+
+        const formatNode: ASTNode = {
+          type: isStrong ? 'strong' : 'emphasis',
+          children: cleanedChildren
+        };
+
+        nodes.splice(opener.nodeIndex + 1, 0, formatNode);
+
+        const nodeShift = wrappedChildren.length - 1;
+
+        for (let d = 0; d < delimiters.length; d++) {
+          if (delimiters[d]!.nodeIndex > opener.nodeIndex && delimiters[d]!.nodeIndex < closer.nodeIndex) {
+            delimiters[d]!.nodeIndex = opener.nodeIndex + 1;
+          } else if (delimiters[d]!.nodeIndex >= closer.nodeIndex) {
+            delimiters[d]!.nodeIndex -= nodeShift;
+          }
+        }
+
+        if (closer.count === 0) {
+          delimiters.splice(closerIdx, 1);
+        }
+        if (opener.count === 0) {
+          delimiters.splice(openerIdx, 1);
+        }
+      } else {
+        stackBottom = closerIdx + 1;
+      }
+    }
+
+    for (let i = nodes.length - 1; i >= 0; i--) {
+      if (nodes[i]!.type === 'text' && nodes[i]!.literal === '') {
+        nodes.splice(i, 1);
+      }
+    }
   }
 }
 
@@ -317,20 +388,12 @@ export class MarkDatafyParser {
         continue;
       }
 
-      // 4. Multi-line HTML Block Handling
+      // 4. HTML Blocks
       if (/^ {0,3}<\/?([a-zA-Z][a-zA-Z0-9-]*)/.test(line)) {
         const htmlLines: string[] = [];
-        while (i < lines.length) {
-          const currentLine = lines[i]!;
-          htmlLines.push(currentLine);
+        while (i < lines.length && lines[i]!.trim() !== '') {
+          htmlLines.push(lines[i]!);
           i++;
-          if (
-            currentLine.trim().endsWith('</dl>') ||
-            currentLine.trim().endsWith('</div>') ||
-            (currentLine.trim() === '' && htmlLines.length > 1)
-          ) {
-            break;
-          }
         }
         root.children!.push({
           type: 'html_block',
@@ -362,7 +425,7 @@ export class MarkDatafyParser {
 
           if (!activeMatch) break;
 
-          const itemContent = activeMatch[2]!;
+          const itemContent = activeMatch[2]!.trim();
           listNode.children!.push({
             type: 'item',
             children: this.inlineParser.parse(itemContent)
@@ -396,12 +459,12 @@ export class MarkDatafyParser {
         continue;
       }
 
-      // 8. Paragraph Accumulation (Fixed Termination Regex)
+      // 8. Paragraph Accumulation
       const paragraphLines: string[] = [];
       while (
         i < lines.length &&
         lines[i]!.trim() !== '' &&
-        !/^ {0,3}(#{1,6}|`{3,}|~{3,}|>|<\/?([a-zA-Z][a-zA-Z0-9-]*)|[*+-]\s+|\d{1,9}[.)]\s+|(?:\*[ \t]*){3,}$|(?:\-[ \t]*){3,}$\vert{}(?:\_[ \t]*){3,}$)/.test(lines[i]!)
+        !/^ {0,3}(#{1,6}|`{3,}|~{3,}|>|<\/?([a-zA-Z][a-zA-Z0-9-]*)|[*+-]\s+|\d{1,9}[.)]\s+)/.test(lines[i]!)
       ) {
         paragraphLines.push(lines[i]!.trim());
         i++;
@@ -410,7 +473,7 @@ export class MarkDatafyParser {
       if (paragraphLines.length > 0) {
         root.children!.push({
           type: 'paragraph',
-          children: this.inlineParser.parse(paragraphLines.join(' '))
+          children: this.inlineParser.parse(paragraphLines.join('\n'))
         });
       }
     }
@@ -429,31 +492,31 @@ export class HTMLRenderer {
 
     switch (node.type) {
       case 'document':
-        return (node.children || []).map((child) => this.render(child)).join('\n');
+        return (node.children || []).map((child) => this.render(child)).join('');
 
       case 'paragraph':
-        return `<p>${this.renderChildren(node)}</p>`;
+        return `<p>${this.renderChildren(node)}</p>\n`;
 
       case 'heading': {
         const idAttr = node.id ? ` id="${node.id}"` : '';
-        return `<h${node.level || 1}${idAttr}>${this.renderChildren(node)}</h${node.level || 1}>`;
+        return `<h${node.level || 1}${idAttr}>${this.renderChildren(node)}</h${node.level || 1}>\n`;
       }
 
       case 'blockquote':
-        return `<blockquote>\n${this.renderChildren(node)}\n</blockquote>`;
+        return `<blockquote>\n${this.renderChildren(node)}</blockquote>\n`;
 
       case 'list': {
         const tag = node.listType === 'ordered' ? 'ol' : 'ul';
         const startAttr = node.listStart && node.listStart !== 1 ? ` start="${node.listStart}"` : '';
-        return `<${tag}${startAttr}>\n${this.renderChildren(node)}</${tag}>`;
+        return `<${tag}${startAttr}>\n${this.renderChildren(node)}</${tag}>\n`;
       }
 
       case 'item':
-        return `<li>${this.renderChildren(node)}</li>`;
+        return `<li>${this.renderChildren(node)}</li>\n`;
 
       case 'code_block': {
         const attr = node.info ? ` class="language-${escapeHtml(node.info.split(/\s+/)[0] || '')}"` : '';
-        return `<pre><code${attr}>${escapeHtml(node.literal || '')}</code></pre>`;
+        return `<pre><code${attr}>${escapeHtml(node.literal || '')}</code></pre>\n`;
       }
 
       case 'html_block':
@@ -461,7 +524,7 @@ export class HTMLRenderer {
         return node.literal || '';
 
       case 'thematic_break':
-        return '<hr />';
+        return '<hr />\n';
 
       case 'text':
         return escapeHtml(node.literal || '');
@@ -479,7 +542,7 @@ export class HTMLRenderer {
         return '\n';
 
       case 'hardbreak':
-        return '<br />';
+        return '<br />\n';
 
       case 'link':
         return `<a href="${escapeHtml(node.destination || '')}">${this.renderChildren(node)}</a>`;
