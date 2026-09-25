@@ -386,17 +386,21 @@ canvas {
 #logo {
 }
 #logo img {
-  width: 45%;
+}
+@media screen and (max-width: 720px) {
+  #logo img {
+    width: 45%;
+  }
 }
 #navigation {
 }
 #navigation ul {
 	display: flex;
-    flex-flow: row wrap;
+  flex-flow: row wrap;
 	list-style: none;
 	margin-block-start: 0;
-    margin-block-end: 0;
-    padding-inline-start: 0;
+  margin-block-end: 0;
+  padding-inline-start: 0;
 }
 #navigation ul li {
 	flex: 1;
