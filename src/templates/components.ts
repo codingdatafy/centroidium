@@ -80,7 +80,7 @@ export function renderHeader({ currentPath }: HeaderProps): string {
 
   const navList = navItems
     .map((item) => {
-      const isActive = currentPath === item.path || (item.path !== '/' && currentPath.startsWith(item.path));
+      const isActive = currentPath === item.path;
       const activeAttr = isActive ? ' class="active" aria-current="page"' : '';
       return `<li><a href="${item.path}"${activeAttr}>${item.label}</a></li>`;
     })
