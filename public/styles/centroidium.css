@@ -386,6 +386,7 @@ canvas {
 #logo {
 }
 #logo img {
+  width: 45%;
 }
 #navigation {
 }
@@ -406,7 +407,7 @@ canvas {
 	text-align: center;
 }
 #navigation ul li:has(> .active) {
-	background-color: rgb(50 205 50);
+	background-color: rgb(0 255 0);
 }
 #navigation ul li a {
 	display: block;
