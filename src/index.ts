@@ -68,13 +68,19 @@ export default {
       } else {
         newHeaders.delete('permissions-policy');
       }
-
-      response = new Response(response.body, {
-        status: response.status,
-        statusText: response.statusText,
-        headers: newHeaders,
-      });
+    } else {
+      // Fallback clean policy if none was attached by upstream handlers
+      newHeaders.set(
+        'permissions-policy',
+        'camera=(), microphone=(), geolocation=(), ch-ua-platform-version=(self)'
+      );
     }
+
+    response = new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: newHeaders,
+    });
 
     ctx.waitUntil(
       (async () => {
