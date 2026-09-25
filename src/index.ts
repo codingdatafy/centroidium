@@ -45,6 +45,37 @@ export default {
       });
     }
 
+    // Clone response headers to clean up permissions policy injected by upstream edge
+    const newHeaders = new Headers(response.headers);
+    const existingPolicy = newHeaders.get('permissions-policy');
+
+    if (existingPolicy) {
+      // Filter out unrecognized privacy sandbox directives
+      const cleanPolicy = existingPolicy
+        .split(',')
+        .map((directive) => directive.trim())
+        .filter(
+          (directive) =>
+            !directive.startsWith('attribution-reporting') &&
+            !directive.startsWith('private-aggregation') &&
+            !directive.startsWith('join-ad-interest-group') &&
+            !directive.startsWith('run-ad-auction')
+        )
+        .join(', ');
+
+      if (cleanPolicy) {
+        newHeaders.set('permissions-policy', cleanPolicy);
+      } else {
+        newHeaders.delete('permissions-policy');
+      }
+
+      response = new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: newHeaders,
+      });
+    }
+
     ctx.waitUntil(
       (async () => {
         const duration = Math.round(performance.now() - startTime);
