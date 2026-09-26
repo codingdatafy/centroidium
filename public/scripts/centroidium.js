@@ -53,8 +53,8 @@
     // Prevent duplicated pageviews in single view lifecycle
     if (pageviewTracked) return;
 
-    // Do not log views if the tab is pre-rendered in background (Firefox/Chrome pre-render)
-    if (document.visibilityState === 'prerender') {
+    // Do not log views if the tab is hidden or pre-rendered in background
+    if (document.visibilityState !== 'visible') {
       return;
     }
 
@@ -97,19 +97,23 @@
     sendBeaconPayload(payload);
   };
 
-  // Visibility state handling for background pre-rendered tabs (e.g. Ctrl-Click)
+  // Visibility state handling for background tabs
   function handleVisibilityChange() {
     if (document.visibilityState === 'visible' && !pageviewTracked) {
       sendPageview();
     }
   }
 
-  if (document.visibilityState === 'prerender') {
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-  } else if (document.readyState === 'complete' || document.readyState === 'interactive') {
-    sendPageview();
-  } else {
-    window.addEventListener('DOMContentLoaded', sendPageview);
+  // Always register visibilitychange listener to catch background tab activations
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+
+  // Trigger pageview immediately if document is already visible on load
+  if (document.visibilityState === 'visible') {
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+      sendPageview();
+    } else {
+      window.addEventListener('DOMContentLoaded', sendPageview);
+    }
   }
 
   // Handle bfcache (Back/Forward navigation) & F5 Reload tracking
