@@ -188,14 +188,14 @@ export async function handleAnalyticsRoute(context: RequestContext): Promise<Res
             indexes: [eventType], // index1
             blobs: [
               targetPath,        // blob1
-              visitorHash,       // blob2
+              parsedReferrer,    // blob2
               country,           // blob3
-              deviceType,        // blob4
-              browserName,       // blob5
-              browserVersion || '', // blob6
-              osName,            // blob7
-              osVersion || '',   // blob8
-              parsedReferrer,    // blob9
+              browserName,       // blob4
+              browserVersion || '', // blob5
+              osName,            // blob6
+              osVersion || '',   // blob7
+              deviceType,        // blob8
+              visitorHash,       // blob9
               targetValue        // blob10
             ],
             doubles: [
@@ -210,14 +210,14 @@ export async function handleAnalyticsRoute(context: RequestContext): Promise<Res
           indexes: ['pageview'], // index1
           blobs: [
             targetPath,          // blob1
-            visitorHash,         // blob2
+            parsedReferrer,      // blob2
             country,             // blob3
-            deviceType,          // blob4
-            browserName,         // blob5
-            browserVersion || '',// blob6
-            osName,              // blob7
-            osVersion || '',     // blob8
-            parsedReferrer,      // blob9
+            browserName,         // blob4
+            browserVersion || '',// blob5
+            osName,              // blob6
+            osVersion || '',     // blob7
+            deviceType,          // blob8
+            visitorHash,         // blob9
             ''                   // blob10: Empty for pageviews
           ],
           doubles: [
@@ -264,55 +264,102 @@ function parseClientInfo(ua: string, request: Request) {
   if (chPlatform) {
     if (chPlatform === 'Windows') {
       osName = 'Windows';
-      const majorVer = chPlatformVersion ? parseInt(chPlatformVersion.split('.')[0] || '0', 10) : 0;
-      if (majorVer >= 13) osVersion = '11';
-      else if (majorVer > 0) osVersion = '10';
+      if (chPlatformVersion) {
+        const majorVer = parseInt(chPlatformVersion.split('.')[0] || '0', 10);
+        if (majorVer >= 13) osVersion = '11';
+        else if (majorVer > 0) osVersion = '10';
+      }
+    } else if (chPlatform === 'macOS') {
+      osName = 'macOS';
+      if (chPlatformVersion) {
+        const parts = chPlatformVersion.split('.');
+        if (parts[0] && parts[0] !== '0') {
+          osVersion = parts.length > 1 ? `${parts[0]}.${parts[1]}` : parts[0];
+        }
+      }
     } else if (chPlatform === 'Android') {
       osName = 'Android';
       if (chPlatformVersion) {
         const cleanVer = chPlatformVersion.replace(/[^0-9.]/g, '').split('.')[0];
         if (cleanVer && cleanVer !== '0') osVersion = cleanVer;
       }
+    } else if (chPlatform === 'iOS') {
+      osName = 'iOS';
+      if (chPlatformVersion) {
+        const cleanVer = chPlatformVersion.replace(/[^0-9.]/g, '').split('.')[0];
+        if (cleanVer && cleanVer !== '0') osVersion = cleanVer;
+      }
     } else if (chPlatform === 'Chrome OS') {
       osName = 'ChromeOS';
+      if (chPlatformVersion) {
+        const cleanVer = chPlatformVersion.replace(/[^0-9.]/g, '').split('.')[0];
+        if (cleanVer && cleanVer !== '0') osVersion = cleanVer;
+      }
     }
   }
 
   if (osName === 'Other' || !osVersion) {
     if (/Android\s([0-9\.]+)/i.test(ua)) {
       osName = 'Android';
-      osVersion = RegExp.$1.split('.')[0] || null;
+      if (!osVersion) osVersion = RegExp.$1.split('.')[0] || null;
     } else if (/Windows NT 10\.0/i.test(ua)) {
       osName = 'Windows';
       if (!osVersion) osVersion = '10/11';
-    } else if (/Windows NT 6\.3/i.test(ua)) { osName = 'Windows'; osVersion = '8.1'; }
-    else if (/Windows NT 6\.2/i.test(ua)) { osName = 'Windows'; osVersion = '8'; }
-    else if (/Windows NT 6\.1/i.test(ua)) { osName = 'Windows'; osVersion = '7'; }
-    else if (/Windows NT/i.test(ua)) { osName = 'Windows'; }
-    else if (/iPhone|iPod/i.test(ua) || (chPlatform === 'iOS' && !/iPad/i.test(ua))) {
+    } else if (/Windows NT 6\.3/i.test(ua)) {
+      osName = 'Windows';
+      osVersion = '8.1';
+    } else if (/Windows NT 6\.2/i.test(ua)) {
+      osName = 'Windows';
+      osVersion = '8';
+    } else if (/Windows NT 6\.1/i.test(ua)) {
+      osName = 'Windows';
+      osVersion = '7';
+    } else if (/Windows NT/i.test(ua)) {
+      osName = 'Windows';
+    } else if (/iPhone|iPod/i.test(ua) || (chPlatform === 'iOS' && !/iPad/i.test(ua))) {
       osName = 'iOS';
-      if (/OS\s([0-9_]+)\slike\sMac\sOS\sX/i.test(ua)) osVersion = RegExp.$1.replace(/_/g, '.').split('.')[0] || null;
+      if (!osVersion && /OS\s([0-9_]+)\slike\sMac\sOS\sX/i.test(ua)) {
+        osVersion = RegExp.$1.replace(/_/g, '.').split('.')[0] || null;
+      }
     } else if (/iPad/i.test(ua) || (/Macintosh/i.test(ua) && request.headers.get('sec-ch-ua-mobile') === '?0' && /touch/i.test(ua))) {
       osName = 'iPadOS';
-      if (/OS\s([0-9_]+)\slike\sMac\sOS\sX/i.test(ua)) osVersion = RegExp.$1.replace(/_/g, '.').split('.')[0] || null;
-      else if (/Version\/([0-9\.]+)/i.test(ua)) osVersion = RegExp.$1.split('.')[0] || null;
+      if (!osVersion) {
+        if (/OS\s([0-9_]+)\slike\sMac\sOS\sX/i.test(ua)) osVersion = RegExp.$1.replace(/_/g, '.').split('.')[0] || null;
+        else if (/Version\/([0-9\.]+)/i.test(ua)) osVersion = RegExp.$1.split('.')[0] || null;
+      }
     } else if (/Mac OS X|Macintosh/i.test(ua) || chPlatform === 'macOS') {
       osName = 'macOS';
-      if (/Mac OS X\s([0-9_\.]+)/i.test(ua)) {
+      if (!osVersion && /Mac OS X\s([0-9_\.]+)/i.test(ua)) {
         const parts = RegExp.$1.replace(/_/g, '.').split('.');
         osVersion = `${parts[0]}.${parts[1] || '0'}`;
       }
-    } else if (/Ubuntu[\/\s]([0-9\.]+)/i.test(ua)) { osName = 'Ubuntu'; osVersion = RegExp.$1.split('.')[0] || null; }
-    else if (/Fedora[\/\s]([0-9\.]+)/i.test(ua)) { osName = 'Fedora'; osVersion = RegExp.$1.split('.')[0] || null; }
-    else if (/Debian[\/\s]([0-9\.]+)/i.test(ua)) { osName = 'Debian'; osVersion = RegExp.$1.split('.')[0] || null; }
-    else if (/Mint[\/\s]([0-9\.]+)/i.test(ua)) { osName = 'Linux Mint'; osVersion = RegExp.$1.split('.')[0] || null; }
-    else if (/Arch/i.test(ua)) osName = 'Arch Linux';
-    else if (/CrOS/i.test(ua)) osName = 'ChromeOS';
-    else if (/Linux/i.test(ua)) osName = 'Linux';
-    else if (/FreeBSD/i.test(ua)) osName = 'FreeBSD';
-    else if (/OpenBSD/i.test(ua)) osName = 'OpenBSD';
-    else if (/SunOS/i.test(ua)) osName = 'Solaris';
-    else if (/HarmonyOS/i.test(ua)) osName = 'HarmonyOS';
+    } else if (/Ubuntu[\/\s]([0-9\.]+)/i.test(ua)) {
+      osName = 'Ubuntu';
+      osVersion = RegExp.$1.split('.')[0] || null;
+    } else if (/Fedora[\/\s]([0-9\.]+)/i.test(ua)) {
+      osName = 'Fedora';
+      osVersion = RegExp.$1.split('.')[0] || null;
+    } else if (/Debian[\/\s]([0-9\.]+)/i.test(ua)) {
+      osName = 'Debian';
+      osVersion = RegExp.$1.split('.')[0] || null;
+    } else if (/Mint[\/\s]([0-9\.]+)/i.test(ua)) {
+      osName = 'Linux Mint';
+      osVersion = RegExp.$1.split('.')[0] || null;
+    } else if (/Arch/i.test(ua)) {
+      osName = 'Arch Linux';
+    } else if (/CrOS/i.test(ua)) {
+      osName = 'ChromeOS';
+    } else if (/Linux/i.test(ua)) {
+      osName = 'Linux';
+    } else if (/FreeBSD/i.test(ua)) {
+      osName = 'FreeBSD';
+    } else if (/OpenBSD/i.test(ua)) {
+      osName = 'OpenBSD';
+    } else if (/SunOS/i.test(ua)) {
+      osName = 'Solaris';
+    } else if (/HarmonyOS/i.test(ua)) {
+      osName = 'HarmonyOS';
+    }
   }
 
   let browserName = 'Other';

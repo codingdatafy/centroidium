@@ -43,7 +43,7 @@ export default {
       });
     }
 
-    // Clean up permissions policy
+    // Clean up permissions policy & attach Client Hints headers
     const newHeaders = new Headers(response.headers);
     const existingPolicy = newHeaders.get('permissions-policy');
 
@@ -71,6 +71,11 @@ export default {
         'camera=(), microphone=(), geolocation=(), ch-ua-platform-version=(self)'
       );
     }
+
+    newHeaders.set(
+      'Accept-CH',
+      'sec-ch-ua-platform-version, sec-ch-ua-platform, sec-ch-ua-mobile, sec-ch-ua-model'
+    );
 
     return new Response(response.body, {
       status: response.status,
