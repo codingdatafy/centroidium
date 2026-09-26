@@ -73,16 +73,39 @@ export async function trackEvent(
 
   if (!env.SITE_ANALYTICS) return;
 
+  // 1. Ignore internal endpoints, sitemaps, and static asset routes
+  if (
+    pathname === '/lib' ||
+    pathname === '/sitemap.xml' ||
+    pathname === '/robots.txt' ||
+    pathname === '/llms.txt' ||
+    pathname === '/favicon.ico' ||
+    pathname === '/_headers' ||
+    pathname.startsWith('/styles/') ||
+    pathname.startsWith('/scripts/') ||
+    pathname.startsWith('/images/') ||
+    pathname.startsWith('/.well-known/')
+  ) {
+    return;
+  }
+
   try {
     const userAgent = request.headers.get('user-agent') || '';
     if (BOT_REGEX.test(userAgent)) return;
 
+    // 2. Compute daily anonymized visitor hash for strict privacy compliance
+    const clientIP = request.headers.get('cf-connecting-ip') || '127.0.0.1';
+    const currentDay = new Date().toISOString().slice(0, 10);
+    const rawSecret = `${clientIP}-${userAgent}-${currentDay}-CD-Secret`;
+    const visitorHashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(rawSecret));
+    const visitorHash = bufferToHex(visitorHashBuffer, 16);
+
     env.SITE_ANALYTICS.writeDataPoint({
       indexes: ['worker_fetch'],
       blobs: [
-        pathname,
-        request.headers.get('cf-ipcountry') || 'UNKNOWN',
-        request.headers.get('cf-connecting-ip') || '127.0.0.1'
+        pathname,                                         // blob1: Request Path
+        request.headers.get('cf-ipcountry') || 'UNKNOWN', // blob2: Country
+        visitorHash                                       // blob3: Anonymized Visitor Hash
       ],
       doubles: [
         statusCode,
