@@ -15,6 +15,8 @@
 (function () {
   'use strict';
 
+  var pageviewTracked = false;
+
   function generateToken(path, timestamp) {
     var str = path + '-' + timestamp + '-CodingDatafyToken';
     var h1 = 0xdeadbeef, h2 = 0x41c6ce57;
@@ -48,6 +50,16 @@
   }
 
   function sendPageview() {
+    // Prevent duplicated pageviews in single view lifecycle
+    if (pageviewTracked) return;
+
+    // Do not log views if the tab is pre-rendered in background (Firefox/Chrome pre-render)
+    if (document.visibilityState === 'prerender') {
+      return;
+    }
+
+    pageviewTracked = true;
+
     var path = window.location.pathname.replace(/\/+$/, '') || '/';
     var ts = Date.now();
     var token = generateToken(path, ts);
@@ -85,63 +97,102 @@
     sendBeaconPayload(payload);
   };
 
-  if (document.readyState === 'complete') {
+  // Visibility state handling for background pre-rendered tabs (e.g. Ctrl-Click)
+  function handleVisibilityChange() {
+    if (document.visibilityState === 'visible' && !pageviewTracked) {
+      sendPageview();
+    }
+  }
+
+  if (document.visibilityState === 'prerender') {
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+  } else if (document.readyState === 'complete' || document.readyState === 'interactive') {
     sendPageview();
   } else {
-    window.addEventListener('load', sendPageview);
+    window.addEventListener('DOMContentLoaded', sendPageview);
   }
+
+  // Handle bfcache (Back/Forward navigation) & F5 Reload tracking
+  window.addEventListener('pageshow', function (event) {
+    if (event.persisted) {
+      pageviewTracked = false;
+      sendPageview();
+    }
+  });
+
+  // Outbound Link Click Event Listener
+  document.addEventListener('click', function (event) {
+    var anchor = event.target.closest('a');
+    if (!anchor || !anchor.href) return;
+
+    try {
+      var targetUrl = new URL(anchor.href, window.location.href);
+      var currentHost = window.location.hostname.replace(/^www\./, '');
+      var targetHost = targetUrl.hostname.replace(/^www\./, '');
+
+      // Check if link is outbound
+      if (targetHost && targetHost !== currentHost && /^https?:/i.test(targetUrl.protocol)) {
+        window.trackEvent('outbound_click', targetUrl.href);
+      }
+    } catch (e) {
+      // Ignore invalid URLs
+    }
+  });
 })();
 
+// Code Snippet Headers & Copy Event Handler
 (function () {
   'use strict';
 
   function initCodeHeaders() {
-    const codeBlocks = document.querySelectorAll('pre');
+    var codeBlocks = document.querySelectorAll('pre');
 
-    codeBlocks.forEach((pre) => {
+    codeBlocks.forEach(function (pre) {
       if (pre.querySelector('.code-header')) return;
 
-      const codeElement = pre.querySelector('code');
-      let languageName = 'Code';
+      var codeElement = pre.querySelector('code');
+      var languageName = 'Code';
 
       if (codeElement) {
-        const classList = Array.from(codeElement.classList);
-        const langClass = classList.find((c) => c.startsWith('language-') || c.startsWith('lang-'));
+        var classList = Array.from(codeElement.classList);
+        var langClass = classList.find(function (c) {
+          return c.startsWith('language-') || c.startsWith('lang-');
+        });
         if (langClass) {
           languageName = langClass.replace(/^(language-|lang-)/, '').toUpperCase();
         }
       }
 
-      const headerDiv = document.createElement('div');
+      var headerDiv = document.createElement('div');
       headerDiv.className = 'code-header';
 
-      const langSpan = document.createElement('span');
+      var langSpan = document.createElement('span');
       langSpan.className = 'code-language-label';
       langSpan.innerText = languageName;
 
-      const button = document.createElement('button');
+      var button = document.createElement('button');
       button.className = 'copy-code-btn';
       button.type = 'button';
       button.setAttribute('aria-label', 'Copy code snippet');
-      button.innerHTML = `
-        <svg class="copy-icon" viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-        <span class="btn-text">Copy</span>
-      `;
+      button.innerHTML =
+        '<svg class="copy-icon" viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>' +
+        '<span class="btn-text">Copy</span>';
 
-      button.addEventListener('click', async () => {
-        const textToCopy = codeElement ? codeElement.innerText : pre.innerText;
+      button.addEventListener('click', async function () {
+        var textToCopy = codeElement ? codeElement.innerText : pre.innerText;
 
         try {
           await navigator.clipboard.writeText(textToCopy);
-          button.querySelector('.btn-text').innerText = 'Copied!';
+          var textSpan = button.querySelector('.btn-text');
+          if (textSpan) textSpan.innerText = 'Copied!';
           button.classList.add('copied');
 
           if (typeof window.trackEvent === 'function') {
             window.trackEvent('copy_code', languageName.toLowerCase());
           }
 
-          setTimeout(() => {
-            button.querySelector('.btn-text').innerText = 'Copy';
+          setTimeout(function () {
+            if (textSpan) textSpan.innerText = 'Copy';
             button.classList.remove('copied');
           }, 2000);
         } catch (err) {
@@ -162,11 +213,13 @@
     initCodeHeaders();
   }
 
-  const observer = new MutationObserver(() => {
+  var observer = new MutationObserver(function () {
     initCodeHeaders();
   });
 
-  observer.observe(document.body, { childList: true, subtree: true });
+  if (document.body) {
+    observer.observe(document.body, { childList: true, subtree: true });
+  }
 })();
 
 /////////////////////////////  Header  /////////////////////////////
