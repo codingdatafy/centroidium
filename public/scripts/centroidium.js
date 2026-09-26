@@ -15,14 +15,6 @@
 (function () {
   'use strict';
 
-  // ============================================================================
-  // TOKEN GENERATOR
-  // ============================================================================
-
-  /**
-   * Generates a fast, deterministic cryptographic synchronization token 
-   * matching the server-side `getSyncToken` implementation.
-   */
   function generateToken(path, timestamp) {
     var str = path + '-' + timestamp + '-CodingDatafyToken';
     var h1 = 0xdeadbeef, h2 = 0x41c6ce57;
@@ -37,18 +29,10 @@
     return hashVal.toString(16).padStart(24, '0').substring(0, 24);
   }
 
-  // ============================================================================
-  // DISPATCHER HELPERS
-  // ============================================================================
-
-  /**
-   * Sends the analytics payload to the Cloudflare Worker beacon endpoint (`/lib`).
-   */
   function sendBeaconPayload(payload) {
     var jsonString = JSON.stringify(payload);
 
     if (navigator.sendBeacon) {
-      // Wrap in Blob to preserve application/json MIME type in Beacon API
       var blob = new Blob([jsonString], { type: 'application/json' });
       navigator.sendBeacon('/lib', blob);
     } else {
@@ -63,9 +47,6 @@
     }
   }
 
-  /**
-   * Records a pageview event (`type: 'init'`)
-   */
   function sendPageview() {
     var path = window.location.pathname.replace(/\/+$/, '') || '/';
     var ts = Date.now();
@@ -84,14 +65,6 @@
     sendBeaconPayload(payload);
   }
 
-  // ============================================================================
-  // PUBLIC GLOBAL TRACKING DISPATCHER
-  // ============================================================================
-
-  /**
-   * Global tracking entry point for custom client interaction events.
-   * Usage: window.trackEvent('copy_code', 'javascript');
-   */
   window.trackEvent = function (eventType, target) {
     if (!eventType) return;
 
@@ -112,18 +85,13 @@
     sendBeaconPayload(payload);
   };
 
-  // Trigger initial pageview dispatch when DOM is ready
   if (document.readyState === 'complete') {
     sendPageview();
   } else {
     window.addEventListener('load', sendPageview);
   }
-
 })();
 
-// ============================================================================
-// UI INTEGRATION: CODE SNIPPET HEADERS & COPY ANALYTICS
-// ============================================================================
 (function () {
   'use strict';
 
@@ -168,7 +136,6 @@
           button.querySelector('.btn-text').innerText = 'Copied!';
           button.classList.add('copied');
 
-          // Dispatch event to Cloudflare Analytics Engine via client beacon handler
           if (typeof window.trackEvent === 'function') {
             window.trackEvent('copy_code', languageName.toLowerCase());
           }
@@ -195,13 +162,18 @@
     initCodeHeaders();
   }
 
-  // Observe dynamic DOM insertions to inject headers on dynamically created code snippets
   const observer = new MutationObserver(() => {
     initCodeHeaders();
   });
 
   observer.observe(document.body, { childList: true, subtree: true });
 })();
+
+/////////////////////////////  Header  /////////////////////////////
+
+/////////////////////////////  Sidebar /////////////////////////////
+
+/////////////////////////////  Main    /////////////////////////////
 // Handle target="_blank" for external links
 (function () {
     var internal = location.host.replace("www.", "");
@@ -214,11 +186,4 @@
         }
     }
 })();
-
-/////////////////////////////  Header  /////////////////////////////
-
-/////////////////////////////  Sidebar /////////////////////////////
-
-/////////////////////////////  Main    /////////////////////////////
-
 /////////////////////////////  Footer  /////////////////////////////

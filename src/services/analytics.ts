@@ -1,27 +1,15 @@
 import type { RequestContext } from '../types';
 
-// ============================================================================
-// CONSTANTS & REGULAR EXPRESSIONS
-// ============================================================================
-
-/** Allowed origins for strict CORS verification */
 const ALLOWED_ORIGINS = new Set([
   'https://www.codingdatafy.com',
   'https://codingdatafy.com'
 ]);
 
-/** Text encoder instance for binary conversions */
 const encoder = new TextEncoder();
 
-/** Regex pattern to flag automated web crawlers, bots, and LLM scrapers */
 const BOT_REGEX = /bot|googlebot|crawler|spider|robot|crawling|lighthouse|chrome-lighthouse|google-inspectiontool|ahrefs|semrush|gptbot|chatgpt|chatgpt-user|oai-searchbot|claudebot|claude-user|claude-searchbot|coherebot|headlesschrome|python|node-fetch|axios|bytespider|ccbot|facebookbot|meta-external|amazonbot|petalbot|scrapy|diffbot|dotbot|rogerbot|blexbot|dataforseo|mj12bot|serpstatbot|perplexity|perplexity-user|perplexitybot|applebot|yandex|bingbot|baidu/i;
 
-/** Regex pattern to flag traffic originating from known datacenter providers */
 const DATACENTER_REGEX = /amazon|aws|google cloud|digitalocean|linode|hetzner|ovh|vultr|azure|alibaba|oracle cloud|fastly|leaseweb|choopa|scaleway|cloudocean|contabo|kamatera|hostinger|hostgator|bluehost/i;
-
-// ============================================================================
-// UTILITIES & TOKEN GENERATORS
-// ============================================================================
 
 function bufferToHex(buffer: ArrayBuffer | Uint8Array, length = 64): string {
   const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
@@ -57,75 +45,12 @@ function jsonResponse(data: Record<string, unknown>, status: number, corsHeaders
   });
 }
 
-// ============================================================================
-// WORKER ANALYTICS SERVICES & DISPATCHERS
-// ============================================================================
-
 /**
- * Tracks HTTP response latency and execution metrics directly from `index.ts`
- */
-export async function trackEvent(
-  context: RequestContext,
-  statusCode: number,
-  durationMs: number
-): Promise<void> {
-  const { env, pathname, request } = context;
-
-  if (!env.SITE_ANALYTICS) return;
-
-  // 1. Ignore internal endpoints, sitemaps, and static asset routes
-  if (
-    pathname === '/lib' ||
-    pathname === '/sitemap.xml' ||
-    pathname === '/robots.txt' ||
-    pathname === '/llms.txt' ||
-    pathname === '/favicon.ico' ||
-    pathname === '/_headers' ||
-    pathname.startsWith('/styles/') ||
-    pathname.startsWith('/scripts/') ||
-    pathname.startsWith('/images/') ||
-    pathname.startsWith('/.well-known/')
-  ) {
-    return;
-  }
-
-  try {
-    const userAgent = request.headers.get('user-agent') || '';
-    if (BOT_REGEX.test(userAgent)) return;
-
-    // 2. Compute daily anonymized visitor hash for strict privacy compliance
-    const clientIP = request.headers.get('cf-connecting-ip') || '127.0.0.1';
-    const currentDay = new Date().toISOString().slice(0, 10);
-    const rawSecret = `${clientIP}-${userAgent}-${currentDay}-CD-Secret`;
-    const visitorHashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(rawSecret));
-    const visitorHash = bufferToHex(visitorHashBuffer, 16);
-
-    env.SITE_ANALYTICS.writeDataPoint({
-      indexes: ['worker_fetch'],
-      blobs: [
-        pathname,                                         // blob1: Request Path
-        request.headers.get('cf-ipcountry') || 'UNKNOWN', // blob2: Country
-        visitorHash                                       // blob3: Anonymized Visitor Hash
-      ],
-      doubles: [
-        statusCode,
-        durationMs,
-        Date.now()
-      ]
-    });
-  } catch (err: unknown) {
-    console.error('[Analytics Engine Error] Engine fetch dispatch failed:', err);
-  }
-}
-
-/**
- * Endpoint Handler for Client-Side Beacons (`/lib`)
- * Evaluates bot security rules, client-hints, cryptographic tokens, and emits data points to Analytics Engine.
+ * Endpoint Handler for Client Beacons (`/lib`)
  */
 export async function handleAnalyticsRoute(context: RequestContext): Promise<Response> {
   const { request, env } = context;
 
-  // CORS Verification
   const origin = request.headers.get('Origin') || '';
   const isAllowedOrigin = ALLOWED_ORIGINS.has(origin);
   const allowOriginHeader = isAllowedOrigin ? origin : 'https://www.codingdatafy.com';
@@ -144,7 +69,6 @@ export async function handleAnalyticsRoute(context: RequestContext): Promise<Res
     return new Response('Method Not Allowed', { status: 405, headers: corsHeaders });
   }
 
-  // Sec-Fetch Metadata Checks
   const fetchDest = request.headers.get('sec-fetch-dest');
   const fetchMode = request.headers.get('sec-fetch-mode');
 
@@ -175,13 +99,11 @@ export async function handleAnalyticsRoute(context: RequestContext): Promise<Res
       }
     }
 
-    // Path Sanitization
     const rawPath = typeof body.p === 'string' ? body.p : '/';
     const splitPath = rawPath.split('?')[0];
     const cleanPath = (splitPath ?? '/').replace(/\/+$/, '') || '/';
     const targetPath = cleanPath.substring(0, 500);
 
-    // Cryptographic Token Validation
     const clientTs = Number(body.ts) || 0;
     const clientToken = body.token || '';
     const now = Date.now();
@@ -199,7 +121,6 @@ export async function handleAnalyticsRoute(context: RequestContext): Promise<Res
       return jsonResponse({ status: 'unauthorized_signature' }, 200, corsHeaders);
     }
 
-    // Bot & Client Spoof Guards
     const clientIP = request.headers.get('cf-connecting-ip') || '127.0.0.1';
     const userAgent = request.headers.get('user-agent') || '';
     const country = request.headers.get('cf-ipcountry') || 'UNKNOWN';
@@ -212,7 +133,6 @@ export async function handleAnalyticsRoute(context: RequestContext): Promise<Res
       return jsonResponse({ status: 'ignored_bot' }, 200, corsHeaders);
     }
 
-    // Client Hints Verification
     const secChUa = request.headers.get('sec-ch-ua');
     const secChPlatform = request.headers.get('sec-ch-ua-platform');
 
@@ -228,7 +148,6 @@ export async function handleAnalyticsRoute(context: RequestContext): Promise<Res
       }
     }
 
-    // Datacenter Verification
     const cfOrg = (request as Request & { cf?: { asOrganization?: string } }).cf?.asOrganization;
     const asOrg = typeof cfOrg === 'string' ? cfOrg.toLowerCase() : '';
     const isOperaProxy = /opera software/i.test(asOrg) || /opera mini|opr\//i.test(userAgent);
@@ -237,38 +156,12 @@ export async function handleAnalyticsRoute(context: RequestContext): Promise<Res
       return jsonResponse({ status: 'ignored_datacenter_traffic' }, 200, corsHeaders);
     }
 
-    // Privacy-Preserving Hash Calculation
+    // Privacy Visitor Hash Calculation
     const currentDay = new Date().toISOString().slice(0, 10);
     const rawSecret = `${clientIP}-${userAgent}-${currentDay}-CD-Secret`;
     const visitorHashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(rawSecret));
     const visitorHash = bufferToHex(visitorHashBuffer, 16);
 
-    const requestType = body.type || 'init';
-
-    // ROUTE A: Custom Interaction Events
-    if (requestType === 'event') {
-      const eventType = body.event_type;
-      const targetValue = typeof body.target === 'string' ? body.target.substring(0, 500) : '';
-
-      if (['copy_code', 'outbound_click', 'site_search'].includes(eventType) && env.SITE_ANALYTICS) {
-        env.SITE_ANALYTICS.writeDataPoint({
-          indexes: [eventType],
-          blobs: [
-            targetPath,
-            targetValue,
-            visitorHash,
-            country
-          ],
-          doubles: [
-            clientTs
-          ]
-        });
-      }
-
-      return jsonResponse({ status: 'event_recorded' }, 200, corsHeaders);
-    }
-
-    // ROUTE B: Initial Pageview Logging
     const { deviceType, browserName, browserVersion, osName, osVersion } = parseClientInfo(userAgent, request);
 
     let parsedReferrer = 'direct';
@@ -281,28 +174,58 @@ export async function handleAnalyticsRoute(context: RequestContext): Promise<Res
       }
     }
 
+    const requestType = body.type || 'init';
     const is404Flag = (body.is_404 === true || body.is_404 === 'true') ? 1 : 0;
+    const createdAt = Date.now();
 
-    // Dispatch Data Point to Cloudflare Analytics Engine
     if (env.SITE_ANALYTICS) {
-      env.SITE_ANALYTICS.writeDataPoint({
-        indexes: ['pageview'],
-        blobs: [
-          targetPath,              // blob1
-          parsedReferrer,          // blob2
-          country,                 // blob3
-          deviceType,              // blob4
-          browserName,             // blob5
-          browserVersion || '',    // blob6
-          osName,                  // blob7
-          osVersion || '',         // blob8
-          visitorHash              // blob9
-        ],
-        doubles: [
-          is404Flag,               // double1
-          clientTs                 // double2
-        ]
-      });
+      if (requestType === 'event') {
+        const eventType = body.event_type;
+        const targetValue = typeof body.target === 'string' ? body.target.substring(0, 500) : '';
+
+        if (['copy_code', 'outbound_click', 'site_search'].includes(eventType)) {
+          env.SITE_ANALYTICS.writeDataPoint({
+            indexes: [eventType], // index1
+            blobs: [
+              targetPath,        // blob1
+              visitorHash,       // blob2
+              country,           // blob3
+              deviceType,        // blob4
+              browserName,       // blob5
+              browserVersion || '', // blob6
+              osName,            // blob7
+              osVersion || '',   // blob8
+              parsedReferrer,    // blob9
+              targetValue        // blob10
+            ],
+            doubles: [
+              createdAt,         // double1
+              is404Flag          // double2
+            ]
+          });
+        }
+      } else {
+        // Standard Pageview Event
+        env.SITE_ANALYTICS.writeDataPoint({
+          indexes: ['pageview'], // index1
+          blobs: [
+            targetPath,          // blob1
+            visitorHash,         // blob2
+            country,             // blob3
+            deviceType,          // blob4
+            browserName,         // blob5
+            browserVersion || '',// blob6
+            osName,              // blob7
+            osVersion || '',     // blob8
+            parsedReferrer,      // blob9
+            ''                   // blob10: Empty for pageviews
+          ],
+          doubles: [
+            createdAt,           // double1
+            is404Flag            // double2
+          ]
+        });
+      }
     }
 
     return jsonResponse({ status: 'recorded' }, 200, corsHeaders);
@@ -311,10 +234,6 @@ export async function handleAnalyticsRoute(context: RequestContext): Promise<Res
     return jsonResponse({ status: 'error', message: err?.message || 'Server error' }, 500, corsHeaders);
   }
 }
-
-// ============================================================================
-// CLIENT DEVICE & BROWSER PARSER
-// ============================================================================
 
 function parseClientInfo(ua: string, request: Request) {
   let deviceType = 'desktop';

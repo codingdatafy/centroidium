@@ -1,6 +1,5 @@
 import type { Env, RequestContext } from './types';
 import { handleRequest } from './router';
-import { trackEvent } from './services/analytics';
 import { renderError } from './templates/error';
 
 export default {
@@ -13,7 +12,6 @@ export default {
     ctx: ExecutionContext
   ): Promise<Response> {
     const url = new URL(request.url);
-    const startTime = performance.now();
 
     const requestContext: RequestContext = {
       request,
@@ -45,12 +43,11 @@ export default {
       });
     }
 
-    // Clone response headers to clean up permissions policy injected by upstream edge
+    // Clean up permissions policy
     const newHeaders = new Headers(response.headers);
     const existingPolicy = newHeaders.get('permissions-policy');
 
     if (existingPolicy) {
-      // Filter out unrecognized privacy sandbox directives
       const cleanPolicy = existingPolicy
         .split(',')
         .map((directive) => directive.trim())
@@ -69,26 +66,16 @@ export default {
         newHeaders.delete('permissions-policy');
       }
     } else {
-      // Fallback clean policy if none was attached by upstream handlers
       newHeaders.set(
         'permissions-policy',
         'camera=(), microphone=(), geolocation=(), ch-ua-platform-version=(self)'
       );
     }
 
-    response = new Response(response.body, {
+    return new Response(response.body, {
       status: response.status,
       statusText: response.statusText,
       headers: newHeaders,
     });
-
-    ctx.waitUntil(
-      (async () => {
-        const duration = Math.round(performance.now() - startTime);
-        await trackEvent(requestContext, response.status, duration);
-      })()
-    );
-
-    return response;
   },
 };
