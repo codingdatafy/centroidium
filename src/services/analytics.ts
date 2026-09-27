@@ -189,46 +189,46 @@ export async function handleAnalyticsRoute(context: RequestContext): Promise<Res
 
         if (['copy_code', 'outbound_click', 'site_search'].includes(eventType)) {
           env.SITE_ANALYTICS.writeDataPoint({
-            indexes: [eventType], // index1
+            indexes: [eventType],
             blobs: [
-              targetPath,        // blob1
-              parsedReferrer,    // blob2
-              country,           // blob3
-              browserName,       // blob4
-              browserVersion || '', // blob5
-              osName,            // blob6
-              osVersion || '',   // blob7
-              deviceType,        // blob8
-              visitorHash,       // blob9
-              targetValue        // blob10
+              targetPath,
+              parsedReferrer,
+              country,
+              browserName,
+              browserVersion || '',
+              osName,
+              osVersion || '',
+              deviceType,
+              visitorHash,
+              targetValue
             ],
             doubles: [
-              createdAt,         // double1
-              is404Flag,         // double2
-              executionTimeMs    // double3
+              createdAt,
+              is404Flag,
+              executionTimeMs
             ]
           });
         }
       } else {
         // Standard Pageview Event
         env.SITE_ANALYTICS.writeDataPoint({
-          indexes: ['pageview'], // index1
+          indexes: ['pageview'],
           blobs: [
-            targetPath,          // blob1
-            parsedReferrer,      // blob2
-            country,             // blob3
-            browserName,         // blob4
-            browserVersion || '',// blob5
-            osName,              // blob6
-            osVersion || '',     // blob7
-            deviceType,          // blob8
-            visitorHash,         // blob9
-            cacheStatus          // blob10
+            targetPath,
+            parsedReferrer,
+            country,
+            browserName,
+            browserVersion || '',
+            osName,
+            osVersion || '',
+            deviceType,
+            visitorHash,
+            cacheStatus
           ],
           doubles: [
-            createdAt,           // double1
-            is404Flag,           // double2
-            executionTimeMs      // double3
+            createdAt,
+            is404Flag,
+            executionTimeMs
           ]
         });
       }

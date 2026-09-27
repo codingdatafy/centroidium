@@ -66,7 +66,8 @@
 
     pageviewTracked = true;
 
-    var path = window.location.pathname.replace(/\/+$/, '') || '/';
+    var rawPath = window.location.pathname.split('?')[0];
+    var path = rawPath.replace(/\/+$/, '') || '/';
     var ts = Date.now();
     var token = generateToken(path, ts);
     var is404 = document.querySelector('main[data-is-404="true"]') !== null;
@@ -89,7 +90,8 @@
   window.trackEvent = function (eventType, target) {
     if (!eventType) return;
 
-    var path = window.location.pathname.replace(/\/+$/, '') || '/';
+    var rawPath = window.location.pathname.split('?')[0];
+    var path = rawPath.replace(/\/+$/, '') || '/';
     var ts = Date.now();
     var token = generateToken(path, ts);
     var metrics = getServerMetrics();
