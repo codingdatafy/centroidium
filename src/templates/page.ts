@@ -1,4 +1,4 @@
-import type { ProcessedDocument, RequestContext } from '../types';
+import type { ProcessedDocument } from '../types';
 import { renderLayout } from './layout';
 
 export interface RenderPageOptions {
