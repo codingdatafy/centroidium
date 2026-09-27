@@ -51,4 +51,6 @@ export interface RequestContext {
   ctx: ExecutionContext;
   url: URL;
   pathname: string;
+  startTime: number;
+  cacheStatus: 'HIT' | 'MISS' | 'BYPASS';
 }

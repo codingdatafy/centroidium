@@ -93,6 +93,8 @@ export async function handleAnalyticsRoute(context: RequestContext): Promise<Res
           event_type: params.get('event_type') || null,
           target: params.get('target') || null,
           is_404: params.get('is_404') === 'true',
+          cache_status: params.get('cache_status') || 'BYPASS',
+          execution_time_ms: params.get('execution_time_ms') ? Number(params.get('execution_time_ms')) : 0,
           ts: params.get('ts') ? Number(params.get('ts')) : 0,
           token: params.get('token') || ''
         };
@@ -176,6 +178,8 @@ export async function handleAnalyticsRoute(context: RequestContext): Promise<Res
 
     const requestType = body.type || 'init';
     const is404Flag = (body.is_404 === true || body.is_404 === 'true') ? 1 : 0;
+    const cacheStatus = typeof body.cache_status === 'string' ? body.cache_status : 'BYPASS';
+    const executionTimeMs = typeof body.execution_time_ms === 'number' ? body.execution_time_ms : Number(body.execution_time_ms || 0);
     const createdAt = Date.now();
 
     if (env.SITE_ANALYTICS) {
@@ -200,7 +204,8 @@ export async function handleAnalyticsRoute(context: RequestContext): Promise<Res
             ],
             doubles: [
               createdAt,         // double1
-              is404Flag          // double2
+              is404Flag,         // double2
+              executionTimeMs    // double3
             ]
           });
         }
@@ -218,11 +223,12 @@ export async function handleAnalyticsRoute(context: RequestContext): Promise<Res
             osVersion || '',     // blob7
             deviceType,          // blob8
             visitorHash,         // blob9
-            ''                   // blob10: Empty for pageviews
+            cacheStatus          // blob10
           ],
           doubles: [
             createdAt,           // double1
-            is404Flag            // double2
+            is404Flag,           // double2
+            executionTimeMs      // double3
           ]
         });
       }

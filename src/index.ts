@@ -11,6 +11,7 @@ export default {
     env: Env,
     ctx: ExecutionContext
   ): Promise<Response> {
+    const startTime = performance.now();
     const url = new URL(request.url);
 
     const requestContext: RequestContext = {
@@ -19,6 +20,8 @@ export default {
       ctx,
       url,
       pathname: url.pathname,
+      startTime,
+      cacheStatus: 'BYPASS',
     };
 
     let response: Response;
@@ -42,6 +45,8 @@ export default {
         },
       });
     }
+
+    const executionTimeMs = parseFloat((performance.now() - startTime).toFixed(2));
 
     // Clean up permissions policy & attach Client Hints headers
     const newHeaders = new Headers(response.headers);
@@ -76,6 +81,10 @@ export default {
       'Accept-CH',
       'sec-ch-ua-platform-version, sec-ch-ua-platform, sec-ch-ua-mobile, sec-ch-ua-model'
     );
+
+    const resolvedCacheStatus = newHeaders.get('X-Cache-Status') || requestContext.cacheStatus;
+    newHeaders.set('X-Cache-Status', resolvedCacheStatus);
+    newHeaders.set('X-Execution-Time-Ms', executionTimeMs.toString());
 
     return new Response(response.body, {
       status: response.status,
