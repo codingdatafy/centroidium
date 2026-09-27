@@ -90,8 +90,6 @@ export async function handleAnalyticsRoute(context: RequestContext): Promise<Res
           p: params.get('p'),
           r: params.get('r'),
           type: params.get('type') || 'init',
-          event_type: params.get('event_type') || null,
-          target: params.get('target') || null,
           is_404: params.get('is_404') === 'true',
           cache_status: params.get('cache_status') || 'BYPASS',
           execution_time_ms: params.get('execution_time_ms') ? Number(params.get('execution_time_ms')) : 0,
@@ -176,62 +174,33 @@ export async function handleAnalyticsRoute(context: RequestContext): Promise<Res
       }
     }
 
-    const requestType = body.type || 'init';
     const is404Flag = (body.is_404 === true || body.is_404 === 'true') ? 1 : 0;
     const cacheStatus = typeof body.cache_status === 'string' ? body.cache_status : 'BYPASS';
     const executionTimeMs = typeof body.execution_time_ms === 'number' ? body.execution_time_ms : Number(body.execution_time_ms || 0);
     const createdAt = Date.now();
 
     if (env.SITE_ANALYTICS) {
-      if (requestType === 'event') {
-        const eventType = body.event_type;
-        const targetValue = typeof body.target === 'string' ? body.target.substring(0, 500) : '';
-
-        if (['copy_code', 'outbound_click', 'site_search'].includes(eventType)) {
-          env.SITE_ANALYTICS.writeDataPoint({
-            indexes: [eventType],
-            blobs: [
-              targetPath,
-              parsedReferrer,
-              country,
-              browserName,
-              browserVersion || '',
-              osName,
-              osVersion || '',
-              deviceType,
-              visitorHash,
-              targetValue
-            ],
-            doubles: [
-              createdAt,
-              is404Flag,
-              executionTimeMs
-            ]
-          });
-        }
-      } else {
-        // Standard Pageview Event
-        env.SITE_ANALYTICS.writeDataPoint({
-          indexes: ['pageview'],
-          blobs: [
-            targetPath,
-            parsedReferrer,
-            country,
-            browserName,
-            browserVersion || '',
-            osName,
-            osVersion || '',
-            deviceType,
-            visitorHash,
-            cacheStatus
-          ],
-          doubles: [
-            createdAt,
-            is404Flag,
-            executionTimeMs
-          ]
-        });
-      }
+      // Pageview Event
+      env.SITE_ANALYTICS.writeDataPoint({
+        indexes: ['pageview'],
+        blobs: [
+          targetPath,
+          parsedReferrer,
+          country,
+          browserName,
+          browserVersion || '',
+          osName,
+          osVersion || '',
+          deviceType,
+          visitorHash,
+          cacheStatus
+        ],
+        doubles: [
+          createdAt,
+          is404Flag,
+          executionTimeMs
+        ]
+      });
     }
 
     return jsonResponse({ status: 'recorded' }, 200, corsHeaders);

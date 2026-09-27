@@ -1,3 +1,4 @@
+// Analytics Tracking
 (function () {
   'use strict';
 
@@ -87,30 +88,6 @@
     sendBeaconPayload(payload);
   }
 
-  window.trackEvent = function (eventType, target) {
-    if (!eventType) return;
-
-    var rawPath = window.location.pathname.split('?')[0];
-    var path = rawPath.replace(/\/+$/, '') || '/';
-    var ts = Date.now();
-    var token = generateToken(path, ts);
-    var metrics = getServerMetrics();
-
-    var payload = {
-      p: path,
-      r: document.referrer || '',
-      type: 'event',
-      event_type: eventType,
-      target: target || '',
-      cache_status: metrics.cacheStatus,
-      execution_time_ms: metrics.executionTimeMs,
-      ts: ts,
-      token: token
-    };
-
-    sendBeaconPayload(payload);
-  };
-
   function handleVisibilityChange() {
     if (document.visibilityState === 'visible' && !pageviewTracked) {
       sendPageview();
@@ -131,23 +108,6 @@
     if (event.persisted) {
       pageviewTracked = false;
       sendPageview();
-    }
-  });
-
-  document.addEventListener('click', function (event) {
-    var anchor = event.target.closest('a');
-    if (!anchor || !anchor.href) return;
-
-    try {
-      var targetUrl = new URL(anchor.href, window.location.href);
-      var currentHost = window.location.hostname.replace(/^www\./, '');
-      var targetHost = targetUrl.hostname.replace(/^www\./, '');
-
-      if (targetHost && targetHost !== currentHost && /^https?:/i.test(targetUrl.protocol)) {
-        window.trackEvent('outbound_click', targetUrl.href);
-      }
-    } catch (e) {
-      // Ignore invalid URLs
     }
   });
 })();
@@ -198,10 +158,6 @@
           var textSpan = button.querySelector('.btn-text');
           if (textSpan) textSpan.innerText = 'Copied!';
           button.classList.add('copied');
-
-          if (typeof window.trackEvent === 'function') {
-            window.trackEvent('copy_code', languageName.toLowerCase());
-          }
 
           setTimeout(function () {
             if (textSpan) textSpan.innerText = 'Copy';
