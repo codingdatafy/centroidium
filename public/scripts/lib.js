@@ -1,4 +1,3 @@
-// Analytics Tracking
 (function () {
   'use strict';
 
@@ -22,16 +21,31 @@
     var cacheStatus = 'BYPASS';
     var executionTimeMs = 0;
 
-    try {
-      var navEntries = performance.getEntriesByType('navigation');
-      if (navEntries && navEntries.length > 0) {
-        var nav = navEntries[0];
-        if (nav.duration) {
-          executionTimeMs = parseFloat(nav.duration.toFixed(2));
+    var execMeta = document.querySelector('meta[name="server-execution-time"]');
+    var cacheMeta = document.querySelector('meta[name="server-cache-status"]');
+
+    if (execMeta && execMeta.getAttribute('content')) {
+      executionTimeMs = parseFloat(execMeta.getAttribute('content')) || 0;
+    }
+
+    if (cacheMeta && cacheMeta.getAttribute('content')) {
+      cacheStatus = cacheMeta.getAttribute('content');
+    }
+
+    if (executionTimeMs === 0) {
+      try {
+        var navEntries = performance.getEntriesByType('navigation');
+        if (navEntries && navEntries.length > 0) {
+          var nav = navEntries[0];
+          if (nav.responseEnd && nav.requestStart) {
+            executionTimeMs = parseFloat((nav.responseEnd - nav.requestStart).toFixed(2));
+          } else if (nav.duration) {
+            executionTimeMs = parseFloat(nav.duration.toFixed(2));
+          }
         }
+      } catch (e) {
+        // Performance API fallback safety
       }
-    } catch (e) {
-      // Fallback if performance timing fails
     }
 
     return {

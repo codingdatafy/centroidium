@@ -7,6 +7,8 @@ export interface LayoutOptions {
   pathname: string;
   siteName: string;
   content: string;
+  executionTimeMs?: number;
+  cacheStatus?: string;
 }
 
 /**
@@ -20,6 +22,8 @@ export function renderLayout(options: LayoutOptions): string {
     pathname,
     siteName,
     content,
+    executionTimeMs = 0,
+    cacheStatus = 'BYPASS',
   } = options;
 
   const formattedTitle = title.includes(siteName) ? title : `${title} - ${siteName}`;
@@ -38,6 +42,8 @@ export function renderLayout(options: LayoutOptions): string {
 <html lang="en" data-scroll-behavior="smooth">
   <head>
     ${metaHtml}
+    <meta name="server-execution-time" content="${executionTimeMs}" />
+    <meta name="server-cache-status" content="${cacheStatus}" />
   </head>
   <body>
     <div id="root">

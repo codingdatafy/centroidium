@@ -1,4 +1,4 @@
-import type { ProcessedDocument } from '../types';
+import type { ProcessedDocument, RequestContext } from '../types';
 import { renderLayout } from './layout';
 
 export interface RenderPageOptions {
@@ -6,6 +6,8 @@ export interface RenderPageOptions {
   pathname: string;
   siteName: string;
   siteUrl: string;
+  executionTimeMs?: number;
+  cacheStatus?: string;
 }
 
 /**
@@ -30,7 +32,7 @@ function formatDate(dateStr: string): { isoDate: string; formattedDate: string }
 /**
  * Renders the document/article page content shell and wraps it inside the global layout shell.
  */
-export function renderPage({ doc, pathname, siteName, siteUrl }: RenderPageOptions): string {
+export function renderPage({ doc, pathname, siteName, siteUrl, executionTimeMs = 0, cacheStatus = 'BYPASS' }: RenderPageOptions): string {
   const { meta, contentHtml } = doc;
 
   const title = meta.title ?? `${siteName} Documentation`;
@@ -90,6 +92,8 @@ export function renderPage({ doc, pathname, siteName, siteUrl }: RenderPageOptio
     pathname,
     siteName,
     content: pageContentHtml,
+    executionTimeMs,
+    cacheStatus,
   });
 }
 

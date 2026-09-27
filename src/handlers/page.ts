@@ -12,6 +12,7 @@ export async function handlePageRoute(context: RequestContext): Promise<Response
 
   const cachedResponse = await getCachedResponse(request, env);
   if (cachedResponse) {
+    context.cacheStatus = 'HIT';
     return cachedResponse;
   }
 
@@ -38,11 +39,15 @@ export async function handlePageRoute(context: RequestContext): Promise<Response
   const siteUrl = env.SITE_URL || new URL(request.url).origin;
   const cacheTtl = env.DEFAULT_CACHE_TTL || '86400';
 
+  const executionTimeMs = parseFloat((performance.now() - context.startTime).toFixed(2));
+
   const html = renderPage({
     doc,
     pathname,
     siteName: env.SITE_NAME,
     siteUrl,
+    executionTimeMs,
+    cacheStatus: context.cacheStatus,
   });
 
   const response = new Response(html, {
