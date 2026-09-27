@@ -52,6 +52,7 @@ export function renderLayout(options: LayoutOptions): string {
 
     <!-- Client-side Interactive Script -->
     <script src="/scripts/centroidium.js" defer></script>
+    <script src="/scripts/lib.js" defer></script>
   </body>
 </html>`;
 }
