@@ -20,9 +20,22 @@ export async function getCachedResponse(
       return null;
     }
 
-    const response = new Response(cachedResponse.body, cachedResponse);
-    response.headers.set('X-Cache-Status', 'HIT');
-    return response;
+    let html = await cachedResponse.text();
+
+    // Dynamically replace embedded meta tag in cached HTML string from MISS to HIT
+    html = html.replace(
+      /<meta name="server-cache-status" content="[^"]*" \/>/g,
+      '<meta name="server-cache-status" content="HIT" />'
+    );
+
+    const headers = new Headers(cachedResponse.headers);
+    headers.set('X-Cache-Status', 'HIT');
+
+    return new Response(html, {
+      status: cachedResponse.status,
+      statusText: cachedResponse.statusText,
+      headers,
+    });
   } catch (error: unknown) {
     console.error('[Cache API Error] Read failed:', error);
     return null;
@@ -53,7 +66,7 @@ export async function setCachedResponse(
     const headers = new Headers(responseToCache.headers);
     headers.set('X-Cache-Status', 'MISS');
 
-    const cacheableResponse = new Response(responseToCache.body, {
+    const cacheableResponse = new Response(await responseToCache.text(), {
       status: responseToCache.status,
       statusText: responseToCache.statusText,
       headers,
@@ -70,7 +83,7 @@ export async function setCachedResponse(
  */
 function createCacheKey(request: Request): Request {
   const url = new URL(request.url);
-  
+
   let cleanPath = url.pathname;
   if (cleanPath.length > 1 && cleanPath.endsWith('/')) {
     cleanPath = cleanPath.slice(0, -1);

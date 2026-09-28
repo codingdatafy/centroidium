@@ -16,6 +16,9 @@ export async function handlePageRoute(context: RequestContext): Promise<Response
     return cachedResponse;
   }
 
+  // Set explicit MISS status when bypass didn't occur and cache missed
+  context.cacheStatus = 'MISS';
+
   const r2Key = resolveR2Key(pathname);
 
   const rawMarkdown = await fetchMarkdownFromR2(env.CONTENT_BUCKET, r2Key);
@@ -55,6 +58,7 @@ export async function handlePageRoute(context: RequestContext): Promise<Response
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
       'Cache-Control': `public, max-age=${cacheTtl}, s-maxage=${cacheTtl}`,
+      'X-Cache-Status': context.cacheStatus,
     },
   });
 

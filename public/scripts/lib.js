@@ -24,12 +24,12 @@
     var execMeta = document.querySelector('meta[name="server-execution-time"]');
     var cacheMeta = document.querySelector('meta[name="server-cache-status"]');
 
-    if (execMeta && execMeta.getAttribute('content')) {
-      executionTimeMs = parseFloat(execMeta.getAttribute('content')) || 0;
-    }
-
     if (cacheMeta && cacheMeta.getAttribute('content')) {
       cacheStatus = cacheMeta.getAttribute('content');
+    }
+
+    if (execMeta && execMeta.getAttribute('content')) {
+      executionTimeMs = parseFloat(execMeta.getAttribute('content')) || 0;
     }
 
     if (executionTimeMs === 0) {
