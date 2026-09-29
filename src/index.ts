@@ -48,17 +48,12 @@ export default {
 
     const executionTimeMs = parseFloat((performance.now() - startTime).toFixed(2));
 
-    // Attach Client Hints, security, and performance headers
+    // Attach Client Hints and performance headers
     const newHeaders = new Headers(response.headers);
 
     newHeaders.set(
       'Accept-CH',
       'sec-ch-ua-platform-version, sec-ch-ua-platform, sec-ch-ua-mobile, sec-ch-ua-model'
-    );
-
-    newHeaders.set(
-      'Permissions-Policy',
-      'camera=(), microphone=(), geolocation=(), payment=(), usb=()'
     );
 
     const resolvedCacheStatus = newHeaders.get('X-Cache-Status') || requestContext.cacheStatus;
