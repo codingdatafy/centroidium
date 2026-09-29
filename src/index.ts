@@ -73,7 +73,7 @@ export default {
     } else {
       newHeaders.set(
         'permissions-policy',
-        'camera=(), microphone=(), geolocation=(), ch-ua-platform-version=(self)'
+        'camera=(), microphone=(), geolocation=()'
       );
     }
 
