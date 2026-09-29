@@ -2,13 +2,6 @@ import type { Env, RequestContext } from './types';
 import { handleRequest } from './router';
 import { renderError } from './templates/error';
 
-const DISALLOWED_PERMISSIONS_FEATURES = [
-  'attribution-reporting',
-  'private-aggregation',
-  'join-ad-interest-group',
-  'run-ad-auction',
-];
-
 export default {
   /**
    * Main entry point for the Cloudflare Worker runtime (workerd)
@@ -55,28 +48,8 @@ export default {
 
     const executionTimeMs = parseFloat((performance.now() - startTime).toFixed(2));
 
-    // Clean up permissions policy & attach Client Hints headers
+    // Attach Client Hints and performance headers
     const newHeaders = new Headers(response.headers);
-    const existingPolicy = newHeaders.get('permissions-policy');
-    const defaultPolicy = 'camera=(), microphone=(), geolocation=(), ch-ua-platform-version=(self)';
-
-    if (existingPolicy) {
-      const cleanPolicy = existingPolicy
-        .split(',')
-        .map((directive) => directive.trim())
-        .filter((directive) => {
-          if (!directive) return false;
-          const lowerDirective = directive.toLowerCase();
-          return !DISALLOWED_PERMISSIONS_FEATURES.some((feature) =>
-            lowerDirective.includes(feature)
-          );
-        })
-        .join(', ');
-
-      newHeaders.set('permissions-policy', cleanPolicy || defaultPolicy);
-    } else {
-      newHeaders.set('permissions-policy', defaultPolicy);
-    }
 
     newHeaders.set(
       'Accept-CH',
