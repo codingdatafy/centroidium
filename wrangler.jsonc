@@ -38,5 +38,28 @@
     "SITE_URL": "https://www.codingdatafy.com",
     "SITE_NAME": "CodingDatafy",
     "DEFAULT_CACHE_TTL": "86400"
+  },
+  "env": {
+    "dev": {
+      "name": "centroidium-dev",
+      "routes": [
+        {
+          "pattern": "test.codingdatafy.com",
+          "custom_domain": true
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "CONTENT_BUCKET",
+          "bucket_name": "codingdatafy-content-dev"
+        }
+      ],
+      "vars": {
+        "ENVIRONMENT": "development",
+        "SITE_URL": "https://test.codingdatafy.com",
+        "SITE_NAME": "CodingDatafy (Dev)",
+        "DEFAULT_CACHE_TTL": "0"
+      }
+    }
   }
 }
