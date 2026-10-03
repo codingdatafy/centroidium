@@ -16,53 +16,6 @@ export interface MetaProps {
 }
 
 /**
- * Converts frontmatter breadcrumb string (e.g. "Languages/JavaScript/Array/Slice")
- * into HTML breadcrumb navigation links.
- */
-export function renderBreadcrumb(breadcrumbStr: string): string {
-  if (!breadcrumbStr || !breadcrumbStr.trim()) {
-    return '';
-  }
-
-  const rawSegments = breadcrumbStr.split('/').map((s) => s.trim()).filter(Boolean);
-  if (rawSegments.length === 0) {
-    return '';
-  }
-
-  let accumulatedPath = '';
-  const items: string[] = [];
-
-  for (let index = 0; index < rawSegments.length; index++) {
-    const segment = rawSegments[index]!;
-    const slug = segment.toLowerCase();
-
-    if (index === 0) {
-      accumulatedPath = `/${slug}`;
-      items.push('<a href="/">Homepage</a>');
-    } else {
-      accumulatedPath += `/${slug}`;
-      const isLast = index === rawSegments.length - 1;
-
-      if (isLast) {
-        items.push(`<span aria-current="page">${escapeHtml(segment)}</span>`);
-      } else {
-        items.push(`<a href="${escapeHtml(accumulatedPath)}">${escapeHtml(segment)}</a>`);
-      }
-    }
-  }
-
-  const breadcrumbContent = items.join(' <span class="breadcrumb-separator">&gt;</span> ');
-
-  return `
-      <div id="breadcrumb">
-        <nav aria-label="Breadcrumb">
-          ${breadcrumbContent}
-        </nav>
-      </div>
-  `.trim();
-}
-
-/**
  * Renders HTML head metadata including OpenGraph, JSON-LD structured data, and custom frontmatter stylesheets
  */
 export function renderMeta({ title, description, canonicalUrl, siteName, customStyle }: MetaProps): string {
@@ -114,7 +67,7 @@ export function renderMeta({ title, description, canonicalUrl, siteName, customS
 }
 
 /**
- * Renders header and navigation component with active route highlighting and breadcrumb div
+ * Renders header, navigation, and breadcrumb component
  */
 export function renderHeader({ currentPath, breadcrumb }: HeaderProps): string {
   const navItems = [
@@ -139,8 +92,38 @@ export function renderHeader({ currentPath, breadcrumb }: HeaderProps): string {
     })
     .join('\n              ');
 
-  const breadcrumbHtml = breadcrumb ? renderBreadcrumb(breadcrumb) : '';
-  const breadcrumbBlock = breadcrumbHtml ? `\n      ${breadcrumbHtml}` : '';
+  let breadcrumbHtml = '';
+
+  if (breadcrumb && typeof breadcrumb === 'string' && breadcrumb.trim().length > 0) {
+    const rawSegments = breadcrumb.split('/').map((s) => s.trim()).filter(Boolean);
+    const breadcrumbItems: string[] = [];
+
+    // Lead with Homepage link
+    breadcrumbItems.push(`<li><a href="/">Homepage</a></li>`);
+
+    let accumulatedPath = '';
+    rawSegments.forEach((segment, index) => {
+      const slug = segment.toLowerCase().replace(/\s+/g, '-');
+      accumulatedPath += `/${slug}`;
+      const isLast = index === rawSegments.length - 1;
+
+      breadcrumbItems.push(`<li class="separator" aria-hidden="true">&gt;</li>`);
+
+      if (isLast) {
+        breadcrumbItems.push(`<li><span class="active" aria-current="page">${escapeHtml(segment)}</span></li>`);
+      } else {
+        breadcrumbItems.push(`<li><a href="${accumulatedPath}">${escapeHtml(segment)}</a></li>`);
+      }
+    });
+
+    breadcrumbHtml = `\n      <div id="breadcrumb">
+        <nav aria-label="Breadcrumb">
+          <ol>
+            ${breadcrumbItems.join('\n            ')}
+          </ol>
+        </nav>
+      </div>`;
+  }
 
   return `
     <header id="header">
@@ -151,7 +134,7 @@ export function renderHeader({ currentPath, breadcrumb }: HeaderProps): string {
         <ul>
           ${navList}
         </ul>
-      </nav>${breadcrumbBlock}
+      </nav>${breadcrumbHtml}
     </header>
   `.trim();
 }

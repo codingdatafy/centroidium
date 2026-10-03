@@ -43,11 +43,11 @@ export function renderPage({ doc, pathname, siteName, siteUrl, executionTimeMs =
   const customStyle = meta.style ? String(meta.style) : undefined;
   const sidebarHtml = (meta.sidebarHtml as string) ?? '';
   const mainContainerId = meta.id ? ` id="${escapeHtml(String(meta.id))}"` : '';
-  
+  const rawBreadcrumb = meta.breadcrumb;
+  const breadcrumb = typeof rawBreadcrumb === 'string' ? rawBreadcrumb : undefined;
+
   const rawLastUpdated = (meta.updatedAt || meta.lastUpdated || meta.publishedAt) as string | undefined;
   const parsedDate = rawLastUpdated ? formatDate(String(rawLastUpdated)) : null;
-
-  const breadcrumb = typeof meta.breadcrumb === 'string' ? meta.breadcrumb : undefined;
 
   const articleFooterHtml = `
     <footer id="article-footer">
@@ -92,7 +92,7 @@ export function renderPage({ doc, pathname, siteName, siteUrl, executionTimeMs =
     executionTimeMs,
     cacheStatus,
     customStyle,
-    ...(breadcrumb !== undefined ? { breadcrumb } : {}),
+    breadcrumb,
   });
 }
 

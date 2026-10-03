@@ -40,11 +40,7 @@ export function renderLayout(options: LayoutOptions): string {
     customStyle,
   });
 
-  const headerHtml = renderHeader({
-    currentPath: pathname,
-    ...(breadcrumb !== undefined ? { breadcrumb } : {}),
-  });
-  
+  const headerHtml = renderHeader({ currentPath: pathname, breadcrumb });
   const footerHtml = renderFooter({ siteName });
 
   return `<!DOCTYPE html>
