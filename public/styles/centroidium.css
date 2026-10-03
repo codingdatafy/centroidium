@@ -761,3 +761,51 @@ pre code {
 .copy-code-btn svg {
   stroke: currentColor;
 }
+/* Header Breadcrumbs */
+#breadcrumbs {
+  width: 100%;
+  padding: 0.5rem 1rem;
+  background-color: transparent;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 0.9rem;
+}
+
+#breadcrumbs nav {
+  display: flex;
+  align-items: center;
+}
+
+#breadcrumbs .breadcrumb-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  gap: 0.5rem;
+}
+
+#breadcrumbs .breadcrumb-item {
+  display: inline-flex;
+  align-items: center;
+}
+
+#breadcrumbs .breadcrumb-item a {
+  color: #0076ff;
+  text-decoration: none;
+  transition: color 0.15s ease-in-out;
+}
+
+#breadcrumbs .breadcrumb-item a:hover {
+  text-decoration: underline;
+}
+
+#breadcrumbs .breadcrumb-separator {
+  color: #888;
+  user-select: none;
+}
+
+#breadcrumbs .breadcrumb-current {
+  color: #cccccc;
+  font-weight: 600;
+}

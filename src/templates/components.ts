@@ -15,6 +15,102 @@ export interface MetaProps {
 }
 
 /**
+ * Mapping of known URL path segments to their exact display labels
+ */
+const KNOWN_LABELS: Record<string, string> = {
+  languages: 'Languages',
+  frameworks: 'Frameworks',
+  apis: 'APIs',
+  protocols: 'Protocols',
+  databases: 'Databases',
+  tools: 'Tools',
+  compatibility: 'Compatibility',
+  development: 'Development',
+  roadmaps: 'Roadmaps',
+  glossary: 'Glossary',
+  about: 'About',
+  contact: 'Contact',
+  'terms-of-use': 'Terms of Use',
+  'privacy-policy': 'Privacy Policy',
+  faq: 'FAQ',
+  contribute: 'Contribute',
+  sponsors: 'Sponsors',
+  javascript: 'JavaScript',
+  typescript: 'TypeScript',
+  html: 'HTML',
+  css: 'CSS',
+  sql: 'SQL',
+  json: 'JSON',
+  xml: 'XML',
+  php: 'PHP',
+  api: 'API',
+  ui: 'UI',
+  ux: 'UX',
+  dom: 'DOM',
+  cli: 'CLI',
+};
+
+/**
+ * Formats URL path segments into clean title-cased labels
+ */
+function formatBreadcrumbLabel(segment: string): string {
+  const lower = segment.toLowerCase();
+  if (KNOWN_LABELS[lower]) {
+    return KNOWN_LABELS[lower];
+  }
+
+  return segment
+    .replace(/[-_]+/g, ' ')
+    .split(' ')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+}
+
+/**
+ * Generates breadcrumb navigation HTML for any given URL path
+ */
+export function renderBreadcrumbs(currentPath: string): string {
+  const cleanPath = currentPath.replace(/^\/+|\/+$/g, '');
+  const segments = cleanPath ? cleanPath.split('/') : [];
+
+  const items: Array<{ label: string; path: string }> = [
+    { label: 'Homepage', path: '/' },
+  ];
+
+  let accumulatedPath = '';
+  for (const segment of segments) {
+    accumulatedPath += `/${segment}`;
+    items.push({
+      label: formatBreadcrumbLabel(segment),
+      path: accumulatedPath,
+    });
+  }
+
+  const listItems = items
+    .map((item, index) => {
+      const isLast = index === items.length - 1;
+      const separator = !isLast
+        ? '<li class="breadcrumb-separator" aria-hidden="true">&gt;</li>'
+        : '';
+
+      const content = isLast
+        ? `<li class="breadcrumb-item breadcrumb-current" aria-current="page">${escapeHtml(item.label)}</li>`
+        : `<li class="breadcrumb-item"><a href="${escapeHtml(item.path)}">${escapeHtml(item.label)}</a></li>`;
+
+      return `${content}${separator ? `\n          ${separator}` : ''}`;
+    })
+    .join('\n          ');
+
+  return `
+        <nav aria-label="Breadcrumb">
+          <ol class="breadcrumb-list">
+            ${listItems}
+          </ol>
+        </nav>
+  `.trim();
+}
+
+/**
  * Renders HTML head metadata including OpenGraph, JSON-LD structured data, and custom frontmatter stylesheets
  */
 export function renderMeta({ title, description, canonicalUrl, siteName, customStyle }: MetaProps): string {
@@ -66,7 +162,7 @@ export function renderMeta({ title, description, canonicalUrl, siteName, customS
 }
 
 /**
- * Renders header and navigation component with active route highlighting
+ * Renders header and navigation component with active route highlighting and breadcrumbs
  */
 export function renderHeader({ currentPath }: HeaderProps): string {
   const navItems = [
@@ -91,6 +187,8 @@ export function renderHeader({ currentPath }: HeaderProps): string {
     })
     .join('\n              ');
 
+  const breadcrumbsHtml = renderBreadcrumbs(currentPath);
+
   return `
     <header id="header">
       <a href="/" id="logo">
@@ -101,6 +199,9 @@ export function renderHeader({ currentPath }: HeaderProps): string {
           ${navList}
         </ul>
       </nav>
+      <div id="breadcrumbs">
+        ${breadcrumbsHtml}
+      </div>
     </header>
   `.trim();
 }
