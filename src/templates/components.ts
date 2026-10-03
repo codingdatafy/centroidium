@@ -11,12 +11,13 @@ export interface MetaProps {
   description: string;
   canonicalUrl: string;
   siteName: string;
+  customStyle?: string;
 }
 
 /**
- * Renders HTML head metadata including OpenGraph and JSON-LD structured data
+ * Renders HTML head metadata including OpenGraph, JSON-LD structured data, and custom frontmatter stylesheets
  */
-export function renderMeta({ title, description, canonicalUrl, siteName }: MetaProps): string {
+export function renderMeta({ title, description, canonicalUrl, siteName, customStyle }: MetaProps): string {
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Organization",
@@ -29,6 +30,10 @@ export function renderMeta({ title, description, canonicalUrl, siteName }: MetaP
       "https://facebook.com/codingdatafy"
     ]
   };
+
+  const customStyleHtml = customStyle
+    ? `\n    <link rel="stylesheet" href="/styles/${escapeHtml(customStyle)}" />`
+    : '';
 
   return `
     <meta charset="UTF-8" />
@@ -52,8 +57,8 @@ export function renderMeta({ title, description, canonicalUrl, siteName }: MetaP
     <meta name="twitter:description" content="${escapeHtml(description)}" />
     <meta name="twitter:image" content="https://www.codingdatafy.com/images/logo.png" />
 
-    <!-- Stylesheet -->
-    <link rel="stylesheet" href="/styles/centroidium.css" />
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="/styles/centroidium.css" />${customStyleHtml}
 
     <!-- Structured Data (JSON-LD) -->
     <script type="application/ld+json">${JSON.stringify(jsonLd)}</script>

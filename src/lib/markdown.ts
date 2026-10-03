@@ -174,11 +174,11 @@ function sanitizeHtml(html: string): string {
 }
 
 /**
- * YAML-like Frontmatter parser
+ * YAML Frontmatter parser supporting strings and multiline block scalars (style: | or style: >)
  */
 function parseFrontmatter(rawMarkdown: string): { meta: DocumentMeta; body: string } {
   const meta: DocumentMeta = {};
-  const frontmatterRegex = /^---\n([\s\S]*?)\n---\n?/;
+  const frontmatterRegex = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
   const match = rawMarkdown.match(frontmatterRegex);
 
   if (!match) {
@@ -188,8 +188,30 @@ function parseFrontmatter(rawMarkdown: string): { meta: DocumentMeta; body: stri
   const yamlBlock = match[1] ?? '';
   const body = rawMarkdown.replace(frontmatterRegex, '');
 
-  const lines = yamlBlock.split('\n');
-  for (const line of lines) {
+  const lines = yamlBlock.split(/\r?\n/);
+
+  let currentKey: string | null = null;
+  let multilineBuffer: string[] = [];
+  let isMultiline = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!;
+
+    if (isMultiline) {
+      if (line.startsWith('  ') || line.startsWith('\t') || line.trim() === '') {
+        const lineContent = line.startsWith('  ') ? line.slice(2) : line.replace(/^\t/, '');
+        multilineBuffer.push(lineContent);
+        continue;
+      } else {
+        if (currentKey) {
+          meta[currentKey] = multilineBuffer.join('\n').trim();
+        }
+        isMultiline = false;
+        currentKey = null;
+        multilineBuffer = [];
+      }
+    }
+
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith('#')) continue;
 
@@ -198,6 +220,13 @@ function parseFrontmatter(rawMarkdown: string): { meta: DocumentMeta; body: stri
 
     const key = trimmed.slice(0, colonIndex).trim();
     let value: unknown = trimmed.slice(colonIndex + 1).trim();
+
+    if (value === '|' || value === '>') {
+      isMultiline = true;
+      currentKey = key;
+      multilineBuffer = [];
+      continue;
+    }
 
     if (typeof value === 'string') {
       if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
@@ -216,6 +245,10 @@ function parseFrontmatter(rawMarkdown: string): { meta: DocumentMeta; body: stri
     }
 
     meta[key] = value;
+  }
+
+  if (isMultiline && currentKey) {
+    meta[currentKey] = multilineBuffer.join('\n').trim();
   }
 
   return { meta, body };

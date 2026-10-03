@@ -9,6 +9,7 @@ export interface LayoutOptions {
   content: string;
   executionTimeMs?: number;
   cacheStatus?: string;
+  customStyle?: string;
 }
 
 /**
@@ -24,6 +25,7 @@ export function renderLayout(options: LayoutOptions): string {
     content,
     executionTimeMs = 0,
     cacheStatus = 'BYPASS',
+    customStyle,
   } = options;
 
   const formattedTitle = title.includes(siteName) ? title : `${title} - ${siteName}`;
@@ -33,6 +35,7 @@ export function renderLayout(options: LayoutOptions): string {
     description,
     canonicalUrl,
     siteName,
+    customStyle,
   });
 
   const headerHtml = renderHeader({ currentPath: pathname });

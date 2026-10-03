@@ -40,12 +40,8 @@ export function renderPage({ doc, pathname, siteName, siteUrl, executionTimeMs =
     meta.description ?? "On a mission to build the world's largest reference and knowledge base for coding.";
   const absoluteUrl = `${siteUrl}${pathname.startsWith('/') ? pathname : `/${pathname}`}`;
 
-  const customStyleTag = meta.style
-    ? `<link rel="stylesheet" href="/styles/${escapeHtml(String(meta.style))}" />`
-    : '';
-
+  const customStyle = meta.style ? String(meta.style) : undefined;
   const sidebarHtml = (meta.sidebarHtml as string) ?? '';
-
   const mainContainerId = meta.id ? ` id="${escapeHtml(String(meta.id))}"` : '';
   
   const rawLastUpdated = (meta.updatedAt || meta.lastUpdated || meta.publishedAt) as string | undefined;
@@ -68,7 +64,6 @@ export function renderPage({ doc, pathname, siteName, siteUrl, executionTimeMs =
   `.trim();
 
   const pageContentHtml = `
-    ${customStyleTag}
     ${sidebarHtml}
     <main id="main">
       <div${mainContainerId}>
@@ -94,6 +89,7 @@ export function renderPage({ doc, pathname, siteName, siteUrl, executionTimeMs =
     content: pageContentHtml,
     executionTimeMs,
     cacheStatus,
+    customStyle,
   });
 }
 
