@@ -2,7 +2,8 @@ import type { RequestContext } from '../types';
 
 const ALLOWED_ORIGINS = new Set([
   'https://www.codingdatafy.com',
-  'https://codingdatafy.com'
+  'https://codingdatafy.com',
+  'https://test.codingdatafy.com'
 ]);
 
 const encoder = new TextEncoder();
