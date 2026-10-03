@@ -56,6 +56,12 @@ export default {
       'sec-ch-ua-platform-version, sec-ch-ua-platform, sec-ch-ua-mobile, sec-ch-ua-model'
     );
 
+    // Development Environment Overrides
+    if (env.ENVIRONMENT === 'development') {
+      newHeaders.set('X-Robots-Tag', 'noindex, nofollow');
+      newHeaders.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    }
+
     const resolvedCacheStatus = newHeaders.get('X-Cache-Status') || requestContext.cacheStatus;
     newHeaders.set('X-Cache-Status', resolvedCacheStatus);
     newHeaders.set('X-Execution-Time-Ms', executionTimeMs.toString());
