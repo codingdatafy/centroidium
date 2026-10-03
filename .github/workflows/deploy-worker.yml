@@ -38,6 +38,9 @@ jobs:
       - name: Validate TypeScript Build
         run: npm run type-check
 
+      - name: Compile Client TypeScript Scripts
+        run: npm run build:scripts
+
       - name: Deploy Worker via Wrangler
         uses: cloudflare/wrangler-action@v3
         with:
