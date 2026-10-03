@@ -11,7 +11,7 @@ export interface MetaProps {
   description: string;
   canonicalUrl: string;
   siteName: string;
-  customStyle?: string;
+  customStyle?: string | undefined;
 }
 
 /**

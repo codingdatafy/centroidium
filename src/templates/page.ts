@@ -6,8 +6,8 @@ export interface RenderPageOptions {
   pathname: string;
   siteName: string;
   siteUrl: string;
-  executionTimeMs?: number;
-  cacheStatus?: string;
+  executionTimeMs?: number | undefined;
+  cacheStatus?: string | undefined;
 }
 
 /**

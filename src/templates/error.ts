@@ -1,11 +1,11 @@
 import { renderLayout } from './layout';
 
 export interface RenderErrorOptions {
-  statusCode?: number;
-  message?: string;
-  digest?: string;
+  statusCode?: number | undefined;
+  message?: string | undefined;
+  digest?: string | undefined;
   siteName: string;
-  pathname?: string;
+  pathname?: string | undefined;
 }
 
 /**

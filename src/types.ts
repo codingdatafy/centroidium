@@ -3,10 +3,10 @@
  */
 export interface Env {
   CONTENT_BUCKET: R2Bucket;
-  SITE_ANALYTICS?: AnalyticsEngineDataset;
+  SITE_ANALYTICS?: AnalyticsEngineDataset | undefined;
   ASSETS: Fetcher;
-  ENVIRONMENT?: string;
-  SITE_URL?: string;
+  ENVIRONMENT?: string | undefined;
+  SITE_URL?: string | undefined;
   SITE_NAME: string;
   DEFAULT_CACHE_TTL: string;
 }
@@ -15,14 +15,14 @@ export interface Env {
  * Frontmatter metadata extracted from Markdown files
  */
 export interface DocumentMeta {
-  title?: string;
-  description?: string;
-  updatedAt?: string;
-  lastUpdated?: string;
-  publishedAt?: string;
-  style?: string;
-  id?: string;
-  sidebarHtml?: string;
+  title?: string | undefined;
+  description?: string | undefined;
+  updatedAt?: string | undefined;
+  lastUpdated?: string | undefined;
+  publishedAt?: string | undefined;
+  style?: string | undefined;
+  id?: string | undefined;
+  sidebarHtml?: string | undefined;
   [key: string]: unknown;
 }
 

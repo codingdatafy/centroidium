@@ -1,15 +1,15 @@
 import { renderMeta, renderHeader, renderFooter } from './components';
 
 export interface LayoutOptions {
-  title?: string;
-  description?: string;
-  canonicalUrl?: string;
+  title?: string | undefined;
+  description?: string | undefined;
+  canonicalUrl?: string | undefined;
   pathname: string;
   siteName: string;
   content: string;
-  executionTimeMs?: number;
-  cacheStatus?: string;
-  customStyle?: string;
+  executionTimeMs?: number | undefined;
+  cacheStatus?: string | undefined;
+  customStyle?: string | undefined;
 }
 
 /**
