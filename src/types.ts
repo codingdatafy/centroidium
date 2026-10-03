@@ -23,6 +23,7 @@ export interface DocumentMeta {
   style?: string | undefined;
   id?: string | undefined;
   sidebarHtml?: string | undefined;
+  breadcrumb?: string | undefined;
   [key: string]: unknown;
 }
 

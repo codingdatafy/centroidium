@@ -1,5 +1,6 @@
 export interface HeaderProps {
   currentPath: string;
+  breadcrumb?: string | undefined;
 }
 
 export interface FooterProps {
@@ -15,98 +16,49 @@ export interface MetaProps {
 }
 
 /**
- * Mapping of known URL path segments to their exact display labels
+ * Converts frontmatter breadcrumb string (e.g. "Languages/JavaScript/Array/Slice")
+ * into HTML breadcrumb navigation links.
  */
-const KNOWN_LABELS: Record<string, string> = {
-  languages: 'Languages',
-  frameworks: 'Frameworks',
-  apis: 'APIs',
-  protocols: 'Protocols',
-  databases: 'Databases',
-  tools: 'Tools',
-  compatibility: 'Compatibility',
-  development: 'Development',
-  roadmaps: 'Roadmaps',
-  glossary: 'Glossary',
-  about: 'About',
-  contact: 'Contact',
-  'terms-of-use': 'Terms of Use',
-  'privacy-policy': 'Privacy Policy',
-  faq: 'FAQ',
-  contribute: 'Contribute',
-  sponsors: 'Sponsors',
-  javascript: 'JavaScript',
-  typescript: 'TypeScript',
-  html: 'HTML',
-  css: 'CSS',
-  sql: 'SQL',
-  json: 'JSON',
-  xml: 'XML',
-  php: 'PHP',
-  api: 'API',
-  ui: 'UI',
-  ux: 'UX',
-  dom: 'DOM',
-  cli: 'CLI',
-};
-
-/**
- * Formats URL path segments into clean title-cased labels
- */
-function formatBreadcrumbLabel(segment: string): string {
-  const lower = segment.toLowerCase();
-  if (KNOWN_LABELS[lower]) {
-    return KNOWN_LABELS[lower];
+export function renderBreadcrumb(breadcrumbStr: string): string {
+  if (!breadcrumbStr || !breadcrumbStr.trim()) {
+    return '';
   }
 
-  return segment
-    .replace(/[-_]+/g, ' ')
-    .split(' ')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(' ');
-}
-
-/**
- * Generates breadcrumb navigation HTML for any given URL path
- */
-export function renderBreadcrumbs(currentPath: string): string {
-  const cleanPath = currentPath.replace(/^\/+|\/+$/g, '');
-  const segments = cleanPath ? cleanPath.split('/') : [];
-
-  const items: Array<{ label: string; path: string }> = [
-    { label: 'Homepage', path: '/' },
-  ];
+  const rawSegments = breadcrumbStr.split('/').map((s) => s.trim()).filter(Boolean);
+  if (rawSegments.length === 0) {
+    return '';
+  }
 
   let accumulatedPath = '';
-  for (const segment of segments) {
-    accumulatedPath += `/${segment}`;
-    items.push({
-      label: formatBreadcrumbLabel(segment),
-      path: accumulatedPath,
-    });
+  const items: string[] = [];
+
+  for (let index = 0; index < rawSegments.length; index++) {
+    const segment = rawSegments[index]!;
+    const slug = segment.toLowerCase();
+
+    if (index === 0) {
+      accumulatedPath = `/${slug}`;
+      items.push('<a href="/">Homepage</a>');
+    } else {
+      accumulatedPath += `/${slug}`;
+      const isLast = index === rawSegments.length - 1;
+
+      if (isLast) {
+        items.push(`<span aria-current="page">${escapeHtml(segment)}</span>`);
+      } else {
+        items.push(`<a href="${escapeHtml(accumulatedPath)}">${escapeHtml(segment)}</a>`);
+      }
+    }
   }
 
-  const listItems = items
-    .map((item, index) => {
-      const isLast = index === items.length - 1;
-      const separator = !isLast
-        ? '<li class="breadcrumb-separator" aria-hidden="true">&gt;</li>'
-        : '';
-
-      const content = isLast
-        ? `<li class="breadcrumb-item breadcrumb-current" aria-current="page">${escapeHtml(item.label)}</li>`
-        : `<li class="breadcrumb-item"><a href="${escapeHtml(item.path)}">${escapeHtml(item.label)}</a></li>`;
-
-      return `${content}${separator ? `\n          ${separator}` : ''}`;
-    })
-    .join('\n          ');
+  const breadcrumbContent = items.join(' <span class="breadcrumb-separator">&gt;</span> ');
 
   return `
+      <div id="breadcrumb">
         <nav aria-label="Breadcrumb">
-          <ol class="breadcrumb-list">
-            ${listItems}
-          </ol>
+          ${breadcrumbContent}
         </nav>
+      </div>
   `.trim();
 }
 
@@ -162,9 +114,9 @@ export function renderMeta({ title, description, canonicalUrl, siteName, customS
 }
 
 /**
- * Renders header and navigation component with active route highlighting and breadcrumbs
+ * Renders header and navigation component with active route highlighting and breadcrumb div
  */
-export function renderHeader({ currentPath }: HeaderProps): string {
+export function renderHeader({ currentPath, breadcrumb }: HeaderProps): string {
   const navItems = [
     { label: 'Homepage', path: '/' },
     { label: 'Languages', path: '/languages' },
@@ -187,7 +139,8 @@ export function renderHeader({ currentPath }: HeaderProps): string {
     })
     .join('\n              ');
 
-  const breadcrumbsHtml = renderBreadcrumbs(currentPath);
+  const breadcrumbHtml = breadcrumb ? renderBreadcrumb(breadcrumb) : '';
+  const breadcrumbBlock = breadcrumbHtml ? `\n      ${breadcrumbHtml}` : '';
 
   return `
     <header id="header">
@@ -198,10 +151,7 @@ export function renderHeader({ currentPath }: HeaderProps): string {
         <ul>
           ${navList}
         </ul>
-      </nav>
-      <div id="breadcrumbs">
-        ${breadcrumbsHtml}
-      </div>
+      </nav>${breadcrumbBlock}
     </header>
   `.trim();
 }

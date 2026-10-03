@@ -10,6 +10,7 @@ export interface LayoutOptions {
   executionTimeMs?: number | undefined;
   cacheStatus?: string | undefined;
   customStyle?: string | undefined;
+  breadcrumb?: string | undefined;
 }
 
 /**
@@ -26,6 +27,7 @@ export function renderLayout(options: LayoutOptions): string {
     executionTimeMs = 0,
     cacheStatus = 'BYPASS',
     customStyle,
+    breadcrumb,
   } = options;
 
   const formattedTitle = title.includes(siteName) ? title : `${title} - ${siteName}`;
@@ -38,7 +40,11 @@ export function renderLayout(options: LayoutOptions): string {
     customStyle,
   });
 
-  const headerHtml = renderHeader({ currentPath: pathname });
+  const headerHtml = renderHeader({
+    currentPath: pathname,
+    ...(breadcrumb !== undefined ? { breadcrumb } : {}),
+  });
+  
   const footerHtml = renderFooter({ siteName });
 
   return `<!DOCTYPE html>

@@ -47,6 +47,8 @@ export function renderPage({ doc, pathname, siteName, siteUrl, executionTimeMs =
   const rawLastUpdated = (meta.updatedAt || meta.lastUpdated || meta.publishedAt) as string | undefined;
   const parsedDate = rawLastUpdated ? formatDate(String(rawLastUpdated)) : null;
 
+  const breadcrumb = typeof meta.breadcrumb === 'string' ? meta.breadcrumb : undefined;
+
   const articleFooterHtml = `
     <footer id="article-footer">
       ${
@@ -90,6 +92,7 @@ export function renderPage({ doc, pathname, siteName, siteUrl, executionTimeMs =
     executionTimeMs,
     cacheStatus,
     customStyle,
+    ...(breadcrumb !== undefined ? { breadcrumb } : {}),
   });
 }
 
