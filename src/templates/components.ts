@@ -71,7 +71,6 @@ export function renderMeta({ title, description, canonicalUrl, siteName, customS
  */
 export function renderHeader({ currentPath, breadcrumb }: HeaderProps): string {
   const navItems = [
-    { label: 'Homepage', path: '/' },
     { label: 'Languages', path: '/languages' },
     { label: 'Frameworks', path: '/frameworks' },
     { label: 'APIs', path: '/apis' },
