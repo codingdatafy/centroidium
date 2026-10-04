@@ -33,7 +33,7 @@ function formatDate(dateStr: string): { isoDate: string; formattedDate: string }
  * Renders the document/article page content shell and wraps it inside the global layout shell.
  */
 export function renderPage({ doc, pathname, siteName, siteUrl, executionTimeMs = 0, cacheStatus = 'BYPASS' }: RenderPageOptions): string {
-  const { meta, contentHtml } = doc;
+  const { meta, contentHtml, tocHtml } = doc;
 
   const title = meta.title ?? `${siteName} Documentation`;
   const description =
@@ -48,6 +48,11 @@ export function renderPage({ doc, pathname, siteName, siteUrl, executionTimeMs =
 
   const rawLastUpdated = (meta.updatedAt || meta.lastUpdated || meta.publishedAt) as string | undefined;
   const parsedDate = rawLastUpdated ? formatDate(String(rawLastUpdated)) : null;
+
+  const articleTocHtml =
+    tocHtml && tocHtml.trim().length > 0
+      ? `\n              <aside id="article-toc">\n                <nav>\n                  ${tocHtml.split('\n').join('\n                  ')}\n                </nav>\n              </aside>`
+      : '';
 
   const articleFooterHtml = `
     <footer id="article-footer">
@@ -71,7 +76,7 @@ export function renderPage({ doc, pathname, siteName, siteUrl, executionTimeMs =
       <div${mainContainerId}>
         <article id="article">
           <header id="article-header">
-            <h1 id="article-title">${escapeHtml(title)}</h1>
+            <h1 id="article-title">${escapeHtml(title)}</h1>${articleTocHtml}
           </header>
 
           <div>${contentHtml}</div>

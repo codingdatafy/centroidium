@@ -1,5 +1,5 @@
 import type { ProcessedDocument, DocumentMeta } from '../types';
-import { markdatafy } from './markdatafy';
+import { markdatafy, generateTocHtml } from './markdatafy';
 
 /**
  * Safe HTML Tag Allowlist against XSS
@@ -36,7 +36,7 @@ const TAG_SPECIFIC_ATTRIBUTES: Record<string, Set<string>> = {
 /**
  * Processor for Site Markdown content:
  * Extracts frontmatter metadata, converts markdown body, sanitizes raw HTML,
- * and wraps H2-H4 sections cleanly.
+ * generates Auto Table of Contents (TOC), and wraps H2-H4 sections cleanly.
  */
 export async function processMarkdown(rawMarkdown: string): Promise<ProcessedDocument> {
   const { meta, body } = parseFrontmatter(rawMarkdown);
@@ -47,10 +47,13 @@ export async function processMarkdown(rawMarkdown: string): Promise<ProcessedDoc
 
   const contentHtml = await wrapSections(sanitizedHtml);
 
+  const tocHtml = meta.toc === false ? '' : generateTocHtml(body);
+
   return {
     meta,
     contentHtml,
     rawMarkdown,
+    tocHtml,
   };
 }
 
