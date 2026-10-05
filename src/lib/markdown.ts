@@ -1,5 +1,5 @@
 import type { ProcessedDocument, DocumentMeta } from '../types';
-import { markdatafy, generateTocHtml } from './markdatafy';
+import { markdatafy } from './markdatafy';
 
 /**
  * Safe HTML Tag Allowlist against XSS
@@ -33,21 +33,24 @@ const TAG_SPECIFIC_ATTRIBUTES: Record<string, Set<string>> = {
   ol: new Set(['start', 'reversed', 'type']),
 };
 
+interface HeadingNode {
+  level: number;
+  text: string;
+  id: string;
+}
+
 /**
  * Processor for Site Markdown content:
  * Extracts frontmatter metadata, converts markdown body, sanitizes raw HTML,
- * generates Auto Table of Contents (TOC), and wraps H2-H4 sections cleanly.
+ * wraps H2-H4 sections, and generates the auto Table of Contents (TOC).
  */
 export async function processMarkdown(rawMarkdown: string): Promise<ProcessedDocument> {
   const { meta, body } = parseFrontmatter(rawMarkdown);
   
   const rawHtml = markdatafy(body);
-
   const sanitizedHtml = sanitizeHtml(rawHtml);
-
   const contentHtml = await wrapSections(sanitizedHtml);
-
-  const tocHtml = meta.toc === false ? '' : generateTocHtml(body);
+  const tocHtml = await generateToc(sanitizedHtml);
 
   return {
     meta,
@@ -92,6 +95,96 @@ async function wrapSections(html: string): Promise<string> {
 }
 
 /**
+ * Extracts <h2> and <h3> headings and generates the nested TOC HTML structure.
+ */
+async function generateToc(html: string): Promise<string> {
+  if (!html.trim()) return '';
+
+  const headings: HeadingNode[] = [];
+  let currentText = '';
+  let currentLevel = 2;
+  let currentId = '';
+
+  const rewriter = new HTMLRewriter()
+    .on('h2, h3', {
+      element(element) {
+        currentLevel = element.tagName === 'h2' ? 2 : 3;
+        currentId = element.getAttribute('id') || '';
+        currentText = '';
+      },
+      text(text) {
+        currentText += text.text;
+        if (text.lastInTextNode) {
+          const textClean = currentText.trim();
+          const idClean = currentId || slugify(textClean);
+          headings.push({
+            level: currentLevel,
+            text: textClean,
+            id: idClean,
+          });
+        }
+      }
+    });
+
+  await rewriter.transform(new Response(html)).text();
+  return buildTocHtml(headings);
+}
+
+/**
+ * Converts a string into a clean URL slug.
+ */
+function slugify(str: string): string {
+  return str
+    .toLowerCase()
+    .trim()
+    .replace(/<[^>]*>/g, '')
+    .replace(/[^\w\s-]/g, '')
+    .replace(/[\s_-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+/**
+ * Builds the hierarchical nested ordered list TOC structure matching your exact requirement.
+ */
+function buildTocHtml(headings: HeadingNode[]): string {
+  if (headings.length === 0) return '';
+
+  let html = '<aside id="article-toc">\n\t\t\t\t<nav>\n\t\t\t\t\t<ol>';
+  let currentLevel = 2;
+
+  for (let i = 0; i < headings.length; i++) {
+    const h = headings[i]!;
+    if (h.level === 2) {
+      if (currentLevel === 3) {
+        html += '\n\t\t\t\t\t\t\t</ol>\n\t\t\t\t\t\t</li>';
+        currentLevel = 2;
+      }
+      if (i > 0) {
+        html += '</li>';
+      }
+      html += `\n\t\t\t\t\t\t<li><a href="#${h.id}">${h.text}</a>`;
+    } else if (h.level === 3) {
+      if (currentLevel === 2) {
+        html += '\n\t\t\t\t\t\t\t<ol>';
+        currentLevel = 3;
+      } else {
+        html += '</li>';
+      }
+      html += `\n\t\t\t\t\t\t\t\t<li><a href="#${h.id}">${h.text}</a></li>`;
+    }
+  }
+
+  if (currentLevel === 3) {
+    html += '\n\t\t\t\t\t\t\t</ol>\n\t\t\t\t\t\t</li>';
+  } else {
+    html += '</li>';
+  }
+  html += '\n\t\t\t\t\t</ol>\n\t\t\t\t</nav>\n\t\t\t</aside>';
+
+  return html;
+}
+
+/**
  * Validates whether an attribute name is safe to allow
  */
 function isAllowedAttribute(tag: string, attrName: string): boolean {
@@ -112,30 +205,22 @@ function isAllowedAttribute(tag: string, attrName: string): boolean {
  * while preserving safe escaping inside pre and inline code blocks.
  */
 function sanitizeHtml(html: string): string {
-  // 0. Extract <pre> and <code> blocks to prevent unescaping or tag-stripping code samples
   const codeBlocks: string[] = [];
   let clean = html.replace(/<(pre|code)\b[^>]*>[\s\S]*?<\/\1>/gi, (match) => {
     codeBlocks.push(match);
     return `__CODE_BLOCK_${codeBlocks.length - 1}__`;
   });
 
-  // 1. Decode entities back to raw HTML before attribute parsing for non-code elements
   clean = clean
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#039;/g, "'");
 
-  // 2. Strip dangerous tag blocks completely
   clean = clean.replace(/<(script|iframe|object|embed|style|form|input|button|select|textarea)[^>]*>[\s\S]*?<\/\1>/gi, '');
-
-  // 3. Strip inline JavaScript event handlers (e.g. onclick=..., onload=...)
   clean = clean.replace(/\s+on[a-z]+\s*=\s*(?:'[^']*'|"[^"]*"|[^\s>]+)/gi, '');
-
-  // 4. Strip unsafe URI protocols in href and src
   clean = clean.replace(/(href|src)\s*=\s*["']?\s*(?:javascript|vbscript|data):[^"'>\s]+/gi, '$1="#"');
 
-  // 5. Filter allowed tags and allowed attributes
   clean = clean.replace(/<\/?([a-z0-9-]+)([^>]*)>/gi, (match, tagName, attrString) => {
     const tag = tagName.toLowerCase();
 
@@ -168,7 +253,6 @@ function sanitizeHtml(html: string): string {
     return `<${tag}${attrsFormatted}${isSelfClosing}>`;
   });
 
-  // 6. Re-inject preserved <pre> and <code> blocks
   clean = clean.replace(/__CODE_BLOCK_(\d+)__/g, (_, index) => {
     return codeBlocks[Number(index)] ?? '';
   });

@@ -49,11 +49,6 @@ export function renderPage({ doc, pathname, siteName, siteUrl, executionTimeMs =
   const rawLastUpdated = (meta.updatedAt || meta.lastUpdated || meta.publishedAt) as string | undefined;
   const parsedDate = rawLastUpdated ? formatDate(String(rawLastUpdated)) : null;
 
-  const articleTocHtml =
-    tocHtml && tocHtml.trim().length > 0
-      ? `\n              <aside id="article-toc">\n                <nav>\n                  ${tocHtml.split('\n').join('\n                  ')}\n                </nav>\n              </aside>`
-      : '';
-
   const articleFooterHtml = `
     <footer id="article-footer">
       ${
@@ -70,13 +65,16 @@ export function renderPage({ doc, pathname, siteName, siteUrl, executionTimeMs =
     </footer>
   `.trim();
 
+  const tocSectionHtml = tocHtml ? tocHtml : '';
+
   const pageContentHtml = `
     ${sidebarHtml}
     <main id="main">
       <div${mainContainerId}>
         <article id="article">
           <header id="article-header">
-            <h1 id="article-title">${escapeHtml(title)}</h1>${articleTocHtml}
+            <h1 id="article-title">${escapeHtml(title)}</h1>
+            ${tocSectionHtml}
           </header>
 
           <div>${contentHtml}</div>

@@ -24,7 +24,6 @@ export interface DocumentMeta {
   id?: string | undefined;
   sidebarHtml?: string | undefined;
   breadcrumb?: string | undefined;
-  toc?: boolean | undefined;
   [key: string]: unknown;
 }
 

@@ -6,7 +6,6 @@
  * - Block parsing: Code blocks (fenced & indented), Blockquotes, Lists (ordered/unordered with nesting), Headings (ATX & Setext), Thematic breaks, Paragraphs, HTML blocks.
  * - Inline parsing: Raw HTML elements, Emphasis/Strong (`*`, `_`), Inline code, Links, Images, Autolinks, Hard breaks (`\n`, `\s\s\n`), HTML escaping.
  * - Automatic ID generation for headings (`h1`-`h6`).
- * - Auto Table of Contents (TOC) generator for H2 and H3 headings.
  * - Strictly zero runtime dependencies.
  */
 
@@ -29,7 +28,7 @@ function escapeHtml(str: string): string {
 /**
  * Converts a string into a clean, URL-friendly HTML slug ID.
  */
-export function slugify(str: string): string {
+function slugify(str: string): string {
   return str
     .toLowerCase()
     .trim()
@@ -37,145 +36,6 @@ export function slugify(str: string): string {
     .replace(/[^\w\s-]/g, '') // remove non-alphanumeric chars except space and hyphen
     .replace(/[\s_-]+/g, '-') // replace spaces/underscores with single hyphen
     .replace(/^-+|-+$/g, ''); // strip leading/trailing hyphens
-}
-
-/**
- * Strips inline Markdown formatting (code ticks, links, bold/italic markers) from heading title text.
- */
-export function cleanHeadingText(text: string): string {
-  return text
-    .replace(/`([^`]+)`/g, '$1')
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-    .replace(/[*_~]/g, '')
-    .trim();
-}
-
-export interface TocHeading {
-  level: number;
-  text: string;
-  slug: string;
-}
-
-/**
- * Extracts H2 and H3 headings from raw Markdown body, ignoring fenced code blocks.
- */
-export function extractTocHeadings(markdown: string): TocHeading[] {
-  if (!markdown || !markdown.trim()) return [];
-
-  const lines = markdown.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
-  const headings: TocHeading[] = [];
-
-  let i = 0;
-  const totalLines = lines.length;
-  let inFence = false;
-  let fenceChar = '';
-
-  while (i < totalLines) {
-    const line = lines[i]!;
-    const trimmed = line.trim();
-
-    // Skip Fenced Code Blocks (``` or ~~~)
-    const fenceMatch = /^(```|~~~)/.exec(trimmed);
-    if (fenceMatch) {
-      if (!inFence) {
-        inFence = true;
-        fenceChar = fenceMatch[1]!;
-      } else if (trimmed.startsWith(fenceChar)) {
-        inFence = false;
-        fenceChar = '';
-      }
-      i++;
-      continue;
-    }
-
-    if (inFence) {
-      i++;
-      continue;
-    }
-
-    // ATX Headings (## Heading or ### Heading)
-    const atxMatch = /^(#{2,3})\s+(.+)$/.exec(trimmed);
-    if (atxMatch) {
-      const level = atxMatch[1]!.length;
-      const rawText = atxMatch[2]!.replace(/\s+#+$/, '').trim();
-      const text = cleanHeadingText(rawText);
-      const slug = slugify(rawText);
-      if (text && slug) {
-        headings.push({ level, text, slug });
-      }
-      i++;
-      continue;
-    }
-
-    // Setext H2 Headings (Heading \n ---)
-    if (i + 1 < totalLines) {
-      const nextLine = lines[i + 1]!.trim();
-      if (/^-{2,}$/.test(nextLine) && !trimmed.startsWith('-') && trimmed !== '') {
-        const text = cleanHeadingText(trimmed);
-        const slug = slugify(trimmed);
-        if (text && slug) {
-          headings.push({ level: 2, text, slug });
-        }
-        i += 2;
-        continue;
-      }
-    }
-
-    i++;
-  }
-
-  return headings;
-}
-
-/**
- * Generates structured nested <ol> Table of Contents HTML from raw Markdown headings.
- */
-export function generateTocHtml(markdown: string): string {
-  const headings = extractTocHeadings(markdown);
-  if (headings.length === 0) return '';
-
-  let html = '<ol>\n';
-  let inH2 = false;
-  let inH3Ol = false;
-
-  for (let i = 0; i < headings.length; i++) {
-    const item = headings[i]!;
-    const escapedText = escapeHtml(item.text);
-
-    if (item.level === 2) {
-      if (inH3Ol) {
-        html += '  </ol>\n  </li>\n';
-        inH3Ol = false;
-        inH2 = false;
-      } else if (inH2) {
-        html += '</li>\n';
-        inH2 = false;
-      }
-
-      html += `  <li><a href="#${item.slug}">${escapedText}</a>`;
-      inH2 = true;
-    } else if (item.level === 3) {
-      if (!inH2) {
-        html += `  <li><a href="#${item.slug}">${escapedText}</a>`;
-        inH2 = true;
-      } else if (!inH3Ol) {
-        html += '\n    <ol>\n';
-        html += `      <li><a href="#${item.slug}">${escapedText}</a></li>\n`;
-        inH3Ol = true;
-      } else {
-        html += `      <li><a href="#${item.slug}">${escapedText}</a></li>\n`;
-      }
-    }
-  }
-
-  if (inH3Ol) {
-    html += '    </ol>\n  </li>\n';
-  } else if (inH2) {
-    html += '</li>\n';
-  }
-
-  html += '</ol>';
-  return html;
 }
 
 // ============================================================================
