@@ -96,24 +96,34 @@ export function renderHeader({ currentPath, breadcrumb }: HeaderProps): string {
   if (breadcrumb && typeof breadcrumb === 'string' && breadcrumb.trim().length > 0) {
     const rawSegments = breadcrumb.split('/').map((s) => s.trim()).filter(Boolean);
     const breadcrumbItems: string[] = [];
+    const isHomepage = currentPath === '/' || currentPath === '';
 
-    // Lead with Homepage link
-    breadcrumbItems.push(`<li><a href="/">Homepage</a></li>`);
+    if (isHomepage) {
+      const label = rawSegments[0] || 'Homepage';
+      breadcrumbItems.push(`<li><span class="active" aria-current="page">${escapeHtml(label)}</span></li>`);
+    } else {
+      const filteredSegments =
+        rawSegments.length > 0 && rawSegments[0]?.toLowerCase() === 'homepage'
+          ? rawSegments.slice(1)
+          : rawSegments;
 
-    let accumulatedPath = '';
-    rawSegments.forEach((segment, index) => {
-      const slug = segment.toLowerCase().replace(/\s+/g, '-');
-      accumulatedPath += `/${slug}`;
-      const isLast = index === rawSegments.length - 1;
+      breadcrumbItems.push(`<li><a href="/">Homepage</a></li>`);
 
-      breadcrumbItems.push(`<li class="separator" aria-hidden="true">&gt;</li>`);
+      let accumulatedPath = '';
+      filteredSegments.forEach((segment, index) => {
+        const slug = segment.toLowerCase().replace(/\s+/g, '-');
+        accumulatedPath += `/${slug}`;
+        const isLast = index === filteredSegments.length - 1;
 
-      if (isLast) {
-        breadcrumbItems.push(`<li><span class="active" aria-current="page">${escapeHtml(segment)}</span></li>`);
-      } else {
-        breadcrumbItems.push(`<li><a href="${accumulatedPath}">${escapeHtml(segment)}</a></li>`);
-      }
-    });
+        breadcrumbItems.push(`<li class="separator" aria-hidden="true">&gt;</li>`);
+
+        if (isLast) {
+          breadcrumbItems.push(`<li><span class="active" aria-current="page">${escapeHtml(segment)}</span></li>`);
+        } else {
+          breadcrumbItems.push(`<li><a href="${accumulatedPath}">${escapeHtml(segment)}</a></li>`);
+        }
+      });
+    }
 
     breadcrumbHtml = `\n      <div id="breadcrumb">
         <nav aria-label="Breadcrumb">
