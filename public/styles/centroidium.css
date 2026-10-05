@@ -471,6 +471,8 @@ canvas {
 	border: solid 1px rgb(0 0 139);
 }
 #article {
+  margin: auto;
+  width: 70%;
 }
 #article-header {
 	margin: 0 0 1px 0;

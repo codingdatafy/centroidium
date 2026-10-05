@@ -19,16 +19,14 @@ export async function handlePageRoute(context: RequestContext): Promise<Response
   // Set explicit MISS status when bypass didn't occur and cache missed
   context.cacheStatus = 'MISS';
 
-  let r2Key = resolveR2Key(pathname);
+  const r2Key = resolveR2Key(pathname);
 
-  let contentMarkdown = await fetchMarkdownFromR2(env.CONTENT_BUCKET, r2Key);
+  const rawMarkdown = await fetchMarkdownFromR2(env.CONTENT_BUCKET, r2Key);
+
+  let contentMarkdown = rawMarkdown;
   if (!contentMarkdown && !pathname.endsWith('/')) {
     const fallbackKey = resolveR2Key(`${pathname}/`);
-    const fallbackContent = await fetchMarkdownFromR2(env.CONTENT_BUCKET, fallbackKey);
-    if (fallbackContent) {
-      contentMarkdown = fallbackContent;
-      r2Key = fallbackKey;
-    }
+    contentMarkdown = await fetchMarkdownFromR2(env.CONTENT_BUCKET, fallbackKey);
   }
 
   if (!contentMarkdown) {
@@ -46,14 +44,11 @@ export async function handlePageRoute(context: RequestContext): Promise<Response
 
   const executionTimeMs = parseFloat((performance.now() - context.startTime).toFixed(2));
 
-  const githubEditUrl = `https://github.com/codingdatafy/content/edit/main/data/${r2Key}`;
-
   const html = renderPage({
     doc,
     pathname,
     siteName: env.SITE_NAME,
     siteUrl,
-    githubEditUrl,
     executionTimeMs,
     cacheStatus: context.cacheStatus,
   });

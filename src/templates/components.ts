@@ -152,13 +152,6 @@ export function renderFooter({ siteName }: FooterProps): string {
         <li><a href="/faq">FAQ</a></li>
         <li><a href="/contribute">Contribute</a></li>
         <li><a href="/sponsors">Sponsors</a></li>
-      </ul>          
-      <ul id="social-networks">
-        <li>
-          <a href="https://github.com/codingdatafy" target="_blank" rel="external noopener noreferrer">
-            <img src="/images/github.png" alt="GitHub" width="32" height="32" loading="lazy" />
-          </a>
-        </li>
       </ul>
       <p id="copyright">
         <small>Copyright © 2026 <strong>${escapeHtml(siteName)}™</strong> Organization | Content licensed under <strong>CC BY-SA 4.0</strong></small>
