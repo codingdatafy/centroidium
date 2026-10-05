@@ -77,7 +77,8 @@ export function generateTocHtml(html: string): string {
   while ((match = headingRegex.exec(html)) !== null) {
     const tag = match[1]?.toLowerCase();
     const id = match[2] || '';
-    const text = (match[3] || '').replace(/<[^>]*>/g, '').trim();
+    const rawText = (match[3] || '').replace(/<[^>]*>/g, '').trim();
+    const text = unescapeHtml(rawText);
 
     if (!id || !text) continue;
 
@@ -276,6 +277,21 @@ function parseFrontmatter(rawMarkdown: string): { meta: DocumentMeta; body: stri
   return { meta, body };
 }
 
+/**
+ * Decodes HTML entities back to raw characters
+ */
+function unescapeHtml(str: string): string {
+  return str
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'");
+}
+
+/**
+ * Escapes special characters into HTML entities
+ */
 function escapeHtml(str: string): string {
   return str
     .replace(/&/g, '&amp;')

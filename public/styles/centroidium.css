@@ -473,10 +473,9 @@ canvas {
 }
 @media screen and (min-width: 720px) {
   #article {
-  margin: auto;
-  width: 70%;
-  border: solid 1px #000000;
-}
+    margin: auto;
+    width: 70%;
+    border: solid 1px #000000;
 }
 #article-header {
 	margin: 0 0 1px 0;

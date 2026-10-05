@@ -56,12 +56,6 @@ export function renderPage({ doc, pathname, siteName, siteUrl, executionTimeMs =
           ? `<p>Last Updated: <time datetime="${escapeHtml(parsedDate.isoDate)}">${escapeHtml(parsedDate.formattedDate)}</time></p>`
           : ''
       }
-      <p>
-        <small>
-          Published by <strong>${escapeHtml(siteName)}™ Organization</strong>. 
-          Explore <a href="${escapeHtml(absoluteUrl)}">${escapeHtml(siteName)} Documentation</a>.
-        </small>
-      </p>
     </footer>
   `.trim();
 
