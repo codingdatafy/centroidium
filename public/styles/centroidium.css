@@ -476,6 +476,7 @@ canvas {
     margin: auto;
     width: 70%;
     border: solid 1px #000000;
+  }
 }
 #article-header {
 	margin: 0 0 1px 0;
@@ -586,13 +587,6 @@ table.sortable th.sort-desc::after {
 	padding: 0.1em;
 	background: rgb(0 255 0 / 0.2);
 	border: solid 2px green;
-	text-align: center;
-}
-#article-footer {
-	margin: 0 0 0.1em 0;
-	padding: 0.1em;
-	background: rgb(0 255 0 / 0.2);
-	border: solid 1px rgb(0 0 0);
 	text-align: center;
 }
 /* --------------------------- Footer ---------------------------------- */
