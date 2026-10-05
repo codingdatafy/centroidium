@@ -46,7 +46,7 @@ export async function handlePageRoute(context: RequestContext): Promise<Response
 
   const executionTimeMs = parseFloat((performance.now() - context.startTime).toFixed(2));
 
-  const githubEditUrl = `https://github.com/codingdatafy/content/blob/main/data/${r2Key}`;
+  const githubEditUrl = `https://github.com/codingdatafy/content/edit/main/data/${r2Key}`;
 
   const html = renderPage({
     doc,
