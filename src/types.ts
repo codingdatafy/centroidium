@@ -33,8 +33,8 @@ export interface DocumentMeta {
 export interface ProcessedDocument {
   meta: DocumentMeta;
   contentHtml: string;
+  tocHtml: string;
   rawMarkdown: string;
-  tocHtml?: string | undefined;
 }
 
 /**

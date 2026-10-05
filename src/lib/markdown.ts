@@ -33,35 +33,91 @@ const TAG_SPECIFIC_ATTRIBUTES: Record<string, Set<string>> = {
   ol: new Set(['start', 'reversed', 'type']),
 };
 
-interface HeadingNode {
-  level: number;
-  text: string;
+interface TocItem {
   id: string;
+  text: string;
+  children: TocItem[];
 }
 
 /**
  * Processor for Site Markdown content:
  * Extracts frontmatter metadata, converts markdown body, sanitizes raw HTML,
- * wraps H2-H4 sections, and generates the auto Table of Contents (TOC).
+ * generates table of contents, and wraps H2-H4 sections cleanly in <section> tags.
  */
 export async function processMarkdown(rawMarkdown: string): Promise<ProcessedDocument> {
   const { meta, body } = parseFrontmatter(rawMarkdown);
   
   const rawHtml = markdatafy(body);
+
   const sanitizedHtml = sanitizeHtml(rawHtml);
+
+  const tocHtml = generateTocHtml(sanitizedHtml);
+
   const contentHtml = await wrapSections(sanitizedHtml);
-  const tocHtml = await generateToc(sanitizedHtml);
 
   return {
     meta,
     contentHtml,
-    rawMarkdown,
     tocHtml,
+    rawMarkdown,
   };
 }
 
 /**
- * Wraps <h2> through <h4> headers and their sibling content inside <section> tags
+ * Generates Table of Contents HTML structure (<aside id="article-toc">) from H2 and H3 headings
+ */
+export function generateTocHtml(html: string): string {
+  const headingRegex = /<(h[23])\b[^>]*\bid="([^"]+)"[^>]*>([\s\S]*?)<\/h[23]>/gi;
+  const items: TocItem[] = [];
+  let currentH2: TocItem | null = null;
+
+  let match: RegExpExecArray | null;
+  while ((match = headingRegex.exec(html)) !== null) {
+    const tag = match[1]?.toLowerCase();
+    const id = match[2] || '';
+    const text = (match[3] || '').replace(/<[^>]*>/g, '').trim();
+
+    if (!id || !text) continue;
+
+    if (tag === 'h2') {
+      currentH2 = { id, text, children: [] };
+      items.push(currentH2);
+    } else if (tag === 'h3') {
+      const h3Item: TocItem = { id, text, children: [] };
+      if (currentH2) {
+        currentH2.children.push(h3Item);
+      } else {
+        items.push(h3Item);
+      }
+    }
+  }
+
+  if (items.length === 0) {
+    return '';
+  }
+
+  const listItemsHtml = items
+    .map((item) => {
+      let itemHtml = `\t\t\t\t\t\t<li><a href="#${escapeHtml(item.id)}">${escapeHtml(item.text)}</a>`;
+      if (item.children.length > 0) {
+        const subItemsHtml = item.children
+          .map(
+            (child) =>
+              `\t\t\t\t\t\t\t\t<li><a href="#${escapeHtml(child.id)}">${escapeHtml(child.text)}</a></li>`
+          )
+          .join('\n');
+        itemHtml += `\n\t\t\t\t\t\t\t<ol>\n${subItemsHtml}\n\t\t\t\t\t\t\t</ol>\n\t\t\t\t\t\t`;
+      }
+      itemHtml += '</li>';
+      return itemHtml;
+    })
+    .join('\n');
+
+  return `<aside id="article-toc">\n\t\t\t\t<nav>\n\t\t\t\t\t<ol>\n${listItemsHtml}\n\t\t\t\t\t</ol>\n\t\t\t\t</nav>\n\t\t\t</aside>`;
+}
+
+/**
+ * Wraps <h2> through <h4> headers and their sibling content inside pure <section> tags without classes or IDs
  * Uses native Cloudflare Workers HTMLRewriter API.
  */
 async function wrapSections(html: string): Promise<string> {
@@ -77,9 +133,7 @@ async function wrapSections(html: string): Promise<string> {
           element.before('</section>', { html: true });
         }
         
-        const id = element.getAttribute('id') || '';
-        const sectionId = id ? ` id="section-${id}"` : '';
-        element.before(`<section class="doc-section"${sectionId}>`, { html: true });
+        element.before('<section>', { html: true });
         inSection = true;
       }
     });
@@ -92,96 +146,6 @@ async function wrapSections(html: string): Promise<string> {
   }
 
   return transformedHtml;
-}
-
-/**
- * Extracts <h2> and <h3> headings and generates the nested TOC HTML structure.
- */
-async function generateToc(html: string): Promise<string> {
-  if (!html.trim()) return '';
-
-  const headings: HeadingNode[] = [];
-  let currentText = '';
-  let currentLevel = 2;
-  let currentId = '';
-
-  const rewriter = new HTMLRewriter()
-    .on('h2, h3', {
-      element(element) {
-        currentLevel = element.tagName === 'h2' ? 2 : 3;
-        currentId = element.getAttribute('id') || '';
-        currentText = '';
-      },
-      text(text) {
-        currentText += text.text;
-        if (text.lastInTextNode) {
-          const textClean = currentText.trim();
-          const idClean = currentId || slugify(textClean);
-          headings.push({
-            level: currentLevel,
-            text: textClean,
-            id: idClean,
-          });
-        }
-      }
-    });
-
-  await rewriter.transform(new Response(html)).text();
-  return buildTocHtml(headings);
-}
-
-/**
- * Converts a string into a clean URL slug.
- */
-function slugify(str: string): string {
-  return str
-    .toLowerCase()
-    .trim()
-    .replace(/<[^>]*>/g, '')
-    .replace(/[^\w\s-]/g, '')
-    .replace(/[\s_-]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-}
-
-/**
- * Builds the hierarchical nested ordered list TOC structure matching your exact requirement.
- */
-function buildTocHtml(headings: HeadingNode[]): string {
-  if (headings.length === 0) return '';
-
-  let html = '<aside id="article-toc">\n\t\t\t\t<nav>\n\t\t\t\t\t<ol>';
-  let currentLevel = 2;
-
-  for (let i = 0; i < headings.length; i++) {
-    const h = headings[i]!;
-    if (h.level === 2) {
-      if (currentLevel === 3) {
-        html += '\n\t\t\t\t\t\t\t</ol>\n\t\t\t\t\t\t</li>';
-        currentLevel = 2;
-      }
-      if (i > 0) {
-        html += '</li>';
-      }
-      html += `\n\t\t\t\t\t\t<li><a href="#${h.id}">${h.text}</a>`;
-    } else if (h.level === 3) {
-      if (currentLevel === 2) {
-        html += '\n\t\t\t\t\t\t\t<ol>';
-        currentLevel = 3;
-      } else {
-        html += '</li>';
-      }
-      html += `\n\t\t\t\t\t\t\t\t<li><a href="#${h.id}">${h.text}</a></li>`;
-    }
-  }
-
-  if (currentLevel === 3) {
-    html += '\n\t\t\t\t\t\t\t</ol>\n\t\t\t\t\t\t</li>';
-  } else {
-    html += '</li>';
-  }
-  html += '\n\t\t\t\t\t</ol>\n\t\t\t\t</nav>\n\t\t\t</aside>';
-
-  return html;
 }
 
 /**
@@ -218,7 +182,9 @@ function sanitizeHtml(html: string): string {
     .replace(/&#039;/g, "'");
 
   clean = clean.replace(/<(script|iframe|object|embed|style|form|input|button|select|textarea)[^>]*>[\s\S]*?<\/\1>/gi, '');
+
   clean = clean.replace(/\s+on[a-z]+\s*=\s*(?:'[^']*'|"[^"]*"|[^\s>]+)/gi, '');
+
   clean = clean.replace(/(href|src)\s*=\s*["']?\s*(?:javascript|vbscript|data):[^"'>\s]+/gi, '$1="#"');
 
   clean = clean.replace(/<\/?([a-z0-9-]+)([^>]*)>/gi, (match, tagName, attrString) => {

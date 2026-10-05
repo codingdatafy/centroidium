@@ -65,7 +65,7 @@ export function renderPage({ doc, pathname, siteName, siteUrl, executionTimeMs =
     </footer>
   `.trim();
 
-  const tocSectionHtml = tocHtml ? tocHtml : '';
+  const tocBlock = tocHtml ? `\n\t\t\t\t\t\t${tocHtml}` : '';
 
   const pageContentHtml = `
     ${sidebarHtml}
@@ -73,8 +73,7 @@ export function renderPage({ doc, pathname, siteName, siteUrl, executionTimeMs =
       <div${mainContainerId}>
         <article id="article">
           <header id="article-header">
-            <h1 id="article-title">${escapeHtml(title)}</h1>
-            ${tocSectionHtml}
+            <h1 id="article-title">${escapeHtml(title)}</h1>${tocBlock}
           </header>
 
           <div>${contentHtml}</div>
