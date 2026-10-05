@@ -595,13 +595,6 @@ table.sortable th.sort-desc::after {
 	border: solid 1px rgb(0 0 0);
 	text-align: center;
 }
-#article-footer p:last-child {
-	position: absolute;
-    left: -9999px;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-}
 /* --------------------------- Footer ---------------------------------- */
 #footer {
 	margin: 1px;
