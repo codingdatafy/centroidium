@@ -425,7 +425,7 @@ canvas {
 /* --------------------------- Content --------------------------------- */
 #content {
 	display: flex;
-    flex-flow: row wrap;
+  flex-flow: row wrap;
 	min-height: 80vh;
 	contain-intrinsic-size: 1000px;
 }
@@ -468,11 +468,11 @@ canvas {
 	margin: 1px;
 	padding: 1px;
 	overflow: auto;
-	border: solid 1px rgb(0 0 139);
 }
 #article {
   margin: auto;
   width: 70%;
+  border: solid 1px #000000;
 }
 #article-header {
 	margin: 0 0 1px 0;
@@ -581,7 +581,7 @@ table.sortable th.sort-desc::after {
 	margin: 0 0 0.1em 0;
 	padding: 0.1em;
 	background: rgb(0 255 0 / 0.2);
-	border: solid 1px rgb(0 0 0);
+	border: solid 2px green;
 	text-align: center;
 }
 #article-footer {
@@ -775,10 +775,11 @@ pre code {
 
 
 #breadcrumb {
-  margin-top: 10px;
+  margin: 5px;
   border: solid 1px;
   padding: 5px;
   font-size: 0.9rem;
+  background: #f0ffff;
 }
 
 #breadcrumb ol {
