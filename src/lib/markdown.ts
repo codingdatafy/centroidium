@@ -42,6 +42,22 @@ interface TocItem {
 }
 
 /**
+ * Determines whether an absolute or protocol-relative URL is external
+ */
+function isExternalUrl(url: string): boolean {
+  if (!/^https?:\/\/|^\/\//i.test(url)) {
+    return false;
+  }
+  try {
+    const parsed = new URL(url.startsWith('//') ? `https:${url}` : url);
+    const host = parsed.hostname.toLowerCase();
+    return host !== 'codingdatafy.com' && !host.endsWith('.codingdatafy.com');
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Processor for Site Markdown content:
  * Extracts frontmatter metadata, converts markdown body, sanitizes raw HTML,
  * generates table of contents, and wraps H2-H4 sections cleanly in <section> tags.
@@ -169,7 +185,8 @@ function isAllowedAttribute(tag: string, attrName: string): boolean {
 
 /**
  * Strips script tags, unsafe protocols (javascript:), and non-allowlisted tags/attributes
- * while preserving safe escaping inside pre and inline code blocks.
+ * while preserving safe escaping inside pre and inline code blocks. Automatically adds
+ * target="_blank" and rel="noopener noreferrer" to external <a> tags.
  */
 function sanitizeHtml(html: string): string {
   const codeBlocks: string[] = [];
@@ -201,7 +218,7 @@ function sanitizeHtml(html: string): string {
       return `</${tag}>`;
     }
 
-    const cleanAttrs: string[] = [];
+    const attrsMap = new Map<string, string>();
     const attrRegex = /([a-z0-9-.]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+)))?/gi;
     let attrMatch: RegExpExecArray | null;
 
@@ -212,8 +229,21 @@ function sanitizeHtml(html: string): string {
       const attrValue = attrMatch[2] ?? attrMatch[3] ?? attrMatch[4] ?? '';
 
       if (isAllowedAttribute(tag, attrName)) {
-        cleanAttrs.push(`${attrName}="${escapeHtml(attrValue)}"`);
+        attrsMap.set(attrName, attrValue);
       }
+    }
+
+    if (tag === 'a') {
+      const href = attrsMap.get('href');
+      if (href && isExternalUrl(href)) {
+        attrsMap.set('target', '_blank');
+        attrsMap.set('rel', 'noopener noreferrer');
+      }
+    }
+
+    const cleanAttrs: string[] = [];
+    for (const [attrName, attrValue] of attrsMap.entries()) {
+      cleanAttrs.push(`${attrName}="${escapeHtml(attrValue)}"`);
     }
 
     const attrsFormatted = cleanAttrs.length > 0 ? ` ${cleanAttrs.join(' ')}` : '';
