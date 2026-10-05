@@ -22,7 +22,7 @@ permissions:
 jobs:
   deploy:
     name: Build & Deploy Engine
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v5
@@ -30,7 +30,7 @@ jobs:
       - name: Setup Node.js Environment
         uses: actions/setup-node@v5
         with:
-          node-version: 22
+          node-version: 24
 
       - name: Install Build Dependencies
         run: npm install
