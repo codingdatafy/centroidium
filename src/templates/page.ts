@@ -6,6 +6,7 @@ export interface RenderPageOptions {
   pathname: string;
   siteName: string;
   siteUrl: string;
+  githubEditUrl?: string | undefined;
   executionTimeMs?: number | undefined;
   cacheStatus?: string | undefined;
 }
@@ -32,7 +33,7 @@ function formatDate(dateStr: string): { isoDate: string; formattedDate: string }
 /**
  * Renders the document/article page content shell and wraps it inside the global layout shell.
  */
-export function renderPage({ doc, pathname, siteName, siteUrl, executionTimeMs = 0, cacheStatus = 'BYPASS' }: RenderPageOptions): string {
+export function renderPage({ doc, pathname, siteName, siteUrl, githubEditUrl, executionTimeMs = 0, cacheStatus = 'BYPASS' }: RenderPageOptions): string {
   const { meta, contentHtml, tocHtml } = doc;
 
   const title = meta.title ?? `${siteName} Documentation`;
@@ -49,11 +50,17 @@ export function renderPage({ doc, pathname, siteName, siteUrl, executionTimeMs =
   const rawLastUpdated = (meta.updatedAt || meta.lastUpdated || meta.publishedAt) as string | undefined;
   const parsedDate = rawLastUpdated ? formatDate(String(rawLastUpdated)) : null;
 
+  const editLinkHtml = githubEditUrl
+    ? ` <span class="edit-github-separator">•</span> <a href="${escapeHtml(githubEditUrl)}" target="_blank" rel="noopener noreferrer" class="edit-github-link">Edit this page on GitHub</a>`
+    : '';
+
   const articleFooterHtml = `
     <footer id="article-footer">
       ${
         parsedDate
-          ? `<p>Last Updated: <time datetime="${escapeHtml(parsedDate.isoDate)}">${escapeHtml(parsedDate.formattedDate)}</time></p>`
+          ? `<p>Last Updated: <time datetime="${escapeHtml(parsedDate.isoDate)}">${escapeHtml(parsedDate.formattedDate)}</time>${editLinkHtml}</p>`
+          : editLinkHtml
+          ? `<p>${editLinkHtml.trim()}</p>`
           : ''
       }
       <p>
