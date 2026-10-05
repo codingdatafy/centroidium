@@ -9,14 +9,15 @@ const ALLOWED_TAGS = new Set([
   'em', 'strong', 'mark', 'time', 'ul', 'ol', 'li',
   'dt', 'dd', 'dl', 'table', 'caption', 'colgroup', 'col',
   'thead', 'tbody', 'tfoot', 'tr', 'th', 'td', 'img', 'blockquote',
-  'pre', 'code', 'hr', 'br', 'sub', 'sup', 'small', 'kbd'
+  'pre', 'code', 'hr', 'br', 'sub', 'sup', 'small', 'kbd',
+  'details', 'summary'
 ]);
 
 /**
  * Global HTML Attributes allowed on any tag in ALLOWED_TAGS
  */
 const GLOBAL_ALLOWED_ATTRIBUTES = new Set([
-  'class', 'id', 'title', 'lang', 'dir', 'role', 'hidden', 'tabindex'
+  'class', 'id', 'title', 'lang', 'dir', 'role', 'hidden', 'tabindex', 'open'
 ]);
 
 /**
@@ -31,6 +32,7 @@ const TAG_SPECIFIC_ATTRIBUTES: Record<string, Set<string>> = {
   td: new Set(['colspan', 'rowspan', 'headers']),
   th: new Set(['colspan', 'rowspan', 'headers', 'scope']),
   ol: new Set(['start', 'reversed', 'type']),
+  details: new Set(['open']),
 };
 
 interface TocItem {
@@ -98,22 +100,22 @@ export function generateTocHtml(html: string): string {
 
   const listItemsHtml = items
     .map((item) => {
-      let itemHtml = `\t\t\t\t\t\t<li><a href="#${escapeHtml(item.id)}">${escapeHtml(item.text)}</a>`;
+      let itemHtml = `\t\t\t\t\t\t\t<li><a href="#${escapeHtml(item.id)}">${escapeHtml(item.text)}</a>`;
       if (item.children.length > 0) {
         const subItemsHtml = item.children
           .map(
             (child) =>
-              `\t\t\t\t\t\t\t\t<li><a href="#${escapeHtml(child.id)}">${escapeHtml(child.text)}</a></li>`
+              `\t\t\t\t\t\t\t\t\t<li><a href="#${escapeHtml(child.id)}">${escapeHtml(child.text)}</a></li>`
           )
           .join('\n');
-        itemHtml += `\n\t\t\t\t\t\t\t<ol>\n${subItemsHtml}\n\t\t\t\t\t\t\t</ol>\n\t\t\t\t\t\t`;
+        itemHtml += `\n\t\t\t\t\t\t\t\t<ol>\n${subItemsHtml}\n\t\t\t\t\t\t\t\t</ol>\n\t\t\t\t\t\t\t`;
       }
       itemHtml += '</li>';
       return itemHtml;
     })
     .join('\n');
 
-  return `<aside id="article-toc">\n\t\t\t\t<nav>\n\t\t\t\t\t<ol>\n${listItemsHtml}\n\t\t\t\t\t</ol>\n\t\t\t\t</nav>\n\t\t\t</aside>`;
+  return `<aside id="article-toc">\n\t\t\t\t<nav>\n\t\t\t\t\t<details open><summary>Table of Contents</summary>\n\t\t\t\t\t\t<ol>\n${listItemsHtml}\n\t\t\t\t\t\t</ol>\n\t\t\t\t\t</details>\n\t\t\t\t</nav>\n\t\t\t</aside>`;
 }
 
 /**

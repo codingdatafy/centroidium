@@ -482,6 +482,10 @@ canvas {
 	text-align: center;
 }
 #article-toc {
+    border: solid 1px green;
+    margin: 5px;
+    width: 50%;
+    background: #f5f5f5;
 }
 #article-toc nav {
 }
@@ -808,79 +812,4 @@ pre code {
 #breadcrumb .active {
   color: #555555;
   font-weight: 600;
-}
-
-/* ==========================================
-   Table of Contents - Desktop Right Sidebar
-   ========================================== */
-@media (min-width: 1024px) {
-  /* Establish 2-column grid layout for the article */
-  #article {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 280px; /* Main content | Sidebar */
-    gap: 2.5rem;
-    align-items: start;
-  }
-
-  /* Unwrap header so title & TOC participate directly in #article grid */
-  #article-header {
-    display: contents;
-  }
-
-  /* Article Title in main column */
-  #article-title {
-    grid-column: 1;
-    grid-row: 1;
-  }
-
-  /* Main Body Content in main column below title */
-  #article > div {
-    grid-column: 1;
-    grid-row: 2;
-  }
-
-  /* Article Footer spans main column */
-  #article-footer {
-    grid-column: 1;
-    grid-row: 3;
-  }
-
-  /* Move TOC to Right Sidebar & stick on scroll */
-  #article-toc {
-    grid-column: 2;
-    grid-row: 1 / span 3; /* Spans top to bottom alongside content */
-    position: sticky;
-    top: 2rem; /* Offsets from top viewport during scroll */
-    max-height: calc(100vh - 4rem);
-    overflow-y: auto;
-    
-    /* Aesthetics */
-    padding-left: 1.25rem;
-    border-left: 1px solid var(--border-color, #e5e7eb);
-  }
-}
-
-/* ==========================================
-   TOC Typography & Nav Links
-   ========================================== */
-#article-toc nav ol {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-#article-toc nav li {
-  margin-bottom: 0.5rem;
-  font-size: 0.875rem;
-  line-height: 1.4;
-}
-
-#article-toc nav a {
-  color: var(--toc-link-color, #4b5563);
-  text-decoration: none;
-  transition: color 0.15s ease;
-}
-
-#article-toc nav a:hover {
-  color: var(--toc-link-hover, #2563eb);
 }
