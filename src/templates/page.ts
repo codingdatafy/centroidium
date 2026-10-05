@@ -10,8 +10,23 @@ export interface RenderPageOptions {
   cacheStatus?: string | undefined;
 }
 
+const ENGLISH_MONTHS = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+
 /**
- * Helper to convert YYYY-MM-DD or ISO strings to "D Month YYYY" format
+ * Helper to convert YYYY-MM-DD or ISO strings to "D month YYYY"
  */
 function formatDate(dateStr: string): { isoDate: string; formattedDate: string } | null {
   const date = new Date(dateStr);
@@ -20,11 +35,17 @@ function formatDate(dateStr: string): { isoDate: string; formattedDate: string }
   }
 
   const isoDate = date.toISOString().split('T')[0] ?? dateStr;
-  const formattedDate = new Intl.DateTimeFormat('en-GB', {
+
+  new Intl.DateTimeFormat('default', {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
-  }).format(date);
+  });
+
+  const day = date.getUTCDate();
+  const month = ENGLISH_MONTHS[date.getUTCMonth()] ?? '';
+  const year = date.getUTCFullYear();
+  const formattedDate = `${day} ${month} ${year}`;
 
   return { isoDate, formattedDate };
 }
