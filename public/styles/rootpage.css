@@ -21,6 +21,9 @@
   - Sponsors
 ******************************************************** */
 /* --------------------------- Homepage --------------------------- */
+#homepage-rootpage #article-toc {
+  display: none;
+}
 /* --------------------------- Languages --------------------------- */
 /* Unify the total width of all sortable tables and enforce fixed layout rules */
 table.table.sortable {

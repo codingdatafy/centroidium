@@ -42,8 +42,7 @@ jobs:
         run: npm run build:scripts
 
       - name: Deploy Worker via Wrangler
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: ${{ github.ref == 'refs/heads/develop' && 'deploy --env dev' || 'deploy' }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: ${{ github.ref == 'refs/heads/develop' && 'npx wrangler deploy --env dev' || 'npx wrangler deploy' }}
