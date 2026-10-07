@@ -9,9 +9,7 @@
   "main": "src/index.ts",
   "scripts": {
     "build:scripts": "esbuild src/scripts/centroidium.ts src/scripts/lib.ts --outdir=public/scripts --target=es2020 --minify",
-    "type-check": "tsc --noEmit && tsc -p tsconfig.client.json --noEmit",
-    "deploy": "wrangler deploy",
-    "deploy:dev": "wrangler deploy --env dev"
+    "type-check": "tsc --noEmit && tsc -p tsconfig.client.json --noEmit"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261003.1",
