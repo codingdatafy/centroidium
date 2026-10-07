@@ -22,7 +22,7 @@ permissions:
 jobs:
   deploy:
     name: Build & Deploy Engine
-    runs-on: ubuntu-26.04
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v5
