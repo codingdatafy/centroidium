@@ -24,7 +24,7 @@ export function renderMeta({ title, description, canonicalUrl, siteName, customS
     "@type": "Organization",
     "name": siteName,
     "url": "https://www.codingdatafy.com",
-    "logo": "https://www.codingdatafy.com/images/logo.png",
+    "logo": "https://www.codingdatafy.com/images/logo.svg",
     "sameAs": [
       "https://github.com/codingdatafy",
       "https://x.com/codingdatafy",
@@ -42,7 +42,7 @@ export function renderMeta({ title, description, canonicalUrl, siteName, customS
     <title>${escapeHtml(title)}</title>
     <meta name="description" content="${escapeHtml(description)}" />
     <link rel="canonical" href="${escapeHtml(canonicalUrl)}" />
-    <link rel="icon" type="image/png" href="/images/favicon.png" />
+    <link rel="icon" type="image/svg+xml" href="/images/favicon.svg" />
     
     <!-- Open Graph Metadata -->
     <meta property="og:site_name" content="${escapeHtml(siteName)}" />
@@ -50,13 +50,13 @@ export function renderMeta({ title, description, canonicalUrl, siteName, customS
     <meta property="og:description" content="${escapeHtml(description)}" />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="${escapeHtml(canonicalUrl)}" />
-    <meta property="og:image" content="https://www.codingdatafy.com/images/logo.png" />
+    <meta property="og:image" content="https://www.codingdatafy.com/images/logo.svg" />
 
     <!-- Twitter Card Metadata -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="${escapeHtml(title)}" />
     <meta name="twitter:description" content="${escapeHtml(description)}" />
-    <meta name="twitter:image" content="https://www.codingdatafy.com/images/logo.png" />
+    <meta name="twitter:image" content="https://www.codingdatafy.com/images/logo.svg" />
 
     <!-- Stylesheets -->
     <link rel="stylesheet" href="/styles/centroidium.css" />${customStyleHtml}
@@ -137,7 +137,7 @@ export function renderHeader({ currentPath, breadcrumb }: HeaderProps): string {
   return `
     <header id="header">
       <a href="/" id="logo">
-        <img src="/images/logo.png" alt="CodingDatafy Logo" width="368" height="77" />
+        <img src="/images/logo.svg" alt="CodingDatafy Logo" width="368" height="77" />
       </a>
       <nav id="navigation">
         <ul>

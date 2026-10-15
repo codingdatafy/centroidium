@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" version="1.2" baseProfile="tiny-ps" viewBox="0 0 32 32" width="32" height="32">
+  <!-- Solid background to prevent dark-mode transparency bugs -->
+  <rect width="32" height="32" fill="#000000" />
+  
+  <!-- Letter C (Green) -->
+  <text x="4" y="21" font-family="Arial, sans-serif" font-weight="bold" font-size="17" fill="#00FF41">C</text>
+  
+  <!-- Letter D (Blue) -->
+  <text x="17" y="21" font-family="Arial, sans-serif" font-weight="bold" font-size="17" fill="#00BFFF">D</text>
+  
+  <!-- Red Underline Bar -->
+  <rect x="4" y="24" width="24" height="3" rx="1" fill="#FF1E1E" />
+</svg>

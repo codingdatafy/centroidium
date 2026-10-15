@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 90" width="100%" height="100%">
+  <!-- Solid black background applied -->
+  <rect width="400" height="90" fill="#000000" />
+
+  <g transform="translate(10, 10)">
+    <!-- Main Text Brand -->
+    <text x="0" y="52" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-weight="900" font-size="52" letter-spacing="-0.5">
+      <!-- "Coding" in Neon Green -->
+      <tspan fill="#00FF33">Coding</tspan>
+      <!-- "Datafy" in Cyan Blue -->
+      <tspan fill="#00B0FF">Datafy</tspan>
+    </text>
+
+    <!-- Red Accent Underline Bar -->
+    <rect x="0" y="60" width="375" height="6" rx="2" fill="#FF1A1A" />
+  </g>
+</svg>
