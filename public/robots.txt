@@ -1,11 +1,5 @@
 # -----------------------------------------------------------------
-# GROUP 1: GLOBAL DEFAULT RULE
-# -----------------------------------------------------------------
-User-agent: *
-Allow: /
-
-# -----------------------------------------------------------------
-# GROUP 2: BLOCKED AI TRAINING CRAWLERS & SPIDERS
+# GROUP 1: BLOCKED AI TRAINING CRAWLERS & SPIDERS
 # -----------------------------------------------------------------
 # OpenAI
 User-agent: GPTBot
@@ -56,10 +50,19 @@ Disallow: /
 User-agent: Cloudflare-Crawler
 Disallow: /
 
+User-agent: CloudflareBrowserRenderingCrawler
+Disallow: /
+
 User-agent: Diffbot
 Disallow: /
 
 User-agent: ManusBot
+Disallow: /
+
+User-agent: manus-user
+Disallow: /
+
+User-agent: meta-webindexer
 Disallow: /
 
 User-agent: NovellumAICrawl
@@ -85,9 +88,8 @@ Disallow: /
 
 User-agent: Scrapy
 Disallow: /
-
 # -----------------------------------------------------------------
-# GROUP 3: BLOCKED SEO & COMPETITOR INTELLIGENCE BOTS
+# GROUP 2: BLOCKED SEO & COMPETITOR INTELLIGENCE BOTS
 # -----------------------------------------------------------------
 # Ahrefs
 User-agent: AhrefsBot
@@ -130,7 +132,7 @@ User-agent: SpyFu
 Disallow: /
 
 # -----------------------------------------------------------------
-# GROUP 4: EXPLICITLY ALLOWED SEARCH & AI-SEARCH BOTS
+# GROUP 3: EXPLICITLY ALLOWED SEARCH & AI-SEARCH BOTS
 # -----------------------------------------------------------------
 # OpenAI
 User-agent: ChatGPT-User
@@ -194,6 +196,12 @@ User-agent: NaverBot
 Allow: /
 
 User-agent: YandexBot
+Allow: /
+
+# -----------------------------------------------------------------
+# GROUP 4: GLOBAL DEFAULT RULE
+# -----------------------------------------------------------------
+User-agent: *
 Allow: /
 
 # -----------------------------------------------------------------
