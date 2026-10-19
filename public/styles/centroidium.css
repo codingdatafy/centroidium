@@ -390,7 +390,7 @@ canvas {
 }
 @media screen and (max-width: 720px) {
   body {
-    font-size: 85%;
+    font-size: 80%;
   }
   #logo img {
     width: 45%;
