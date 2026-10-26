@@ -8,13 +8,15 @@
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
-    "build:scripts": "esbuild src/scripts/centroidium.ts src/scripts/lib.ts --outdir=public/scripts --target=es2020 --minify",
+    "build:scripts": "esbuild src/scripts/*.ts --outdir=public/scripts --target=es2020 --bundle --minify",
+    "build:styles": "esbuild src/styles/*.css --outdir=public/styles --minify",
+    "build": "npm run build:scripts && npm run build:styles",
     "type-check": "tsc --noEmit && tsc -p tsconfig.client.json --noEmit"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20261003.1",
-    "esbuild": "^0.28.2",
-    "typescript": "^7.0.2",
-    "wrangler": "^4.147.0"
+    "@cloudflare/workers-types": "5.20261025.1",
+    "esbuild": "0.28.2",
+    "typescript": "7.0.2",
+    "wrangler": "4.152.0"
   }
 }
