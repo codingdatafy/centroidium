@@ -9,7 +9,7 @@
   "main": "src/index.ts",
   "scripts": {
     "build:scripts": "esbuild src/scripts/*.ts --outdir=public/scripts --target=es2020 --bundle --minify",
-    "build:styles": "esbuild public/styles/*.css --outdir=public/styles --minify",
+    "build:styles": "esbuild src/styles/*.css --outdir=public/styles --minify",
     "build": "npm run build:scripts && npm run build:styles",
     "type-check": "tsc --noEmit && tsc -p tsconfig.client.json --noEmit"
   },
